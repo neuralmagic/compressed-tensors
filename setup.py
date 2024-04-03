@@ -13,6 +13,6 @@ setup(
     author="Neuralmagic, Inc.",
     author_email="support@neuralmagic.com",
     description="Library for manipulating sparse safetensors of neural network models",
-    install_requires=["torch>=1.7.0", "transformers<=4.40", "pydantic>=1.8.2,<2.0.0", "sparsezoo", "black==22.12.0", "isort==5.8.0", "wheel>=0.36.2", "flake8>=3.8.3"],
+    install_requires=["torch>=1.7.0", "transformers<=4.40", "pydantic>=1.8.2,<2.0.0", "sparsezoo", "black==24.3.0", "isort==5.8.0", "wheel>=0.36.2", "flake8>=3.8.3"],
     #packages=_setup_packages(),
 )
