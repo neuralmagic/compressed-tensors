@@ -64,7 +64,8 @@ class QuantizationArgs(BaseModel):
     observer: str = Field(
         default="minmax",
         description=(
-            "The class to use to compute the quantization params - scale and zero-point'"
+            "The class to use to compute the quantization param - "
+            "scale and zero-point'"
         ),
     )
     observer_kwargs: Dict[str, Any] = Field(

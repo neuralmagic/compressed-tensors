@@ -19,9 +19,6 @@ from sparsetensors.quantization.observers.base import Observer
 from torch import FloatTensor, IntTensor, Tensor
 
 
-# from sparsetensors.quantization.utils.quantization_scheme import QuantizationArgs
-
-
 __all__ = ["MemorylessObserver"]
 
 

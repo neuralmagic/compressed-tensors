@@ -16,11 +16,6 @@ from functools import wraps
 
 import torch
 from sparsetensors.quantization.lifecycle.status import QuantizationStatus
-
-# from sparsetensors.quantization.utils.quantization_scheme import (
-#     QuantizationArgs,
-#     QuantizationScheme,
-# )
 from sparsetensors.quantization.quant_args import QuantizationArgs
 from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
@@ -59,35 +54,7 @@ def fake_quantize(
     args: QuantizationArgs,
 ) -> torch.Tensor:
     max_q = torch.tensor(2**args.num_bits - 1)
-    columns = x.shape[1]
     Q = torch.zeros_like(x)
-    # for i1 in range(0, columns, args.block_size):
-    #     i2 = min(i1 + args.block_size, columns)
-    #     count = i2 - i1
-
-    #     W1 = x[:, i1:i2].clone()
-    #     Q1 = torch.zeros_like(W1)
-
-    #     for i in range(count):
-    #         w = W1[:, i]
-    #         breakpoint()
-    #         if args.group_size != -1:
-    #             if (i1 + i) % args.group_size == 0:
-    #                 xmin, xmax = get_qparams(
-    #                     x[:, (i1 + i) : (i1 + i + args.group_size)], args.symmetric
-    #                 )
-    #                 scale, zero = get_scale_zero_point(
-    #                     x[:, (i1 + i) : (i1 + i + args.group_size)],
-    #                     max_q,
-    #                     xmax,
-    #                     xmin,
-    #                     args.symmetric,
-    #                     args.group_size,
-    #                 )
-
-    #         q = quantize(w.unsqueeze(1), scale, zero, max_q).flatten()
-    #     Q1[:, i] = q
-    #     Q[:, i1:i2] = Q1
     Q = quantize(x, scale, zero_point, max_q)
     return dequantize(Q, scale, zero_point)
 
