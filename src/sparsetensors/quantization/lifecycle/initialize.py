@@ -33,8 +33,8 @@ _LOGGER = logging.getLogger(__name__)
 
 def initialize_module_for_quantization(module: Module, scheme: QuantizationScheme):
     if scheme.input_activations is not None:
-
         _initialize_scale_zero_point_observer(module, "input", scheme.input_activations)
+
     if scheme.weights is not None:
         if hasattr(module, "weight"):
             _initialize_scale_zero_point_observer(module, "weight", scheme.weights)
