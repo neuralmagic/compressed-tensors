@@ -14,7 +14,10 @@
 
 
 from sparsetensors.quantization.lifecycle import apply_quantization_config
-from sparsetensors.quantization.quant_config import QuantizationConfig
+from sparsetensors.quantization.quant_config import (
+    QuantizationConfig,
+    QuantizationStatus,
+)
 from transformers import AutoModelForCausalLM
 
 
@@ -49,6 +52,27 @@ def test_apply_quantization_config_tinyllama():
     assert num_linears == 155
     assert num_embeddings == 1
     assert num_rotary_embeddings == 22
+
+
+def test_serialize_config_tinyllama():
+    quant_config = get_sample_tinyllama_quant_config()
+    model = get_tinyllama_model()
+
+    # check that model is not already quantized
+    for module in model.modules():
+        _test_layer_quantization_status(module, inputs=False, weights=False)
+
+    # apply quant config to model
+    apply_quantization_config(model, quant_config)
+
+    serialized_config = QuantizationConfig.from_pretrained(model)
+    assert len(serialized_config.config_groups) == 2
+    assert len(serialized_config.config_groups["group_0"].targets) == 1
+    assert serialized_config.config_groups["group_0"].input_activations is None
+    assert serialized_config.config_groups["group_1"].input_activations is not None
+    assert serialized_config.quantization_status == QuantizationStatus.FROZEN
+    assert serialized_config.format == "fakequant"
+    assert serialized_config.quant_method == "sparseml"
 
 
 def _test_layer_quantization_status(module, inputs: bool, weights: bool):
@@ -108,6 +132,3 @@ def get_sample_tinyllama_quant_config():
         "ignore": ["LlamaRotaryEmbedding"],
     }
     return QuantizationConfig.parse_obj(config_dict)
-
-
-test_apply_quantization_config_tinyllama()
