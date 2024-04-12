@@ -57,9 +57,11 @@ def _test_layer_quantization_status(module, inputs: bool, weights: bool):
     assert hasattr(module, "quantization_scheme") == quantized
     assert hasattr(module, "quantization_status") == quantized
 
-    # check for inputs
+    # check inputs matches expected
     assert hasattr(module, "input_scale") == inputs
     assert hasattr(module, "input_zero_point") == inputs
+
+    # check weights matches expected
     assert hasattr(module, "weight_scale") == weights
     assert hasattr(module, "weight_zero_point") == weights
 
