@@ -15,9 +15,8 @@
 
 import logging
 
+from sparsetensors.quantization.lifecycle.status import QuantizationStatus
 from torch.nn import Module
-
-from sparseml.modifiers.quantization.lifecycle.status import QuantizationStatus
 
 
 __all__ = [

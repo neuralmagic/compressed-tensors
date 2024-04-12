@@ -15,11 +15,16 @@
 from functools import wraps
 
 import torch
+from sparsetensors.quantization.lifecycle.status import QuantizationStatus
+
+# from sparsetensors.quantization.utils.quantization_scheme import (
+#     QuantizationArgs,
+#     QuantizationScheme,
+# )
+from sparsetensors.quantization.quant_args import QuantizationArgs
+from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
 
-from sparseml.modifiers.quantization.lifecycle.status import QuantizationStatus
-
-from sparseml.modifiers.quantization.utils.quantization_scheme import QuantizationScheme, QuantizationArgs
 
 __all__ = ["wrap_module_forward_quantized"]
 
@@ -34,8 +39,8 @@ def quantize(
         torch.round(
             x / scale + zero_point,
         ),
-          0,
-            q_max,
+        0,
+        q_max,
     )
 
 
@@ -83,7 +88,7 @@ def fake_quantize(
     #         q = quantize(w.unsqueeze(1), scale, zero, max_q).flatten()
     #     Q1[:, i] = q
     #     Q[:, i1:i2] = Q1
-    Q =  quantize(x, scale, zero_point, max_q)
+    Q = quantize(x, scale, zero_point, max_q)
     return dequantize(Q, scale, zero_point)
 
 
@@ -138,7 +143,7 @@ def _maybe_calibrate_or_quantize(
         return value
 
     scale = getattr(module, f"{base_name}_scale")
-    # zero_point = getattr(module, f"{base_name}_zero_point").data 
+    # zero_point = getattr(module, f"{base_name}_zero_point").data
     zero_point = getattr(module, f"{base_name}_zero_point")
 
     print(scale, zero_point)

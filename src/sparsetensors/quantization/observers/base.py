@@ -14,11 +14,11 @@
 
 from typing import Optional, Tuple
 
+# from sparsetensors.quantization.utils.quantization_scheme import QuantizationArgs
+from sparsetensors.quantization.quant_args import QuantizationArgs
+from sparsezoo.utils.registry import RegistryMixin
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
-
-from sparseml.modifiers.quantization.utils.quantization_scheme import QuantizationArgs
-from sparsezoo.utils.registry import RegistryMixin
 
 
 __all__ = ["Observer"]
@@ -31,9 +31,7 @@ class Observer(Module, RegistryMixin):
     pair
     """
 
-    def __init__(self, 
-        quantization_args: QuantizationArgs
-    ):
+    def __init__(self, quantization_args: QuantizationArgs):
         self.quantization_args: QuantizationArgs = quantization_args
         super().__init__()
         self._scale = None

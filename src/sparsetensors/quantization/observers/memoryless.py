@@ -15,10 +15,11 @@
 from typing import Tuple
 
 import torch
+from sparsetensors.quantization.observers.base import Observer
 from torch import FloatTensor, IntTensor, Tensor
 
-from sparseml.modifiers.quantization.observers.base import Observer
-# from sparseml.modifiers.quantization.utils.quantization_scheme import QuantizationArgs
+
+# from sparsetensors.quantization.utils.quantization_scheme import QuantizationArgs
 
 
 __all__ = ["MemorylessObserver"]

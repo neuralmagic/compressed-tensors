@@ -1,17 +1,18 @@
 import torch
 from torch.nn import Linear
-# from sparseml.modifiers.quantization.utils.quantization_scheme import QuantizationScheme, QuantizationArgs
+
 from sparsetensors.quantization.quant_args import QuantizationArgs
 from sparsetensors.quantization.quant_scheme import QuantizationScheme
-from sparseml.modifiers.quantization.lifecycle.initialize import initialize_module_for_quantization
-from sparseml.modifiers.quantization.lifecycle.calibration import set_module_for_calibration
-from sparseml.modifiers.quantization.lifecycle.frozen import freeze_module_quantization
+from sparsetensors.quantization.lifecycle.initialize import initialize_module_for_quantization
+from sparsetensors.quantization.lifecycle.calibration import set_module_for_calibration
+from sparsetensors.quantization.lifecycle.frozen import freeze_module_quantization
 num_bits = 8
 
 scheme = QuantizationScheme(
     input_acivations=QuantizationArgs(num_bits=num_bits, symmetric=False),
     weights=QuantizationArgs(num_bits=num_bits,  symmetric=True),
     output_activations=None,
+    targets = ["*"],
 )
 
 layer = Linear(4, 4)
@@ -31,25 +32,29 @@ set_module_for_calibration(layer)
 layer(torch.randn(4,4))
 print(dict(layer.named_parameters()))  # scale and zero point should have updated values
 print(2)
-for _ in range(10):
+print("calib layers ")
+for i in range(10):
+    print("iter", i)
     layer(torch.randn(4,4))
 print(dict(layer.named_parameters()))  # scale and zero point should have updated values again since we did another pass
 
 print(3)
-breakpoint()
+# breakpoint()
 
 
 freeze_module_quantization(layer)
-for _ in range(10):
+print("freeze layers ")
+for i in range(10):
     # do more forward passes but show args are frozen
-    layer(torch.random.randn(4,4))
+    print("iter", i)
+    layer(torch.randn(4,4))
 print(dict(layer.named_parameters()))  # scale and zero point should not be updated now
 
 
-# missing
+# # missing
 
-# correctness
-# quantizing an entire model
+# # correctness
+# # quantizing an entire model
 
 
 

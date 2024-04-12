@@ -16,16 +16,16 @@
 import logging
 
 import torch
-from torch.nn import Module, Parameter
+from sparsetensors.quantization.lifecycle.forward import wrap_module_forward_quantized
+from sparsetensors.quantization.lifecycle.status import QuantizationStatus
 
-from sparseml.modifiers.quantization.lifecycle.forward import (
-    wrap_module_forward_quantized,
-)
-from sparseml.modifiers.quantization.lifecycle.status import QuantizationStatus
-from sparseml.modifiers.quantization.utils.quantization_scheme import (
-    QuantizationArgs,
-    QuantizationScheme,
-)
+# from sparsetensors.quantization.utils.quantization_scheme import (
+#     QuantizationArgs,
+#     QuantizationScheme,
+# )
+from sparsetensors.quantization.quant_args import QuantizationArgs
+from sparsetensors.quantization.quant_scheme import QuantizationScheme
+from torch.nn import Module, Parameter
 
 
 __all__ = [
@@ -39,9 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 def initialize_module_for_quantization(module: Module, scheme: QuantizationScheme):
     if scheme.input_activations is not None:
 
-        _initialize_scale_zero_point_observer(
-            module, "input", scheme.input_activations
-            )
+        _initialize_scale_zero_point_observer(module, "input", scheme.input_activations)
     if scheme.weights is not None:
         if hasattr(module, "weight"):
             _initialize_scale_zero_point_observer(module, "weight", scheme.weights)
@@ -52,14 +50,15 @@ def initialize_module_for_quantization(module: Module, scheme: QuantizationSchem
                 f"for {type(module)}"
             )
     if scheme.output_activations is not None:
-        _initialize_scale_zero_point_observer(module, "output", scheme.output_activations)
+        _initialize_scale_zero_point_observer(
+            module, "output", scheme.output_activations
+        )
 
     module.quantization_scheme = scheme
     module.quantization_status = QuantizationStatus.INITIALIZED
 
     # wrap forward call of module to perform quantized actions based on calltime status
     wrap_module_forward_quantized(module, scheme)
-
 
 
 def _initialize_scale_zero_point_observer(
