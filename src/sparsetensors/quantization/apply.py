@@ -48,6 +48,7 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
         target = _find_first_name_or_class_match(name, submodule, target_to_scheme)
         if target is not None:
             # target matched, initialize layer from the matched scheme
+            # TODO: add follow on lifecycle calls based on the quantization status
             initialize_module_for_quantization(submodule, target_to_scheme[target])
 
 
