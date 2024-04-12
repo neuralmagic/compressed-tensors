@@ -15,7 +15,7 @@
 from typing import Optional, Tuple
 
 from sparsetensors.quantization.quant_args import QuantizationArgs
-from sparsezoo.utils.registry import RegistryMixin
+from sparsetensors.registry.registry import RegistryMixin
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
 
