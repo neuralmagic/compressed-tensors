@@ -17,6 +17,11 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 from sparsetensors.quantization.quant_scheme import QuantizationScheme
+from sparsetensors.quantization.utils import (
+    is_module_quantized,
+    iter_named_leaf_modules,
+)
+from torch.nn import Module
 
 
 __all__ = [
@@ -90,3 +95,41 @@ class QuantizationConfig(BaseModel):
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = None
+
+    @staticmethod
+    def from_pretrained(model: Module) -> "QuantizationConfig":
+        """
+        TODO: fill in docstrings
+        """
+        quant_scheme_to_layers = []
+        quantization_status = None
+        ignore = []
+        for name, submodule in iter_named_leaf_modules(model):
+            if not is_module_quantized(submodule):
+                ignore.append(name)
+            else:
+                quantization_status = submodule.quantization_status
+                scheme = submodule.quantization_scheme
+
+                match_found = False
+                for idx, (existing_scheme, _) in enumerate(quant_scheme_to_layers):
+                    if scheme == existing_scheme:
+                        match_found = True
+                        quant_scheme_to_layers[idx][1].append(
+                            name
+                        )  # append((name, module_type(submodule)))
+                        break
+                if not match_found:
+                    quant_scheme_to_layers.append((scheme, [name]))
+
+        config_groups = {}
+        for idx, (scheme, targets) in enumerate(quant_scheme_to_layers):
+            group_name = "group_" + str(idx)
+            scheme.targets = targets
+            config_groups[group_name] = scheme
+
+        return QuantizationConfig(
+            config_groups=config_groups,
+            quantization_status=quantization_status,
+            ignore=ignore,
+        )

@@ -14,7 +14,7 @@
 
 import re
 from collections import OrderedDict
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, Optional
 
 from sparsetensors.quantization.lifecycle.calibration import set_module_for_calibration
 from sparsetensors.quantization.lifecycle.frozen import freeze_module_quantization
@@ -26,6 +26,7 @@ from sparsetensors.quantization.quant_config import (
     QuantizationStatus,
 )
 from sparsetensors.quantization.quant_scheme import QuantizationScheme
+from sparsetensors.quantization.utils import iter_named_leaf_modules
 from torch.nn import Module
 
 
@@ -51,7 +52,7 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
 
     # build list of layers to target to avoid mutating submodule dict during iteration
     layer_quant_scheme_pairs = []
-    for name, submodule in _iter_named_leaf_modules(model):
+    for name, submodule in iter_named_leaf_modules(model):
         if _find_first_name_or_class_match(name, submodule, config.ignore):
             continue  # layer matches ignore list, continue
         target = _find_first_name_or_class_match(name, submodule, target_to_scheme)
@@ -84,14 +85,6 @@ def apply_quantization_status(
         set_module_for_calibration(module)
     if status >= QuantizationStatus.FROZEN:
         freeze_module_quantization(module)
-
-
-def _iter_named_leaf_modules(model: Module) -> Tuple[str, Module]:
-    # yields modules that do not have any submodules
-    # TODO: potentially expand to add list of allowed submodules such as observers
-    for name, submodule in model.named_modules():
-        if len(list(submodule.children())) == 0:
-            yield name, submodule
 
 
 def _find_first_name_or_class_match(
