@@ -21,7 +21,19 @@ __all__ = ["is_module_quantized", "iter_named_leaf_modules", "module_type"]
 
 
 def is_module_quantized(module: Module) -> bool:
-    return hasattr(module, "quantization_scheme")
+    if not hasattr(module, "quantization_scheme"):
+        return False
+
+    if module.quantization_scheme.weights is not None:
+        return True
+
+    if module.quantization_scheme.input_activations is not None:
+        return True
+
+    if module.quantization_scheme.output_activations is not None:
+        return True
+
+    return False
 
 
 def module_type(module: Module) -> str:
