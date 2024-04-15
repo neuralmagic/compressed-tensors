@@ -15,7 +15,11 @@
 from typing import List, Optional
 
 import pytest
-from sparsetensors.quantization.lifecycle.forward import wrap_module_forward_quantized
+import torch
+from sparsetensors.quantization.lifecycle.forward import (
+    maybe_calibrate_or_quantize,
+    wrap_module_forward_quantized,
+)
 from sparsetensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
@@ -43,7 +47,7 @@ def create_quantization_scheme():
     return quantization_scheme
 
 
-def test_wrap_module_forward_quantized__forward_overwrite(create_quantization_scheme):
+def test_wrap_module_forward_quantized(create_quantization_scheme):
     num_bits = 8
     quantization_scheme = create_quantization_scheme(
         targets=["*"],
@@ -60,16 +64,37 @@ def test_wrap_module_forward_quantized__forward_overwrite(create_quantization_sc
     assert not func_forward == layer.forward.__func__
 
 
-def test_wrap_module_forward_quantized__forward_overwrite(create_quantization_scheme):
+@pytest.mark.parametrize(
+    "quantization_status", ["INITIALIZED", "CALIBRATION", "FROZEN"]
+)
+def test_maybe_calibrate_or_quantize(create_quantization_scheme, quantization_status):
     num_bits = 8
     quantization_scheme = create_quantization_scheme(
         targets=["*"],
         weights=QuantizationArgs(num_bits=num_bits, symmetric=True),
         input_activations=QuantizationArgs(num_bits=num_bits, symmetric=False),
     )
+    quantization_args = QuantizationArgs(num_bits=num_bits, symmetric=False)
     layer = Linear(4, 4)
     layer.weight.data *= 100
 
-    data = layer.weight.data
+    initialize_module_for_quantization(layer, quantization_scheme)
+    layer.quantization_status = QuantizationStatus(quantization_status)
 
-    wrap_module_forward_quantized(layer, quantization_scheme)
+    if layer.quantization_status == QuantizationStatus.INITIALIZED:
+        out = maybe_calibrate_or_quantize(
+            layer, layer.weight.data, "input", quantization_args
+        )
+        assert torch.allclose(out, layer.weight.data)
+    elif layer.quantization_status == QuantizationStatus.CALIBRATION:
+        out = maybe_calibrate_or_quantize(
+            layer, layer.weight.data, "input", quantization_args
+        )
+        assert not torch.allclose(out, layer.weight.data)
+
+    elif layer.quantization_status == QuantizationStatus.FROZEN:
+        # scale and zero points are empty -- cannot quantize
+        with pytest.raises(ValueError):
+            out = maybe_calibrate_or_quantize(
+                layer, layer.weight.data, "input", quantization_args
+            )

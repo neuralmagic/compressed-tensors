@@ -21,7 +21,13 @@ from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
 
 
-__all__ = ["wrap_module_forward_quantized", "quantize", "dequantize", "fake_quantize"]
+__all__ = [
+    "wrap_module_forward_quantized",
+    "quantize",
+    "dequantize",
+    "fake_quantize",
+    "maybe_calibrate_or_quantize",
+]
 
 
 def quantize(
@@ -69,13 +75,13 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         input_ = args[0]
         if scheme.input_activations is not None:
             # calibrate and (fake) quantize input activations when applicable
-            input_ = _maybe_calibrate_or_quantize(
+            input_ = maybe_calibrate_or_quantize(
                 module, input_, "input", scheme.input_activations
             )
 
         if scheme.weights is not None:
             # calibrate and (fake) quantize weights when applicable
-            self.weight.data = _maybe_calibrate_or_quantize(
+            self.weight.data = maybe_calibrate_or_quantize(
                 module, self.weight, "weight", scheme.weights
             )
 
@@ -86,7 +92,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 
         if scheme.output_activations is not None:
             # calibrate and (fake) quantize output activations when applicable
-            output = _maybe_calibrate_or_quantize(
+            output = maybe_calibrate_or_quantize(
                 module, output, "output", scheme.output_activations
             )
         return output
@@ -97,14 +103,11 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
     setattr(module, "forward", bound_wrapped_forward)
 
 
-def _maybe_calibrate_or_quantize(
+def maybe_calibrate_or_quantize(
     module: Module, value: Module, base_name: str, args: "QuantizationArgs"
 ) -> torch.Tensor:
     # only run quantized for the included stages
-    if module.quantization_status not in {
-        QuantizationStatus.CALIBRATION,
-        QuantizationStatus.FROZEN,
-    }:
+    if module.quantization_status == QuantizationStatus.INITIALIZED:
         return value
 
     scale = getattr(module, f"{base_name}_scale")
@@ -119,4 +122,8 @@ def _maybe_calibrate_or_quantize(
         # update scale and zero point
         scale.data = updated_scale
         zero_point.data = updated_zero_point
+
+    if scale.data.numel() < 1 and zero_point.data.numel() < 1:
+        raise ValueError("scale and zero_points are empty.")
+
     return fake_quantize(value, scale, zero_point, args)
