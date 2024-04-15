@@ -28,9 +28,13 @@ def freeze_module_quantization(module: Module):
         return
 
     # delete observers from module
+    submodule_name_do_delete = set()
     for submodule_name, _ in module.named_modules():
         if "." not in submodule_name and submodule_name.endswith("_observer"):
             # delete any observers that belong directly to this module
-            delattr(module, submodule_name)
+            submodule_name_do_delete.add(submodule_name)
+
+    for submodule_name in submodule_name_do_delete:
+        delattr(module, submodule_name)
 
     module.quantization_status = QuantizationStatus.FROZEN

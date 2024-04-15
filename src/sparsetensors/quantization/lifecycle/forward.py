@@ -21,7 +21,7 @@ from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
 
 
-__all__ = ["wrap_module_forward_quantized","quantize","dequantize","fake_quantize"]
+__all__ = ["wrap_module_forward_quantized", "quantize", "dequantize", "fake_quantize"]
 
 
 def quantize(
@@ -89,7 +89,6 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             output = _maybe_calibrate_or_quantize(
                 module, output, "output", scheme.output_activations
             )
-
         return output
 
     # bind wrapped forward to module class so reference to `self` is correct
@@ -120,5 +119,4 @@ def _maybe_calibrate_or_quantize(
         # update scale and zero point
         scale.data = updated_scale
         zero_point.data = updated_zero_point
-
     return fake_quantize(value, scale, zero_point, args)

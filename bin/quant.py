@@ -9,7 +9,7 @@ from sparsetensors.quantization.lifecycle.frozen import freeze_module_quantizati
 num_bits = 8
 
 scheme = QuantizationScheme(
-    input_acivations=QuantizationArgs(num_bits=num_bits, symmetric=False),
+    # input_activations=QuantizationArgs(num_bits=num_bits, symmetric=False),
     weights=QuantizationArgs(num_bits=num_bits,  symmetric=True),
     output_activations=None,
     targets = ["*"],
@@ -25,9 +25,11 @@ print(layer)  # should see observer under layer now
 print(0)
 print(dict(layer.named_parameters()))  # should see empty tensors for scale and zero point now
 print(1)
+    
 
 
 set_module_for_calibration(layer)
+
 # do a calibration step
 layer(torch.randn(4,4))
 print(dict(layer.named_parameters()))  # scale and zero point should have updated values
@@ -41,6 +43,8 @@ print(dict(layer.named_parameters()))  # scale and zero point should have update
 print(3)
 # breakpoint()
 
+for submodule_name, _ in layer.named_modules():
+    print(submodule_name)
 
 freeze_module_quantization(layer)
 print("freeze layers ")
