@@ -21,7 +21,7 @@ from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
 
 
-__all__ = ["wrap_module_forward_quantized"]
+__all__ = ["wrap_module_forward_quantized","quantize","dequantize","fake_quantize"]
 
 
 def quantize(
@@ -67,7 +67,6 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
     @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
     def wrapped_forward(self, *args, **kwargs):
         input_ = args[0]
-
         if scheme.input_activations is not None:
             # calibrate and (fake) quantize input activations when applicable
             input_ = _maybe_calibrate_or_quantize(
@@ -112,8 +111,6 @@ def _maybe_calibrate_or_quantize(
     scale = getattr(module, f"{base_name}_scale")
     # zero_point = getattr(module, f"{base_name}_zero_point").data
     zero_point = getattr(module, f"{base_name}_zero_point")
-
-    print(scale, zero_point)
 
     if module.quantization_status == QuantizationStatus.CALIBRATION:
         # get observer and get new quant params from observation
