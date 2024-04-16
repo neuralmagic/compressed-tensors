@@ -21,6 +21,7 @@ from tqdm import tqdm
 
 __all__ = [
     "is_module_quantized",
+    "is_model_quantized",
     "iter_named_leaf_modules",
     "module_type",
     "calculate_compression_ratio",
@@ -46,6 +47,22 @@ def is_module_quantized(module: Module) -> bool:
 
     if module.quantization_scheme.output_activations is not None:
         return True
+
+    return False
+
+
+def is_model_quantized(model: Module) -> bool:
+    """
+    Check if any modules in a model are quantized, based on the existence of a non-empty
+    quantization scheme in at least one module
+
+    :param model: pytorch model
+    :return: True if model is quantized, False otherwise
+    """
+
+    for _, submodule in iter_named_leaf_modules(model):
+        if is_module_quantized(submodule):
+            return True
 
     return False
 
