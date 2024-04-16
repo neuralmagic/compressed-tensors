@@ -12,35 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional
 
-import pytest
 from sparsetensors.quantization.lifecycle.frozen import freeze_module_quantization
 from sparsetensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
 from sparsetensors.quantization.lifecycle.status import QuantizationStatus
 from sparsetensors.quantization.quant_args import QuantizationArgs
-from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Linear
-
-
-@pytest.fixture(scope="module")
-def create_quantization_scheme():
-    def quantization_scheme(
-        targets: List[str],
-        weights: Optional[QuantizationArgs] = None,
-        input_activations: Optional[QuantizationArgs] = None,
-        output_activations: Optional[QuantizationArgs] = None,
-    ):
-        return QuantizationScheme(
-            targets=targets,
-            weights=weights,
-            input_activations=input_activations,
-            output_activations=output_activations,
-        )
-
-    return quantization_scheme
 
 
 def test_set_module_for_calibration(create_quantization_scheme):
