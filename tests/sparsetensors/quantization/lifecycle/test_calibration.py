@@ -15,6 +15,8 @@
 from typing import List, Optional
 
 import pytest
+from sparsetensors.quantization.lifecycle.calibration import set_module_for_calibration
+from sparsetensors.quantization.lifecycle.status import QuantizationStatus
 from sparsetensors.quantization.quant_args import QuantizationArgs
 from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Linear
@@ -38,9 +40,22 @@ def create_quantization_scheme():
     return quantization_scheme
 
 
-def test_set_module_for_calibration(create_quantization_scheme):
+@pytest.mark.parametrize("quantization_status", ["INITIALIZED", "CALIBRATION"])
+def test_set_module_for_calibration(create_quantization_scheme, quantization_status):
+    num_bits = 8
     quantization_scheme = create_quantization_scheme(
         targets=["*"],
+        weights=QuantizationArgs(num_bits=num_bits, symmetric=True),
+        input_activations=QuantizationArgs(num_bits=num_bits, symmetric=False),
     )
 
     layer = Linear(4, 4)
+    layer.quantization_status = QuantizationStatus(quantization_status)
+    layer.quantization_scheme = quantization_scheme
+
+    if layer.quantization_status == QuantizationStatus.INITIALIZED:
+        set_module_for_calibration(layer)
+        assert layer.quantization_status == QuantizationStatus.CALIBRATION
+    else:
+        with pytest.raises(TypeError):
+            set_module_for_calibration(layer)
