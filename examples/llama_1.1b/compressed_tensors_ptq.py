@@ -23,7 +23,7 @@ from sparsetensors.quantization import (
 from sparseml.transformers.finetune.data.data_args import DataTrainingArguments
 from sparseml.transformers.finetune.data.base import TextGenerationDataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from datasets import load_dataset
+
 
 config_file = "example_quant_config.json"
 model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
@@ -59,7 +59,7 @@ dataset_manager = TextGenerationDataset.load_from_registry(
     tokenizer=tokenizer,
 )
 calib_dataset = dataset_manager.tokenize_and_process(
-    load_dataset(dataset_name, split=split)
+    dataset_manager.get_raw_dataset()
 )
 
 # run calibration
