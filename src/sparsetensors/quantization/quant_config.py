@@ -18,6 +18,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from sparsetensors.quantization.utils import (
+    calculate_compression_ratio,
     is_module_quantized,
     iter_named_leaf_modules,
     module_type,
@@ -100,7 +101,11 @@ class QuantizationConfig(BaseModel):
     @staticmethod
     def from_pretrained(model: Module) -> "QuantizationConfig":
         """
-        TODO: fill in docstrings
+        Converts a model into its associated QuantizationConfig based on the
+        QuantizationScheme attached to each quanitzed module
+
+        :param model: model to calculate quantization scheme of
+        :return: filled out QuantizationScheme for the input model
         """
         quant_scheme_to_layers = []
         quantization_status = None
@@ -125,6 +130,8 @@ class QuantizationConfig(BaseModel):
                 if not match_found:
                     quant_scheme_to_layers.append(scheme)
 
+        # clean up ignore list, we can leave out layers types if none of the
+        # instances are quantized
         consolidated_ignore = []
         for layer_type, ignore_names in ignore.items():
             if layer_type in quantization_type_names:
@@ -138,8 +145,10 @@ class QuantizationConfig(BaseModel):
             group_name = "group_" + str(idx)
             config_groups[group_name] = scheme
 
+        compression_ratio = calculate_compression_ratio(model)
         return QuantizationConfig(
             config_groups=config_groups,
             quantization_status=quantization_status,
+            global_compression_ratio=compression_ratio,
             ignore=consolidated_ignore,
         )

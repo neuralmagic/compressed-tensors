@@ -77,6 +77,8 @@ def test_serialize_config_tinyllama():
     assert serialized_config.format == "fakequant"
     assert serialized_config.quant_method == "sparseml"
     assert serialized_config.ignore == ["model.layers.1.mlp.down_proj"]
+    assert serialized_config.global_compression_ratio > 1.0
+    assert serialized_config.global_compression_ratio < 8.0
 
 
 def _test_layer_quantization_status(module, inputs: bool, weights: bool):
