@@ -22,7 +22,8 @@ from sparsetensors.quantization import (
 )
 from sparseml.transformers.finetune.data.data_args import DataTrainingArguments
 from sparseml.transformers.finetune.data.base import TextGenerationDataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, DefaultDataCollator
+from torch.utils.data import DataLoader
 
 
 config_file = "example_quant_config.json"
@@ -48,7 +49,6 @@ apply_quantization_config(model, config)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 data_args = DataTrainingArguments(
     dataset=dataset_name,
-    dataset_config_name="main",
     max_seq_length=max_seq_length,
     pad_to_max_length=pad_to_max_length,
 )
@@ -61,10 +61,16 @@ dataset_manager = TextGenerationDataset.load_from_registry(
 calib_dataset = dataset_manager.tokenize_and_process(
     dataset_manager.get_raw_dataset()
 )
+data_loader = DataLoader(
+    calib_dataset, batch_size=1, collate_fn=DefaultDataCollator()
+)
 
 # run calibration
-for _ in tqdm(num_calibration_samples(10)):
-    _ = model(**tokenizer("", return_tensors="pt"))
+for idx, sample in tqdm(enumerate(data_loader)):
+    _ = model(**sample)
+
+    if idx >= num_calibration_samples:
+        break
 
 # freeze params after calibration
 model.apply(freeze_module_quantization)
