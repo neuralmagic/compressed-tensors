@@ -15,11 +15,12 @@
 from enum import Enum
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from sparsetensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
+    module_type,
 )
 from torch.nn import Module
 
@@ -94,7 +95,7 @@ class QuantizationConfig(BaseModel):
     format: str = "fakequant"
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
-    ignore: Optional[List[str]] = None
+    ignore: Optional[List[str]] = Field(default_factory=list)
 
     @staticmethod
     def from_pretrained(model: Module) -> "QuantizationConfig":
@@ -103,33 +104,42 @@ class QuantizationConfig(BaseModel):
         """
         quant_scheme_to_layers = []
         quantization_status = None
-        ignore = []
+        ignore = {}
+        quantization_type_names = set()
         for name, submodule in iter_named_leaf_modules(model):
+            layer_type = module_type(submodule)
             if not is_module_quantized(submodule):
-                ignore.append(name)
+                if layer_type not in ignore:
+                    ignore[layer_type] = []
+                ignore[layer_type].append(name)
             else:
                 quantization_status = submodule.quantization_status
                 scheme = submodule.quantization_scheme
+                quantization_type_names.add(layer_type)
 
                 match_found = False
-                for idx, (existing_scheme, _) in enumerate(quant_scheme_to_layers):
+                for existing_scheme in quant_scheme_to_layers:
                     if scheme == existing_scheme:
                         match_found = True
-                        quant_scheme_to_layers[idx][1].append(
-                            name
-                        )  # append((name, module_type(submodule)))
                         break
                 if not match_found:
-                    quant_scheme_to_layers.append((scheme, [name]))
+                    quant_scheme_to_layers.append(scheme)
+
+        consolidated_ignore = []
+        for layer_type, ignore_names in ignore.items():
+            if layer_type in quantization_type_names:
+                # specific layers of a quantized type are ignored
+                consolidated_ignore += ignore_names
+            # else we leave it off the ignore list, doesn't fall under any of the
+            # existing quantization schemes so it won't be quantized
 
         config_groups = {}
-        for idx, (scheme, targets) in enumerate(quant_scheme_to_layers):
+        for idx, scheme in enumerate(quant_scheme_to_layers):
             group_name = "group_" + str(idx)
-            scheme.targets = targets
             config_groups[group_name] = scheme
 
         return QuantizationConfig(
             config_groups=config_groups,
             quantization_status=quantization_status,
-            ignore=ignore,
+            ignore=consolidated_ignore,
         )

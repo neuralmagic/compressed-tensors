@@ -36,7 +36,9 @@ def test_apply_quantization_config_tinyllama():
     num_linears = 0
     num_embeddings = 0
     num_rotary_embeddings = 0
-    for module in model.modules():
+    for name, module in model.named_modules():
+        if name in quant_config.ignore:
+            continue
         module_type = module.__class__.__name__
         if module_type == "Linear":
             num_linears += 1
@@ -49,7 +51,7 @@ def test_apply_quantization_config_tinyllama():
             _test_layer_quantization_status(module, inputs=False, weights=False)
 
     # sanity check correct number of layers targeted
-    assert num_linears == 155
+    assert num_linears == 154  # 155 Linear layers - 1 that gets ignored
     assert num_embeddings == 1
     assert num_rotary_embeddings == 22
 
@@ -67,12 +69,14 @@ def test_serialize_config_tinyllama():
 
     serialized_config = QuantizationConfig.from_pretrained(model)
     assert len(serialized_config.config_groups) == 2
-    assert len(serialized_config.config_groups["group_0"].targets) == 1
+    assert serialized_config.config_groups["group_0"].targets == ["Embedding"]
     assert serialized_config.config_groups["group_0"].input_activations is None
+    assert serialized_config.config_groups["group_1"].targets == ["Linear"]
     assert serialized_config.config_groups["group_1"].input_activations is not None
     assert serialized_config.quantization_status == QuantizationStatus.FROZEN
     assert serialized_config.format == "fakequant"
     assert serialized_config.quant_method == "sparseml"
+    assert serialized_config.ignore == ["model.layers.1.mlp.down_proj"]
 
 
 def _test_layer_quantization_status(module, inputs: bool, weights: bool):
@@ -129,6 +133,6 @@ def get_sample_tinyllama_quant_config():
                 "targets": ["Embedding"],
             },
         },
-        "ignore": ["LlamaRotaryEmbedding"],
+        "ignore": ["LlamaRotaryEmbedding", "model.layers.1.mlp.down_proj"],
     }
     return QuantizationConfig.parse_obj(config_dict)
