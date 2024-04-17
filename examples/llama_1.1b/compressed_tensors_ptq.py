@@ -14,7 +14,7 @@
 
 from tqdm import tqdm
 
-from sparsetensors.quantization import (
+from compressed_tensors.quantization import (
     apply_quantization_config,
     freeze_module_quantization,
     QuantizationConfig,
