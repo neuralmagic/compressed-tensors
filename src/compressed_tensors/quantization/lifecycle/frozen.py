@@ -36,9 +36,12 @@ def freeze_module_quantization(module: Module):
 
     # delete observers from module
     observer_names = []
-    for submodule_name, _ in module.named_modules():
+    for submodule_name, submodule in module.named_modules():
         if "." not in submodule_name and submodule_name.endswith("_observer"):
-            # delete any observers that belong directly to this module
+            if getattr(submodule, "DYNAMIC", False):
+                continue  # do not delete dynamic observers
+
+            # delete any non-dynamic observers that belong directly to this module
             observer_names.append(submodule_name)
     for observer_name in observer_names:
         delattr(module, observer_name)

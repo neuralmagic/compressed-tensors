@@ -30,6 +30,9 @@ class Observer(Module, RegistryMixin):
     pair
     """
 
+    # child classes should set to True if they are meant to be used as dynamic
+    DYNAMIC = False
+
     def __init__(self, quantization_args: QuantizationArgs):
         self.quantization_args: QuantizationArgs = quantization_args
         super().__init__()
