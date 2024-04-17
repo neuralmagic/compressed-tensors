@@ -29,14 +29,15 @@ def quantize(
     x: torch.Tensor,
     scale: torch.Tensor,
     zero_point: torch.Tensor,
-    q_max: torch.Tensor,
+    max_q: torch.Tensor,
+    min_q,
 ) -> torch.Tensor:
     return torch.clamp(
         torch.round(
             x / scale + zero_point,
         ),
-        0,
-        q_max,
+        min_q,
+        max_q,
     )
 
 
@@ -56,9 +57,12 @@ def fake_quantize(
     zero_point: torch.Tensor,
     args: QuantizationArgs,
 ) -> torch.Tensor:
-    max_q = torch.tensor(2**args.num_bits - 1, device=x.device)
-    Q = torch.zeros_like(x)
-    Q = quantize(x, scale, zero_point, max_q)
+
+    # signed quantized
+    max_q = torch.tensor(2 ** int(args.num_bits // 2) - 1, device=x.device)
+    min_q = -torch.tensor(2 ** int(args.num_bits // 2), device=x.device)
+
+    Q = quantize(x, scale, zero_point, max_q, min_q)
     return dequantize(Q, scale, zero_point)
 
 
