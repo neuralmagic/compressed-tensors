@@ -13,8 +13,8 @@
 # limitations under the License.
 
 
-from sparsetensors.quantization.observers.base import Observer
-from sparsetensors.quantization.observers.memoryless import MemorylessObserver
+from compressed_tensors.quantization.observers.base import Observer
+from compressed_tensors.quantization.observers.memoryless import MemorylessObserver
 
 
 __all__ = ["DynamicObserver"]
