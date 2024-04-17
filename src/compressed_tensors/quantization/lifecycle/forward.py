@@ -112,18 +112,22 @@ def _maybe_calibrate_or_quantize(
     }:
         return value
 
-    device = next(module.parameters()).device
-    scale = getattr(module, f"{base_name}_scale")
-    # zero_point = getattr(module, f"{base_name}_zero_point").data
-    zero_point = getattr(module, f"{base_name}_zero_point")
+    observer = getattr(module, f"{base_name}_observer")
+    if observer.DYNAMIC:
+        # dynamic quantization - get scale and zero point directly from observer
+        scale, zero_point = observer(value)
+    else:
+        # static quantization - get previous scale and zero point from layer
+        scale = getattr(module, f"{base_name}_scale")
+        zero_point = getattr(module, f"{base_name}_zero_point")
 
-    if module.quantization_status == QuantizationStatus.CALIBRATION:
-        # get observer and get new quant params from observation
-        observer = getattr(module, f"{base_name}_observer")
-        updated_scale, updated_zero_point = observer(value)
+        if module.quantization_status == QuantizationStatus.CALIBRATION:
+            # calibration mode - get new quant params from observer
+            updated_scale, updated_zero_point = observer(value)
 
-        # update scale and zero point
-        scale.data = updated_scale.to(device)
-        zero_point.data = updated_zero_point.to(device)
+            # update scale and zero point
+            device = next(module.parameters()).device
+            scale.data = updated_scale.to(device)
+            zero_point.data = updated_zero_point.to(device)
 
     return fake_quantize(value, scale, zero_point, args)
