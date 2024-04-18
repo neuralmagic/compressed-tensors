@@ -45,21 +45,62 @@ class MinMaxObserver(Observer):
         """
         # TODO: Add support for full range of quantization Args, only supports 8bit
         #       per tensor
-        min_val = torch.tensor([observed.min()])
-        max_val = torch.tensor([observed.max()])
 
-        # update running average
-        if self.counter > 0:
-            self.min_val = (self.min_val * self.counter + min_val) / (self.counter + 1)
-            self.max_val = (self.max_val * self.counter + max_val) / (self.counter + 1)
+        # channel wise quantization
+        if self.quantization_args.group_size == -1 and observed.dim() > 2:
+            scale_zero_points = []
+            for chan_i in range(observed.shape[0]):
+
+                min_val = torch.tensor([observed[chan_i:].min()])
+                max_val = torch.tensor([observed[chan_i:].max()])
+
+                # update running average
+                if self.counter > 0:
+                    self.min_val = (self.min_val * self.counter + min_val) / (
+                        self.counter + 1
+                    )
+                    self.max_val = (self.max_val * self.counter + max_val) / (
+                        self.counter + 1
+                    )
+                else:
+                    self.min_val = min_val
+                    self.max_val = max_val
+
+                # ensure that the zeros are in the range
+                min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
+                max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
+
+                scale_zero_points.append(
+                    calculate_qparams(min_val, max_val, self.quantization_args)
+                )
+
+            self.counter += 1
+
         else:
-            self.min_val = min_val
-            self.max_val = max_val
+            # regular quantization
+            # TODO: group size quantization
+            
+            min_val = torch.tensor([observed.min()])
+            max_val = torch.tensor([observed.max()])
 
-        # ensure that the zeros are in the range
-        min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
-        max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
+            # update running average
+            if self.counter > 0:
+                self.min_val = (self.min_val * self.counter + min_val) / (
+                    self.counter + 1
+                )
+                self.max_val = (self.max_val * self.counter + max_val) / (
+                    self.counter + 1
+                )
+            else:
+                self.min_val = min_val
+                self.max_val = max_val
 
-        self.counter += 1
+            self.counter += 1
 
-        return calculate_qparams(min_val, max_val, self.quantization_args)
+            # ensure that the zeros are in the range
+            min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
+            max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
+
+            return calculate_qparams(min_val, max_val, self.quantization_args)
+
+        return scale_zero_points
