@@ -63,14 +63,8 @@ class PerTokenObserver(Observer):
         max_vals = torch.max(max_vals, torch.zeros_like(max_vals))
 
         # returned shape will match the min/max vals shape
-        scales, zero_points = calculate_qparams(
-            min_vals, max_vals, self.quantization_args
-        )
-
-        # expand scales and zero points to observed shape to avoid ambiguities
-        # when broadcasting
-        # TODO: try to rearchitecture to avoid this, or at least add check
-        # for rectangular shapes where we may not need to do this
-        expand_shape = list(observed.shape)
-        expand_shape[self.range] = -1  # hold token dim constant
-        return scales.expand(expand_shape), zero_points.expand(expand_shape)
+        # since keepdim=True, the reduced dims will have their dims set to 1
+        # so scales and zero points should broadcast correctly along the
+        # token axis
+        # TODO: add test for the broadcast mentioned above
+        return calculate_qparams(min_vals, max_vals, self.quantization_args)
