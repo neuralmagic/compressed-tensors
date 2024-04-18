@@ -14,7 +14,7 @@
 
 import re
 from collections import OrderedDict
-from typing import Iterable, Optional
+from typing import Iterable, List, Optional
 
 from compressed_tensors.quantization.lifecycle.calibration import (
     set_module_for_calibration,
@@ -37,12 +37,21 @@ __all__ = [
 ]
 
 
-def apply_quantization_config(model: Module, config: QuantizationConfig):
+def apply_quantization_config(
+    model: Module,
+    config: QuantizationConfig,
+    extra_ignore_keys: Optional[List],
+):
     """
     Initializes the model for quantization in-place based on the given config
 
     :param model: model to apply quantization config to
     :param config: quantization config
+    :param extra_ignore_keys: list of layer names or layer object types, or regex
+        patterns for either to be added to the ignore list. This is useful for
+        cases where we wish to skip quantization modification for a particular
+        group of layers (ie in inference frameworks with their own quantized Linear
+        implementation)
     """
     # build mapping of targets to schemes for easier matching
     # use ordered dict to preserve target ordering in config
@@ -52,8 +61,11 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
             target_to_scheme[target] = scheme
 
     # mark appropriate layers for quantization by setting their quantization schemes
+    ignore_set = set()
+    ignore_set.update(config.ignore)
+    ignore_set.update(extra_ignore_keys)
     for name, submodule in iter_named_leaf_modules(model):
-        if _find_first_name_or_class_match(name, submodule, config.ignore):
+        if _find_first_name_or_class_match(name, submodule, ignore_set):
             continue  # layer matches ignore list, continue
         target = _find_first_name_or_class_match(name, submodule, target_to_scheme)
         if target is not None:
