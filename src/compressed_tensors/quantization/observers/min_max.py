@@ -47,9 +47,10 @@ class MinMaxObserver(Observer):
         #       per tensor
 
         # channel wise quantization -- group_size == -1
-        if self.quantization_args.group_size == -1 and observed.dim() > 2:
+        if self.quantization_args.group_size == -1:
 
-            reduce_dims = [1, 2]  # 0th dim for channel, 1st, 2nd contain data
+            reduce_dims = [1]  # everything thats not zero
+
             min_vals = observed.amin(dim=reduce_dims, keepdim=True)
             max_vals = observed.amax(dim=reduce_dims, keepdim=True)
 
