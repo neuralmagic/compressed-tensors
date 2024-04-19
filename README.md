@@ -44,8 +44,6 @@ from torch import Tensor
 
 tensors: Dict[str, Tensor] = ...
 compression_config: Dict = save_compressed(tensors, "model.safetensors")
-
-
 ```
 
 ### Loading

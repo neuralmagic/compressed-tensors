@@ -18,6 +18,7 @@ from typing import Dict, Optional, Union
 from compressed_tensors.base import CONFIG_NAME
 from compressed_tensors.compressors import ModelCompressor
 from compressed_tensors.config import CompressionConfig
+from safetensors import safe_open
 from safetensors.torch import save_file
 from torch import Tensor
 from transformers import AutoConfig
@@ -87,5 +88,40 @@ def save_compressed(
     return {CONFIG_NAME: compression_config.model_dump(exclude_unset=True)}
 
 
-def load_compressed(compressed_tensors: Union[str, Path], device: str):
-    pass
+def load_compressed(
+    compressed_tensors: Union[str, Path],
+    compression_config: Optional[CompressionConfig] = None,
+    device: Optional[str] = "cpu",
+) -> Dict[str, Tensor]:
+    """
+    Load compressed tensors from disk. If tensors are not compressed,
+    load them as is.
+
+    :param compressed_tensors: path to compressed tensors
+    :param compression_config: compression config to use for decompressing tensors.
+        Can be either inferred from tensors or provided explicitly.
+    :param device: device to move tensors to. If None, tensors are loaded on CPU.
+    :return decompressed tensors
+    """
+
+    if compressed_tensors is None or not Path(compressed_tensors).exists():
+        raise ValueError("No compressed tensors provided to load")
+
+    # create compression config if not provided
+    # TODO: Not implemented, need to get this in ASAP
+    # compression_config = compression_config or infer_compression_config(tensors)
+
+    if compression_config is None:
+        # no compression applied
+        tensors = {}
+        with safe_open(compressed_tensors, framework="pt", device="cpu") as f:
+            for key in f.keys():
+                tensors[key] = f.get_tensor(key)
+        return tensors
+
+    # decompress
+    compression_format = compression_config.format
+    compressor = ModelCompressor.load_from_registry(
+        compression_format, config=compression_config
+    )
+    return dict(compressor.decompress(compressed_tensors))

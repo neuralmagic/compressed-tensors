@@ -14,7 +14,7 @@
 
 import pytest
 import torch
-from compressed_tensors import save_compressed
+from compressed_tensors import load_compressed, save_compressed
 from compressed_tensors.config import BitmaskConfig
 
 
@@ -44,15 +44,7 @@ def test_save_compressed_sparse(tmp_path, tensors_and_config_sparse):
 
     config_json = save_compressed(
         tensors,
-        compression_config=BitmaskConfig(
-            format=expected_config_json["compression_config"]["format"],
-            global_sparsity=expected_config_json["compression_config"][
-                "global_sparsity"
-            ],
-            sparsity_structure=expected_config_json["compression_config"][
-                "sparsity_structure"
-            ],
-        ),
+        compression_config=BitmaskConfig(**expected_config_json["compression_config"]),
         save_path=tmp_path / "model.safetensors",
     )
     assert (tmp_path / "model.safetensors").exists()
@@ -77,3 +69,16 @@ def test_save_compressed_empty():
 
     with pytest.raises(Exception):
         save_compressed(None, "")
+
+
+def test_load_compressed_sparse(tmp_path, tensors_and_config_sparse):
+    tensors, expected_config_json = tensors_and_config_sparse
+    compression_config = BitmaskConfig(**expected_config_json["compression_config"])
+    save_compressed(
+        tensors,
+        compression_config=compression_config,
+        save_path=tmp_path / "model.safetensors",
+    )
+    loaded_tensors = load_compressed(tmp_path / "model.safetensors", compression_config)
+    for key in tensors:
+        assert torch.allclose(tensors[key], loaded_tensors[key])

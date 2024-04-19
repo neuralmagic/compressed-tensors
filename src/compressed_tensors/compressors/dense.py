@@ -27,5 +27,7 @@ class DenseCompressor(ModelCompressor):
     def compress(self, model_state: Dict[str, Tensor]) -> Dict[str, Tensor]:
         return model_state
 
-    def decompress(self, model_path: str) -> Generator[Tuple[str, Tensor], None, None]:
+    def decompress(
+        self, path_to_model_or_tensors: str
+    ) -> Generator[Tuple[str, Tensor], None, None]:
         return iter([])
