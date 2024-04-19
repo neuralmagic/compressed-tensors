@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from compressed_tensors.quantization.lifecycle import apply_quantization_config
 from compressed_tensors.quantization.quant_config import (
     QuantizationConfig,

@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SPARSITY_CONFIG_NAME = "sparsity_config"
+CONFIG_NAME = "compression_config"
