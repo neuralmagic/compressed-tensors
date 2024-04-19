@@ -71,7 +71,3 @@ class ModelCompressor(RegistryMixin):
             data_old.data = data_new.data
 
         setattr(model, SPARSITY_CONFIG_NAME, self.config)
-
-
-def dummy_test(*args, **kwargs):
-    pass
