@@ -14,6 +14,7 @@
 
 from typing import Optional, Tuple
 
+import torch
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.registry.registry import RegistryMixin
 from torch import FloatTensor, IntTensor, Tensor
@@ -64,8 +65,33 @@ class Observer(Module, RegistryMixin):
         :return: tuple of scale and zero point based on last observed value
         """
         if observed is not None:
-            # re-calcualte scale and zero point, update the stored value
-            self._scale, self._zero_point = self.calculate_qparams(
-                observed, group_size=self.quantization_args.group_size
-            )
+            group_size = self.quantization_args.group_size
+
+            if group_size > 0:  # quantize by groups
+                columns = observed.shape[1]
+                scales, zero_points = [], []
+                for i in range(0, columns, self.quantization_args.group_size):
+                    scale, zero_point = self.calculate_qparams(
+                        observed[:, i : (i + group_size)]
+                    )
+                    scales.append(scale)
+                    zero_points.append(zero_point)
+
+                if hasattr(self, "inc"):
+                    self.inc()
+
+                self._scale = torch.cat(scales)
+                self._zero_point = torch.cat(zero_points)
+
+            elif group_size < 0:  # channel-wise quantization
+                # TODO: Import channel wise logic here
+
+                if hasattr(self, "inc"):
+                    self.inc()
+
+            else:
+                # re-calcualte scale and zero point, update the stored value
+                self._scale, self._zero_point = self.calculate_qparams(observed)
+                if hasattr(self, "inc"):
+                    self.inc()
         return self._scale, self._zero_point
