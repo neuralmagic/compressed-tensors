@@ -212,6 +212,12 @@ def get_quantization_state_dict(model_path: str) -> Dict[str, Tensor]:
 
 
 def _is_quantization_weight(name: str) -> bool:
+    """
+    Checks is a parameter name is associated with a quantization parameter
+
+    :param name: parameter name to check
+    :return: True if parameter name is a quantization parameter, else False
+    """
     if name.endswith("_scale"):
         return True
     if name.endswith("zero_point"):
