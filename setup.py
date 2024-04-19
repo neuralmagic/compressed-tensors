@@ -18,7 +18,7 @@ from typing import List, Dict
 
 def _setup_packages() -> List:
     return find_packages(
-        "src", include=["compressed-tensors", "compressed-tensors.*"], exclude=["*.__pycache__.*"]
+        "src", include=["compressed_tensors", "compressed_tensors.*"], exclude=["*.__pycache__.*"]
     )
     
 def _setup_install_requires() -> List:
@@ -29,7 +29,7 @@ def _setup_extras() -> Dict:
 
 setup(
     name="compressed-tensors",
-    #version="0.3.0",
+    version="0.3.0",
     author="Neuralmagic, Inc.",
     author_email="support@neuralmagic.com",
     description="Library for utilization of compressed safetensors of neural network models",
