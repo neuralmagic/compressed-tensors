@@ -36,23 +36,28 @@ pip install -e .
 
 ### Saving
 
-The function `save_compressed` returns an optional `compression_config` (if compression has been applied). It can be used to inspect the applied compression.
+The function `save_compressed` uses the `compression_format` argument to apply compression to tensors.
+The function `load_compressed` reverses the process: converts the compressed weights on disk to decompressed weights in device memory.
 
 ```python
-from compressed_tensors import save_compressed
+from compressed_tensors import save_compressed, load_compressed, BitmaskConfig
 from torch import Tensor
+from typing import Dict
 
-tensors: Dict[str, Tensor] = ...
-compression_config: Dict = save_compressed(tensors, "model.safetensors")
-```
+# the example BitmaskConfig method efficiently compresses 
+# tensors with large number of zero entries 
+compression_config = BitmaskConfig()
 
-### Loading
 
-```python
-from compressed_tensors import load_compressed
-from torch import Tensor
+tensors: Dict[str, Tensor] = {"tensor_1": Tensor(
+    [[0.0, 0.0, 0.0], 
+     [1.0, 1.0, 1.0]]
+)}
+# compress tensors using BitmaskConfig compression format (save them efficiently on disk)
+save_compressed(tensors, "model.safetensors", compression_format=compression_config.format)
 
-tensors: Dict[str, Tensor] = load_compressed("model.safetensors", device="cpu")
+# decompress tensors (load the uncompressed representation to device memory)
+tensors = load_compressed("model.safetensors", device="cpu", compression_config = compression_config)
 ```
 
 ## Benefits
@@ -87,7 +92,7 @@ The library provides pathways to automatically add the config information to the
 ```json
 // config.json
 {
-    "sparsity_config": {
+    "compression_config": {
         "format": "sparse_bitmask", // "dense_sparsity" for the original tensor format
 
         // Informational

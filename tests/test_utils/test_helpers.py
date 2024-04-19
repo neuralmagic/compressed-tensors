@@ -19,47 +19,44 @@ from compressed_tensors.config import BitmaskConfig
 
 
 @pytest.fixture
-def tensors_and_config_sparse():
+def tensors():
     tensors = {"tensor_1": torch.Tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])}
-    expected_config_json = {
-        "compression_config": {
-            "format": "sparse_bitmask",
-            "global_sparsity": (
-                tensors["tensor_1"].sum() / tensors["tensor_1"].numel()
-            ).item(),
-            "sparsity_structure": "unstructured",
-        }
-    }
-    return tensors, expected_config_json
-
-
-@pytest.fixture
-def tensors_dense():
-    tensors = {"tensor_1": torch.Tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]])}
     return tensors
 
 
-def test_save_compressed_sparse(tmp_path, tensors_and_config_sparse):
-    tensors, expected_config_json = tensors_and_config_sparse
-
-    config_json = save_compressed(
+def test_save_compressed_sparse_bitmask(tmp_path, tensors):
+    save_compressed(
         tensors,
-        compression_config=BitmaskConfig(**expected_config_json["compression_config"]),
+        compression_format="sparse-bitmask",
         save_path=tmp_path / "model.safetensors",
     )
     assert (tmp_path / "model.safetensors").exists()
-    assert config_json == expected_config_json
 
 
-def test_save_compressed_dense(tmp_path, tensors_dense):
-    tensors = tensors_dense
+def test_save_compressed_dense_sparsity(tmp_path, tensors):
+    save_compressed(
+        tensors,
+        compression_format="dense-sparsity",
+        save_path=tmp_path / "model.safetensors",
+    )
+    assert (tmp_path / "model.safetensors").exists()
 
-    config_json = save_compressed(
+
+def test_save_compressed_no_compression(tmp_path, tensors):
+    save_compressed(
         tensors,
         save_path=tmp_path / "model.safetensors",
     )
     assert (tmp_path / "model.safetensors").exists()
-    assert config_json is None
+
+
+def test_save_compressed_rubbish_compression_format(tmp_path, tensors):
+    with pytest.raises(Exception):
+        save_compressed(
+            tensors,
+            compression_format="this_is_not_a_valid_format",
+            save_path=tmp_path / "model.safetensors",
+        )
 
 
 def test_save_compressed_empty():
@@ -71,24 +68,37 @@ def test_save_compressed_empty():
         save_compressed(None, "")
 
 
-def test_load_compressed_sparse(tmp_path, tensors_and_config_sparse):
-    tensors, expected_config_json = tensors_and_config_sparse
-    compression_config = BitmaskConfig(**expected_config_json["compression_config"])
+def test_load_compressed_sparse_bitmask(tmp_path, tensors):
     save_compressed(
         tensors,
-        compression_config=compression_config,
+        compression_format="sparse-bitmask",
         save_path=tmp_path / "model.safetensors",
+    )
+    compression_config = BitmaskConfig(
+        format="sparse-bitmask",
     )
     loaded_tensors = load_compressed(tmp_path / "model.safetensors", compression_config)
     for key in tensors:
         assert torch.allclose(tensors[key], loaded_tensors[key])
 
 
-def test_load_compressed_dense(tmp_path, tensors_dense):
+def test_load_compressed_dense_sparsity(tmp_path, tensors):
     save_compressed(
-        tensors_dense,
+        tensors,
+        compression_format="dense-sparsity",
+        save_path=tmp_path / "model.safetensors",
+    )
+    compression_config = BitmaskConfig(format="dense-sparsity")
+    loaded_tensors = load_compressed(tmp_path / "model.safetensors", compression_config)
+    # loaded_tensors is empty -> decompression returns empty dict
+    assert not loaded_tensors
+
+
+def test_load_compressed_no_compression(tmp_path, tensors):
+    save_compressed(
+        tensors,
         save_path=tmp_path / "model.safetensors",
     )
     loaded_tensors = load_compressed(tmp_path / "model.safetensors")
-    for key in tensors_dense:
-        assert torch.allclose(tensors_dense[key], loaded_tensors[key])
+    for key in tensors:
+        assert torch.allclose(tensors[key], loaded_tensors[key])

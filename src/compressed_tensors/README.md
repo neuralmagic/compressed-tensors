@@ -34,7 +34,7 @@ Config information gets stored in the HF config file
 ```json
 // config.json
 {
-    "sparsity_config": {
+    "compression_config": {
         "format": "sparse_bitmask", // "dense_sparsity" for original tensor format
 
         // informational

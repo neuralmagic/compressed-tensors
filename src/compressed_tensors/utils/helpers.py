@@ -13,11 +13,11 @@
 # limitations under the License.
 
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Literal, Optional, Union
 
 from compressed_tensors.base import CONFIG_NAME
 from compressed_tensors.compressors import ModelCompressor
-from compressed_tensors.config import CompressionConfig
+from compressed_tensors.config import CompressionConfig, CompressionFormat
 from safetensors import safe_open
 from safetensors.torch import save_file
 from torch import Tensor
@@ -51,46 +51,46 @@ def infer_compressor_from_model_config(
 def save_compressed(
     tensors: Dict[str, Tensor],
     save_path: Union[str, Path],
-    compression_config: Optional[CompressionConfig] = None,
-) -> Optional[CompressionConfig]:
+    compression_format: Optional[
+        Literal[CompressionFormat.sparse_bitmask, CompressionFormat.dense_sparsity]
+    ] = None,
+):
     """
     Save compressed tensors to disk. If tensors are not compressed,
     save them as is.
 
     :param tensors: dictionary of tensors to compress
     :param save_path: path to save compressed tensors
-    :param compression_config: compression config to use for compressing tensors.
-        Can be either inferred from tensors or provided explicitly
+    :param compression_format: compression format used for the tensors
     :return: compression config, if tensors were compressed - None otherwise
     """
     if tensors is None or len(tensors) == 0:
         raise ValueError("No tensors or empty tensors provided to compress")
 
-    # create compression config if not provided
-    # TODO: Not implemented, need to get this in ASAP
-    # compression_config = compression_config or infer_compression_config(tensors)
-
-    if compression_config is None:
+    if compression_format is None:
         # no compression applied
         save_file(tensors, save_path)
-        return None
+        return
+
+    if not (
+        compression_format in ModelCompressor.registered_names()
+        or compression_format in ModelCompressor.registered_aliases()
+    ):
+        raise ValueError(
+            f"Unknown compression format: {compression_format}. "
+            f"Must be one of {set(ModelCompressor.registered_names() + ModelCompressor.registered_aliases())}"  # noqa E501
+        )
 
     # compress
-    compression_format = compression_config.format
-    compressor = ModelCompressor.load_from_registry(
-        compression_format, config=compression_config
-    )
+    compressor = ModelCompressor.load_from_registry(compression_format)
     # save compressed tensors
     compressed_tensors = compressor.compress(tensors)
     save_file(compressed_tensors, save_path)
 
-    # return compression_config as dict
-    return {CONFIG_NAME: compression_config.model_dump(exclude_unset=True)}
-
 
 def load_compressed(
     compressed_tensors: Union[str, Path],
-    compression_config: Optional[CompressionConfig] = None,
+    compression_config: CompressionConfig = None,
     device: Optional[str] = "cpu",
 ) -> Dict[str, Tensor]:
     """
@@ -99,17 +99,12 @@ def load_compressed(
 
     :param compressed_tensors: path to compressed tensors
     :param compression_config: compression config to use for decompressing tensors.
-        Can be either inferred from tensors or provided explicitly.
     :param device: device to move tensors to. If None, tensors are loaded on CPU.
     :return decompressed tensors
     """
 
     if compressed_tensors is None or not Path(compressed_tensors).exists():
         raise ValueError("No compressed tensors provided to load")
-
-    # create compression config if not provided
-    # TODO: Not implemented, need to get this in ASAP
-    # compression_config = compression_config or infer_compression_config(tensors)
 
     if compression_config is None:
         # no compression applied

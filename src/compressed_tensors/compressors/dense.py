@@ -15,10 +15,11 @@
 from typing import Dict, Generator, Tuple
 
 from compressed_tensors.compressors import ModelCompressor
+from compressed_tensors.config import CompressionFormat
 from torch import Tensor
 
 
-@ModelCompressor.register(name="dense_sparsity")
+@ModelCompressor.register(name=CompressionFormat.dense_sparsity.value)
 class DenseCompressor(ModelCompressor):
     """
     Identity compressor for dense models, returns the original state_dict

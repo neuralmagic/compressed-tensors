@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import operator
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, Optional, Tuple
 
 from compressed_tensors.base import CONFIG_NAME
 from compressed_tensors.config import CompressionConfig
@@ -33,7 +33,7 @@ class ModelCompressor(RegistryMixin):
     :param config: config specifying compression parameters
     """
 
-    def __init__(self, config: CompressionConfig):
+    def __init__(self, config: Optional[CompressionConfig] = None):
         self.config = config
 
     def compress(self, model_state: Dict[str, Tensor]) -> Dict[str, Tensor]:
