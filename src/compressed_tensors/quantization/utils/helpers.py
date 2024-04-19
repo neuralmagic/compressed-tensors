@@ -28,6 +28,15 @@ __all__ = [
 ]
 
 
+def is_quantization_weight(name: str) -> bool:
+    if name.endswith("_scale"):
+        return True
+    if name.endswith("zero_point"):
+        return True
+
+    return False
+
+
 def is_module_quantized(module: Module) -> bool:
     """
     Check if a module is quantized, based on the existence of a non-empty quantization
