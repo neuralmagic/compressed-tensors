@@ -82,3 +82,13 @@ def test_load_compressed_sparse(tmp_path, tensors_and_config_sparse):
     loaded_tensors = load_compressed(tmp_path / "model.safetensors", compression_config)
     for key in tensors:
         assert torch.allclose(tensors[key], loaded_tensors[key])
+
+
+def test_load_compressed_dense(tmp_path, tensors_dense):
+    save_compressed(
+        tensors_dense,
+        save_path=tmp_path / "model.safetensors",
+    )
+    loaded_tensors = load_compressed(tmp_path / "model.safetensors")
+    for key in tensors_dense:
+        assert torch.allclose(tensors_dense[key], loaded_tensors[key])
