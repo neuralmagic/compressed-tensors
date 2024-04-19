@@ -65,5 +65,7 @@ class Observer(Module, RegistryMixin):
         """
         if observed is not None:
             # re-calcualte scale and zero point, update the stored value
-            self._scale, self._zero_point = self.calculate_qparams(observed)
+            self._scale, self._zero_point = self.calculate_qparams(
+                observed, group_size=self.quantization_args.group_size
+            )
         return self._scale, self._zero_point

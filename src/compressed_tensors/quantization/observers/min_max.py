@@ -38,26 +38,48 @@ class MinMaxObserver(Observer):
         self.max_val = -float("inf")
         self.counter = 0
 
-    def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
+    def calculate_qparams(
+        self, observed: Tensor, group_size: int = 0
+    ) -> Tuple[FloatTensor, IntTensor]:
         """
+
         :param observed: observed tensor to calculate quantization parameters for
         :return: tuple of scale and zero point derived from the observed tensor
         """
 
-        min_val = torch.tensor([observed.min()])
-        max_val = torch.tensor([observed.max()])
+        # quantize by groups
+        if group_size > 0:
+            columns = observed.shape[1]
+            scales, zero_points = [], []
+            for i in range(0, columns, self.quantization_args.group_size):
+                scale, zero_point = self.calculate_qparams(
+                    observed[:, i : (i + group_size)], 0
+                )
+                scales.append(scale)
+                zero_points.append(zero_point)
 
-        # update global min and max
-        if self.counter > 0:
-            self.min_val = torch.min(min_val, self.min_val)
-            self.max_val = torch.max(max_val, self.max_val)
-        else:
-            self.min_val = min_val
-            self.max_val = max_val
+            return torch.cat(scales), torch.cat(zero_points)
 
-        # ensure that the zeros are in the range
-        min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
-        max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
+        # channel-wise quantization
+        if group_size < 0:
+            ...
 
-        self.counter += 1
-        return calculate_qparams(min_val, max_val, self.quantization_args)
+        if group_size == 0:
+
+            min_val = torch.tensor([observed.min()])
+            max_val = torch.tensor([observed.max()])
+
+            # update global min and max
+            if self.counter > 0:
+                self.min_val = torch.min(min_val, self.min_val)
+                self.max_val = torch.max(max_val, self.max_val)
+            else:
+                self.min_val = min_val
+                self.max_val = max_val
+
+            # ensure that the zeros are in the range
+            min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
+            max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
+
+            self.counter += 1
+            return calculate_qparams(min_val, max_val, self.quantization_args)
