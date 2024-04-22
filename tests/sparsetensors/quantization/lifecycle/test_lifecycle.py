@@ -20,7 +20,7 @@ from sparsetensors.quantization.lifecycle.frozen import freeze_module_quantizati
 from sparsetensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
-from sparsetensors.quantization.lifecycle.status import QuantizationStatus
+from sparsetensors.quantization.lifecycle.quant_config import QuantizationStatus
 from sparsetensors.quantization.quant_args import QuantizationArgs
 from torch.nn import Linear
 
@@ -82,8 +82,11 @@ def test_lifecyle(create_quantization_scheme):
     assert torch.numel(layer.weight_scale) > 0
     assert torch.numel(layer.weight_zero_point) > 0
 
-    # lower bound for quantize is 0
-    assert torch.all(layer.weight.data >= 0)
+    # symmetric zero points should center at 0
+    assert layer.weight_zero_point.data == 0
+
+    # check high and low bound of the weights
+    assert torch.all(layer.weight.data >= -128) and torch.all(layer.weight.data <= 127)
 
     initalized_layer = deepcopy(layer)
 
@@ -95,13 +98,13 @@ def test_lifecyle(create_quantization_scheme):
     assert initalized_layer.input_scale != layer.input_scale
     assert initalized_layer.weight_scale != layer.weight_scale
 
-    frozen_layer = deepcopy(layer)
+    layer_before_freeze = deepcopy(layer)
 
     # Freeze, no update after any forward pass
     freeze_module_quantization(layer)
     for _ in range(10):
         layer(torch.randn(4, 4))
 
-    assert frozen_layer.input_zero_point == layer.input_zero_point
-    assert frozen_layer.input_scale == layer.input_scale
-    assert frozen_layer.weight_scale == layer.weight_scale
+    assert layer_before_freeze.input_zero_point == layer.input_zero_point
+    assert layer_before_freeze.input_scale == layer.input_scale
+    assert layer_before_freeze.weight_scale == layer.weight_scale
