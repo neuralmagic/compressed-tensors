@@ -25,7 +25,7 @@ from sparsetensors.quantization.quant_args import QuantizationArgs
 from torch.nn import Linear
 
 
-def test_lifecyle(create_quantization_scheme):
+def test_lifecyle(create_quantization_scheme, mocker):
     num_bits = 8
 
     quantization_scheme = create_quantization_scheme(
