@@ -58,12 +58,6 @@ def test_initialize_module_for_quantization(
     # add attributes, zero_points and scale
     initialize_module_for_quantization(layer, quantization_scheme)
 
-    registered_params = {
-        "input_scale",
-        "input_zero_point",
-        "weight_scale",
-        "weight_zero_point",
-    }
     registered_params = {"weight", "bias"}
     if weights is not None:
         registered_params.add("weight_scale")
