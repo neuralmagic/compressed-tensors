@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from functools import wraps
+from typing import Optional
 
 import torch
 from compressed_tensors.quantization.quant_args import QuantizationArgs
@@ -29,16 +30,25 @@ def quantize(
     x: torch.Tensor,
     scale: torch.Tensor,
     zero_point: torch.Tensor,
-    q_min: torch.Tensor,
-    q_max: torch.Tensor,
+    args: QuantizationArgs,
+    dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
-    return torch.clamp(
+    bit_range = 2**args.num_bits
+    q_min = torch.tensor(bit_range / 2 - 1, device=x.device)
+    q_max = torch.tensor(-bit_range / 2, device=x.device)
+
+    quantized_value = torch.clamp(
         torch.round(
             x / scale + zero_point,
         ),
         q_min,
         q_max,
     )
+
+    if dtype is not None:
+        quantized_value = quantized_value.to(dtype)
+
+    return quantized_value
 
 
 @torch.no_grad()
@@ -57,12 +67,8 @@ def fake_quantize(
     zero_point: torch.Tensor,
     args: QuantizationArgs,
 ) -> torch.Tensor:
-    bit_range = 2**args.num_bits
-    max_q = torch.tensor(bit_range / 2 - 1, device=x.device)
-    min_q = torch.tensor(-bit_range / 2, device=x.device)
-    Q = torch.zeros_like(x)
-    Q = quantize(x, scale, zero_point, min_q, max_q)
-    return dequantize(Q, scale, zero_point)
+    x_quant = quantize(x, scale, zero_point, args)
+    return dequantize(x_quant, scale, zero_point)
 
 
 def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):

@@ -60,9 +60,32 @@ class QuantizationStatus(str, Enum):
         return
 
     def __ge__(self, other):
+        if other is None:
+            return True
         if not isinstance(other, self.__class__):
             raise NotImplementedError
         return LIFECYCLE_ORDER.index(self) >= LIFECYCLE_ORDER.index(other)
+
+    def __gt__(self, other):
+        if other is None:
+            return True
+        if not isinstance(other, self.__class__):
+            raise NotImplementedError
+        return LIFECYCLE_ORDER.index(self) > LIFECYCLE_ORDER.index(other)
+
+    def __lt__(self, other):
+        if other is None:
+            return False
+        if not isinstance(other, self.__class__):
+            raise NotImplementedError
+        return LIFECYCLE_ORDER.index(self) < LIFECYCLE_ORDER.index(other)
+
+    def __le__(self, other):
+        if other is None:
+            return False
+        if not isinstance(other, self.__class__):
+            raise NotImplementedError
+        return LIFECYCLE_ORDER.index(self) <= LIFECYCLE_ORDER.index(other)
 
 
 LIFECYCLE_ORDER = [
