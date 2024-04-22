@@ -35,3 +35,55 @@ def test_min_max_observer(symmetric, expected_scale, expected_zero_point):
 
     assert round(scale.item(), 4) == expected_scale
     assert round(zero_point.item(), 4) == expected_zero_point
+
+
+def test_min_max_observer_symmetric_scale_range():
+    tensor = torch.rand(4, 4)
+    tensor *= 127
+
+    num_bits = 8
+    weights = QuantizationArgs(num_bits=num_bits, symmetric=True)
+
+    observer = weights.get_observer()
+    scale, zero_point = observer(tensor)
+
+    # if symmetric, max symmetric_range = abs(-128) / 255
+    assert round(scale.item(), 4) <= 1.0039
+    assert round(zero_point.item(), 4) == 0
+
+
+def test_min_max_observer_value_update():
+    inp = torch.tensor([1, 1, 1, 1, 1])
+    inp_update_max = torch.tensor([127, 1, 1, 1, 1])
+    inp_update_min = torch.tensor([-128, 1, 1, 1, 1])
+
+    # udpate the min, max twice total
+    tensors = [
+        inp,
+        inp,
+        inp_update_max,  # update max
+        inp,
+        inp_update_min,  # update min
+    ]
+
+    tensor = inp
+    num_bits = 8
+    weights = QuantizationArgs(num_bits=num_bits, symmetric=True)
+
+    observer = weights.get_observer()
+    curr_max = 1
+    curr_min = 1
+    for i, tensor in enumerate(tensors):
+        observer(tensor)
+        curr_max = max(observer.max_val, curr_max)
+        curr_min = min(observer.min_val, curr_max)
+
+        if i < 2:
+            assert curr_max == 1
+            assert curr_min == 1
+        elif i < 4:
+            assert curr_max == 43  # (127 + 2) / 3
+            assert curr_min == 1
+        else:
+            assert curr_max == 43
+            assert curr_min == -24.8  # (-128 + 4) / 5
