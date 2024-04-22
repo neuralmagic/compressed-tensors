@@ -13,20 +13,42 @@
 # limitations under the License.
 
 
+import pytest
 from sparsetensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
-from sparsetensors.quantization.lifecycle.status import QuantizationStatus
 from sparsetensors.quantization.quant_args import QuantizationArgs
+from sparsetensors.quantization.quant_config import QuantizationStatus
 from torch.nn import Linear
 
 
-def test_initialize_module_for_quantization(create_quantization_scheme):
-    num_bits = 8
+NUM_BITS = 8
+
+
+@pytest.mark.parametrize(
+    "weights,input_activations",
+    [
+        (
+            QuantizationArgs(num_bits=NUM_BITS, symmetric=True),
+            None,
+        ),
+        (
+            None,
+            QuantizationArgs(num_bits=NUM_BITS, symmetric=True),
+        ),
+        (
+            QuantizationArgs(num_bits=NUM_BITS, symmetric=True),
+            QuantizationArgs(num_bits=NUM_BITS, symmetric=True),
+        ),
+    ],
+)
+def test_initialize_module_for_quantization(
+    create_quantization_scheme, weights, input_activations
+):
     quantization_scheme = create_quantization_scheme(
         targets=["*"],
-        weights=QuantizationArgs(num_bits=num_bits, symmetric=True),
-        input_activations=QuantizationArgs(num_bits=num_bits, symmetric=False),
+        weights=weights,
+        input_activations=input_activations,
     )
     layer = Linear(4, 4)
 
@@ -36,17 +58,26 @@ def test_initialize_module_for_quantization(create_quantization_scheme):
     # add attributes, zero_points and scale
     initialize_module_for_quantization(layer, quantization_scheme)
 
-    expected_registered_params = {
+    registered_params = {
         "input_scale",
         "input_zero_point",
         "weight_scale",
         "weight_zero_point",
     }
-    actual_registered_params = set()
-    for key in layer.state_dict().keys():
-        actual_registered_params.add(key)
+    registered_params = {"weight", "bias"}
+    if weights is not None:
+        registered_params.add("weight_scale")
+        registered_params.add("weight_zero_point")
 
-    expected_registered_params.issubset(actual_registered_params)
+    if input_activations is not None:
+        registered_params.add("input_scale")
+        registered_params.add("input_zero_point")
+
+    for key in layer.state_dict().keys():
+        assert key in registered_params
+        registered_params.remove(key)
+
+    assert len(registered_params) == 0
 
     assert hasattr(layer, "quantization_scheme")
     assert hasattr(layer, "quantization_status")
