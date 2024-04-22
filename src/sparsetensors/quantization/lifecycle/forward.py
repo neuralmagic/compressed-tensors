@@ -21,7 +21,13 @@ from sparsetensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
 
 
-__all__ = ["wrap_module_forward_quantized"]
+__all__ = [
+    "wrap_module_forward_quantized",
+    "quantize",
+    "dequantize",
+    "fake_quantize",
+    "maybe_calibrate_or_quantize",
+]
 
 
 @torch.no_grad()
