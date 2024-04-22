@@ -109,7 +109,7 @@ def load_compressed(
     if compression_config is None:
         # no compression applied
         tensors = {}
-        with safe_open(compressed_tensors, framework="pt", device="cpu") as f:
+        with safe_open(compressed_tensors, framework="pt", device=device) as f:
             for key in f.keys():
                 tensors[key] = f.get_tensor(key)
         return tensors
