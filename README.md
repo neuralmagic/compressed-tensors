@@ -11,7 +11,6 @@ The compressed format stores the data much more efficiently by taking advantage 
 - Sparse tensors -> due to a large number of entries that are equal to zero.
 - Quantized -> due to their low precision representation.
 
-
 ### Introduce an elegant interface to save/load compressed tensors
 
 The library provides the user with the ability to compress/decompress tensors. The properties of tensors are defined by human-readable configs, allowing the users to understand the compression format at a quick glance.
@@ -34,7 +33,7 @@ pip install -e .
 
 ## Getting started
 
-### Saving
+### Saving/Loading Compressed Tensors (Bitmask Compression)
 
 The function `save_compressed` uses the `compression_format` argument to apply compression to tensors.
 The function `load_compressed` reverses the process: converts the compressed weights on disk to decompressed weights in device memory.
@@ -57,47 +56,8 @@ tensors: Dict[str, Tensor] = {"tensor_1": Tensor(
 save_compressed(tensors, "model.safetensors", compression_format=compression_config.format)
 
 # decompress tensors (load the uncompressed representation to device memory)
-tensors = load_compressed("model.safetensors", device="cpu", compression_config = compression_config)
+tensors = load_compressed("model.safetensors", compression_config = compression_config)
 ```
 
-## Benefits
-TODO
-
-## SafeTensors File Format
-
-For each parameter in the uncompressed state_dict, we store the following attributes needed for decompression in the compressed state_dict:
-
-- Compressed tensor
-- Bitmask
-- Uncompressed shape
-- Row offsets
-
-```python
-# Dense
-{
-    PARAM_NAME: uncompressed_tensor
-}
-
-# Compressed
-{
-    PARAM_NAME.compressed: compressed_tensor,  # 1d tensor
-    PARAM_NAME.bitmask: value,  # 2d bitmask tensor (nrows x (ncols / 8))
-    PARAM_NAME.shape: value,  # Uncompressed shape tensor
-    PARAM_NAME.row_offsets: value  # 1d offsets tensor
-}
-```
-
-The library provides pathways to automatically add the config information to the HF config file.
-
-```json
-// config.json
-{
-    "compression_config": {
-        "format": "sparse_bitmask", // "dense_sparsity" for the original tensor format
-
-        // Informational
-        "sparsity_structure": "unstructured", // Or 2:4, 8:16, etc.
-        "global_sparsity": "0.5"
-    }
-}
-```
+### Saving Compressed Model Weights (Using Quantization)
+// TODO

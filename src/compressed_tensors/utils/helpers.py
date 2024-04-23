@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from pathlib import Path
-from typing import Dict, Literal, Optional, Union
+from typing import Dict, Optional, Union
 
 from compressed_tensors.base import CONFIG_NAME
 from compressed_tensors.compressors import ModelCompressor
@@ -51,9 +51,7 @@ def infer_compressor_from_model_config(
 def save_compressed(
     tensors: Dict[str, Tensor],
     save_path: Union[str, Path],
-    compression_format: Optional[
-        Literal[CompressionFormat.sparse_bitmask, CompressionFormat.dense_sparsity]
-    ] = None,
+    compression_format: Optional[CompressionFormat] = None,
 ):
     """
     Save compressed tensors to disk. If tensors are not compressed,
