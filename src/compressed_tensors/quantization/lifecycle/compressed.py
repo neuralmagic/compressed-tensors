@@ -33,7 +33,7 @@ def compress_quantized_weights(module: Module):
     """
     Quantizes the module weight representation to use fewer bits in memory
 
-    apply to full model with `model.apply(compress_quantized)`
+    apply to full model with `model.apply(compress_quantized_weights)`
 
     :param module: module to compress to quantized representation
     """
