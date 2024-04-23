@@ -52,17 +52,16 @@ class MovingAverageMinMaxObserver(Observer):
         min_val = torch.tensor([observed.min()])
         max_val = torch.tensor([observed.max()])
 
-        # update global min and max
-        if self.counter > 0:
+        if self.min_val == float("inf") and self.max_val == float("-inf"):
+            self.min_val = min_val
+            self.max_val = max_val
+        else:
             self.min_val = self.min_val + self.averaging_constant * (
                 min_val - self.min_val
             )
             self.max_val = self.max_val + self.averaging_constant * (
                 max_val - self.max_val
             )
-        else:
-            self.min_val = min_val
-            self.max_val = max_val
 
         # ensure that the zeros are in the range
         min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
