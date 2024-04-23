@@ -66,8 +66,14 @@ class Observer(Module, RegistryMixin):
         """
         if observed is not None:
             group_size = self.quantization_args.group_size
+            if group_size is None:
 
-            if group_size > 0:  # quantize by groups
+                # re-calcualte scale and zero point, update the stored value
+                self._scale, self._zero_point = self.calculate_qparams(observed)
+                if hasattr(self, "inc"):
+                    self.inc()
+
+            elif group_size > 0:  # quantize by groups
                 columns = observed.shape[1]
                 scales, zero_points = [], []
                 for i in range(0, columns, self.quantization_args.group_size):
@@ -89,9 +95,4 @@ class Observer(Module, RegistryMixin):
                 if hasattr(self, "inc"):
                     self.inc()
 
-            else:
-                # re-calcualte scale and zero point, update the stored value
-                self._scale, self._zero_point = self.calculate_qparams(observed)
-                if hasattr(self, "inc"):
-                    self.inc()
         return self._scale, self._zero_point

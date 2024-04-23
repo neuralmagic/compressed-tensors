@@ -38,7 +38,7 @@ def calculate_qparams(
     if quantization_args.symmetric:
         symmetric_range = 2 * max(min_vals.abs(), max_vals.abs())
         scales = symmetric_range / bit_range
-        zero_points = torch.tensor(0).to(torch.int8)
+        zero_points = torch.tensor([0]).to(torch.int8)
     else:
         # non-symmetric
         observed_range = max_vals - min_vals
