@@ -27,11 +27,13 @@ __all__ = ["MemorylessObserver"]
 class MemorylessObserver(Observer):
     """
     Implements a dynamic quantization observer that sets the scale and
-    zero point based on the latest observed value
+    zero point based on the latest observed value without tracking state
     """
 
     def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
         """
+        Returns the min and max values of observed
+
         :param observed: observed tensor to calculate quantization parameters for
         :return: tuple of scale and zero point derived from the observed tensor
         """
