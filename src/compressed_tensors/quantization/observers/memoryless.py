@@ -39,8 +39,7 @@ class MemorylessObserver(Observer):
         """
         # TODO: Add support for full range of quantization Args, only supports 8bit
         #       per tensor
-        min_val = observed.min()
-        max_val = observed.max()
+        min_val, max_val = torch.aminmax(observed)
 
         # ensure zero is in the range
         min_val = torch.min(min_val, torch.zeros_like(min_val))

@@ -49,8 +49,7 @@ class MovingAverageMinMaxObserver(Observer):
         :return: tuple of scale and zero point derived from the observed tensor
         """
 
-        min_val = torch.tensor([observed.min()])
-        max_val = torch.tensor([observed.max()])
+        min_val, max_val = torch.aminmax(observed)
 
         if self.min_val == float("inf") and self.max_val == float("-inf"):
             self.min_val = min_val
@@ -64,7 +63,7 @@ class MovingAverageMinMaxObserver(Observer):
             )
 
         # ensure that the zeros are in the range
-        min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
-        max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
+        self.min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
+        self.max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
 
-        return calculate_qparams(min_val, max_val, self.quantization_args)
+        return calculate_qparams(self.min_val, self.max_val, self.quantization_args)
