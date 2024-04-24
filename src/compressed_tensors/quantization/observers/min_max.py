@@ -62,8 +62,5 @@ class MovingAverageMinMaxObserver(Observer):
                 max_val - self.max_val
             )
 
-        # ensure that the zeros are in the range
-        self.min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
-        self.max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
-
+        # print("NM", self.min_val, self.max_val)
         return calculate_qparams(self.min_val, self.max_val, self.quantization_args)
