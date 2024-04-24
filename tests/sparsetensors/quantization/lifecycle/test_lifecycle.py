@@ -20,12 +20,12 @@ from sparsetensors.quantization.lifecycle.frozen import freeze_module_quantizati
 from sparsetensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
-from sparsetensors.quantization.lifecycle.quant_config import QuantizationStatus
 from sparsetensors.quantization.quant_args import QuantizationArgs
+from sparsetensors.quantization.quant_config import QuantizationStatus
 from torch.nn import Linear
 
 
-def test_lifecyle(create_quantization_scheme, mocker):
+def test_lifecyle(create_quantization_scheme):
     num_bits = 8
 
     quantization_scheme = create_quantization_scheme(
@@ -98,13 +98,20 @@ def test_lifecyle(create_quantization_scheme, mocker):
     assert initalized_layer.input_scale != layer.input_scale
     assert initalized_layer.weight_scale != layer.weight_scale
 
+    # check quantization f_q(x) is applied after frozen without update
+    input_check_for_quant = torch.randn(4, 4)
+    out_calibration = layer(input_check_for_quant)
+
     layer_before_freeze = deepcopy(layer)
 
     # Freeze, no update after any forward pass
     freeze_module_quantization(layer)
+
     for _ in range(10):
         layer(torch.randn(4, 4))
-
     assert layer_before_freeze.input_zero_point == layer.input_zero_point
     assert layer_before_freeze.input_scale == layer.input_scale
     assert layer_before_freeze.weight_scale == layer.weight_scale
+
+    # check that the same quantization is applied as calibration to frozen
+    assert torch.all(out_calibration == layer(input_check_for_quant))
