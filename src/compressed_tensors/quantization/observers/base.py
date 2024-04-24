@@ -53,6 +53,12 @@ class Observer(Module, RegistryMixin):
         """
         raise NotImplementedError(f"{self.__class__} must implement calculate_qparams")
 
+    def post_calculate_qparams(self) -> None:
+        """
+        Run any logic specific to its observers after running calculate_qparams
+        """
+        ...
+
     def get_qparams(
         self, observed: Optional[Tensor] = None
     ) -> Tuple[FloatTensor, IntTensor]:
@@ -70,8 +76,8 @@ class Observer(Module, RegistryMixin):
 
                 # re-calcualte scale and zero point, update the stored value
                 self._scale, self._zero_point = self.calculate_qparams(observed)
-                if hasattr(self, "inc"):
-                    self.inc()
+
+                self.post_calculate_qparams()
 
             elif group_size > 0:  # quantize by groups
                 columns = observed.shape[1]
@@ -83,8 +89,7 @@ class Observer(Module, RegistryMixin):
                     scales.append(scale)
                     zero_points.append(zero_point)
 
-                if hasattr(self, "inc"):
-                    self.inc()
+                self.post_calculate_qparams()
 
                 self._scale = torch.cat(scales)
                 self._zero_point = torch.cat(zero_points)
@@ -98,8 +103,7 @@ class Observer(Module, RegistryMixin):
                     scales.append(scale)
                     zero_points.append(zero_point)
 
-                if hasattr(self, "inc"):
-                    self.inc()
+                self.post_calculate_qparams()
 
                 self._scale = torch.cat(scales)
                 self._zero_point = torch.cat(zero_points)

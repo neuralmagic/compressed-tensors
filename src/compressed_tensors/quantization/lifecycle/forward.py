@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from functools import wraps
+from math import ceil
 
 import torch
 from compressed_tensors.quantization.quant_args import QuantizationArgs
@@ -59,7 +60,6 @@ def fake_quantize(
     max_q = torch.tensor(bit_range / 2 - 1, device=x.device)
     min_q = torch.tensor(-bit_range / 2, device=x.device)
 
-    columns = x.shape[1]
     group_size = args.group_size
 
     if group_size is None or group_size == 0:
@@ -68,11 +68,13 @@ def fake_quantize(
 
     # group
     elif group_size > 0:
+
         DQ = torch.zeros_like(x)
 
         # TODO: vectorize the for loop
         # TODO: fix genetric assumption about the tensor size for computing group
-        for i in range(int(columns / group_size)):
+        columns = x.shape[1]
+        for i in range(ceil(columns / group_size)):
             sc = scale[i]
             zp = zero_point[i]
 

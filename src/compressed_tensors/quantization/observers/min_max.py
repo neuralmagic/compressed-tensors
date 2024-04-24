@@ -65,5 +65,5 @@ class MinMaxObserver(Observer):
 
         return calculate_qparams(min_val, max_val, self.quantization_args)
 
-    def inc(self):
+    def post_calculate_qparams(self):
         self.counter += 1
