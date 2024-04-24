@@ -15,7 +15,7 @@
 import operator
 from typing import Dict, Generator, Optional, Tuple
 
-from compressed_tensors.base import CONFIG_NAME
+from compressed_tensors.base import SPARSITY_CONFIG_NAME
 from compressed_tensors.config import CompressionConfig
 from compressed_tensors.registry import RegistryMixin
 from torch import Tensor
@@ -74,4 +74,4 @@ class ModelCompressor(RegistryMixin):
             data_old = operator.attrgetter(name)(model)
             data_old.data = data_new.data
 
-        setattr(model, CONFIG_NAME, self.config)
+        setattr(model, SPARSITY_CONFIG_NAME, self.config)

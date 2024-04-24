@@ -15,16 +15,25 @@
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from compressed_tensors.base import CONFIG_NAME
+import torch
+from compressed_tensors.base import SPARSITY_CONFIG_NAME
 from compressed_tensors.compressors import ModelCompressor
-from compressed_tensors.config import CompressionConfig, CompressionFormat
-from safetensors import safe_open
+from compressed_tensors.config import (
+    CompressionConfig,
+    CompressionFormat,
+    DenseSparsityConfig,
+)
 from safetensors.torch import save_file
 from torch import Tensor
 from transformers import AutoConfig
 
 
-__all__ = ["infer_compressor_from_model_config", "load_compressed", "save_compressed"]
+__all__ = [
+    "infer_compressor_from_model_config",
+    "load_compressed",
+    "save_compressed",
+    "save_compressed_model",
+]
 
 
 def infer_compressor_from_model_config(
@@ -38,7 +47,7 @@ def infer_compressor_from_model_config(
     :return: matching compressor if config contains a sparsity config
     """
     config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
-    sparsity_config = getattr(config, CONFIG_NAME, None)
+    sparsity_config = getattr(config, SPARSITY_CONFIG_NAME, None)
     if sparsity_config is None:
         return None
 
@@ -65,10 +74,8 @@ def save_compressed(
     if tensors is None or len(tensors) == 0:
         raise ValueError("No tensors or empty tensors provided to compress")
 
-    if compression_format is None:
-        # no compression applied
-        save_file(tensors, save_path)
-        return
+    # if no compression_format specified, default to `dense_sparsity`
+    compression_format = compression_format or CompressionFormat.dense_sparsity.value
 
     if not (
         compression_format in ModelCompressor.registered_names()
@@ -104,17 +111,41 @@ def load_compressed(
     if compressed_tensors is None or not Path(compressed_tensors).exists():
         raise ValueError("No compressed tensors provided to load")
 
-    if compression_config is None:
-        # no compression applied
-        tensors = {}
-        with safe_open(compressed_tensors, framework="pt", device="cpu") as f:
-            for key in f.keys():
-                tensors[key] = f.get_tensor(key)
-        return tensors
+    # if no compression_config specified, default to `dense_sparsity`
+    compression_config = compression_config or DenseSparsityConfig()
 
     # decompress
     compression_format = compression_config.format
     compressor = ModelCompressor.load_from_registry(
         compression_format, config=compression_config
     )
-    return dict(compressor.decompress(compressed_tensors))
+    return dict(compressor.decompress(compressed_tensors, device=device))
+
+
+def save_compressed_model(
+    model: torch.nn.Module,
+    filename: str,
+    compression_format: Optional[CompressionFormat] = None,
+    force_contiguous: bool = True,
+):
+    """
+    Wrapper around safetensors `save_model` helper function, which allows for
+    saving compressed model to disk.
+
+    Note: The model is assumed to have a
+        state_dict with  unique entries
+
+    :param model: model to save on disk
+    :param filename: filename location to save the file
+    :param compression_format: compression format used for the model
+    :param force_contiguous: forcing the state_dict to be saved as contiguous tensors
+    """
+    state_dict = model.state_dict()
+    if force_contiguous:
+        state_dict = {k: v.contiguous() for k, v in state_dict.items()}
+    try:
+        save_compressed(state_dict, filename, compression_format=compression_format)
+    except ValueError as e:
+        msg = str(e)
+        msg += " Or use save_compressed_model(..., force_contiguous=True), read the docs for potential caveats."  # noqa E501
+        raise ValueError(msg)

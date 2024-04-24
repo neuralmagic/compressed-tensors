@@ -12,4 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SPARSITY_CONFIG_NAME = "sparsity_config"
+import nbformat
+import pytest
+from nbconvert.preprocessors import ExecutePreprocessor
+
+
+@pytest.mark.parametrize("notebook", ["examples/bitmask_compression.ipynb"])
+def test_notebook_exec(notebook):
+    with open(notebook) as f:
+        nb = nbformat.read(f, as_version=4)
+        ep = ExecutePreprocessor(timeout=600, kernel_name="python3")
+        try:
+            assert ep.preprocess(nb) is not None, f"Got empty notebook for {notebook}"
+        except Exception:
+            assert False, f"Failed executing {notebook}"

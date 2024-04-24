@@ -59,5 +59,23 @@ save_compressed(tensors, "model.safetensors", compression_format=compression_con
 tensors = load_compressed("model.safetensors", compression_config = compression_config)
 ```
 
-### Saving Compressed Model Weights (Using Quantization)
-// TODO
+## Saving/Loading Compressed Models (Bitmask Compression)
+
+We can apply bitmask compression to a whole model. For more detailed example see `example` directory.
+```python
+from compressed_tensors import save_compressed_model, load_compressed, BitmaskConfig
+from transformers import AutoModelForCausalLM
+
+model_name = "neuralmagic/llama2.c-stories110M-pruned50"
+model = AutoModelForCausalLM.from_pretrained(model_name)
+
+original_state_dict = model.state_dict()
+
+compression_config = BitmaskConfig()
+
+# save compressed model weights
+save_compressed_model(model, "compressed_model.safetensors", compression_format=compression_config.format)
+
+# load compressed model weights
+state_dict = load_compressed("compressed_model.safetensors", compression_config)
+```
