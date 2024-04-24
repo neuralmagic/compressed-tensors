@@ -59,18 +59,28 @@ def fake_quantize(
     max_q = torch.tensor(bit_range / 2 - 1, device=x.device)
     min_q = torch.tensor(-bit_range / 2, device=x.device)
 
-    DQ = torch.zeros_like(x)
-    num_groups = len(scale)
-    group_size = int(x.shape[1] / num_groups)
+    columns = x.shape[1]
+    group_size = args.group_size
 
-    # TODO: vectorize the for loop
-    for i in range(num_groups):
-        sc = scale[i]
-        zp = zero_point[i]
+    if group_size is None or group_size == 0:
+        Q = quantize(x, scale, zero_point, min_q, max_q)
+        DQ = dequantize(Q, scale, zero_point)
 
-        idx = i * group_size
-        Q = quantize(x[:, idx : (idx + group_size)], sc, zp, min_q, max_q)
-        DQ[:, idx : (idx + group_size)] = dequantize(Q, sc, zp)
+    elif group_size > 0:
+        DQ = torch.zeros_like(x)
+
+        # TODO: vectorize the for loop
+        # TODO: fix genetric assumption about the tensor size for computing group
+        for i in range(int(columns / group_size)):
+            sc = scale[i]
+            zp = zero_point[i]
+
+            idx = i * group_size
+            Q = quantize(x[:, idx : (idx + group_size)], sc, zp, min_q, max_q)
+            DQ[:, idx : (idx + group_size)] = dequantize(Q, sc, zp)
+
+    else:  # group_size < 0
+        ...
 
     return DQ
 
