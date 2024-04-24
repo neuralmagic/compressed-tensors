@@ -66,6 +66,7 @@ def fake_quantize(
         Q = quantize(x, scale, zero_point, min_q, max_q)
         DQ = dequantize(Q, scale, zero_point)
 
+    # group
     elif group_size > 0:
         DQ = torch.zeros_like(x)
 
@@ -79,8 +80,11 @@ def fake_quantize(
             Q = quantize(x[:, idx : (idx + group_size)], sc, zp, min_q, max_q)
             DQ[:, idx : (idx + group_size)] = dequantize(Q, sc, zp)
 
-    else:  # group_size < 0
-        ...
+    # channel-wise
+    else:  # group_size == -1
+        DQ = torch.zeros_like(x)
+        for i in range(len(x)):
+            DQ[i, :] = quantize(x[i, :], scale[i], zero_point[i], min_q, max_q)
 
     return DQ
 

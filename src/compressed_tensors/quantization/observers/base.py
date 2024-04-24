@@ -90,9 +90,18 @@ class Observer(Module, RegistryMixin):
                 self._zero_point = torch.cat(zero_points)
 
             elif group_size < 0:  # channel-wise quantization
-                # TODO: Import channel wise logic here
+
+                # TODO: generalize the logic for reduce_dims
+                scales, zero_points = [], []
+                for observed_c in observed:
+                    scale, zero_point = self.calculate_qparams(observed_c)
+                    scales.append(scale)
+                    zero_points.append(zero_point)
 
                 if hasattr(self, "inc"):
                     self.inc()
+
+                self._scale = torch.cat(scales)
+                self._zero_point = torch.cat(zero_points)
 
         return self._scale, self._zero_point
