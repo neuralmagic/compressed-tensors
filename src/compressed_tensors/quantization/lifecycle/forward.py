@@ -121,7 +121,7 @@ def _maybe_calibrate_or_quantize(
         return value
 
     observer = getattr(module, f"{base_name}_observer")
-    if observer.DYNAMIC:
+    if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
         scale, zero_point = observer(value)
     else:

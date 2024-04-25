@@ -84,7 +84,7 @@ def _initialize_scale_zero_point_observer(
     observer = quantization_args.get_observer()
     module.register_module(f"{base_name}_observer", observer)
 
-    if observer.DYNAMIC:
+    if quantization_args.dynamic:
         return  # no need to register a scale and zero point for a dynamic observer
 
     device = next(module.parameters()).device

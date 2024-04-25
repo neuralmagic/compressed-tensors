@@ -61,6 +61,7 @@ class QuantizationArgs(BaseModel):
     strategy: QuantizationStrategy = QuantizationStrategy.TENSOR
     group_size: Optional[int] = None
     block_structure: Optional[str] = None
+    dynamic: bool = False
     observer: str = Field(
         default="minmax",
         description=(
@@ -81,5 +82,10 @@ class QuantizationArgs(BaseModel):
         :return: torch quantization FakeQuantize built based on these QuantizationArgs
         """
         from compressed_tensors.quantization.observers.base import Observer
+
+        if self.observer == "minmax" and self.dynamic:
+            # override defualt observer for dynamic, you never want minmax which
+            # keeps state across samples for dynamic
+            self.observer = "memoryless"
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
