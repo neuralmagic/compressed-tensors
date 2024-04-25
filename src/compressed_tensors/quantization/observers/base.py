@@ -14,7 +14,11 @@
 
 from typing import Optional, Tuple
 
-from compressed_tensors.quantization.quant_args import QuantizationArgs, QuantizationStrategy
+import torch
+from compressed_tensors.quantization.quant_args import (
+    QuantizationArgs,
+    QuantizationStrategy,
+)
 from compressed_tensors.registry.registry import RegistryMixin
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
@@ -64,9 +68,32 @@ class Observer(Module, RegistryMixin):
         :return: tuple of scale and zero point based on last observed value
         """
         if observed is not None:
-            if self.quantization_args.strategy ==  QuantizationStrategy.TOKEN:
-                ...
-                
-            # re-calcualte scale and zero point, update the stored value
-            self._scale, self._zero_point = self.calculate_qparams(observed)
+            if self.quantization_args.strategy == QuantizationStrategy.TOKEN:
+                self._scale, self._zero_point = self.get_qparams_per_dim(
+                    observed, dim=2
+                )
+
+            else:
+                # re-calcualte scale and zero point, update the stored value
+                self._scale, self._zero_point = self.calculate_qparams(observed)
+
         return self._scale, self._zero_point
+
+    def get_qparams_along_dim(self, observed, dim: int):
+        # TODO: add documentation that specifies the shape must
+        #   be padded with 1-dims so the scales are along the right channel
+        # TODO: generalize the logic for reduce_dims
+        scales, zero_points = [], []
+
+        # TODO: make a more generic way to get the channel
+        num_dims = observed.shape[dim]
+
+        for dim_idx in range(num_dims):
+            scale, zero_point = self.calculate_qparams(
+                observed.select(dim=dim, index=dim_idx)
+            )
+
+            scales.append(scale)
+            zero_points.append(zero_point)
+
+        return torch.cat(scales), torch.cat(zero_points)
