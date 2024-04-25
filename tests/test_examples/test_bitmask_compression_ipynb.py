@@ -17,6 +17,9 @@ import pytest
 from nbconvert.preprocessors import ExecutePreprocessor
 
 
+@pytest.mark.skip(
+    reason="GHA not setup yet to run those tests. The test should work locally"
+)
 @pytest.mark.parametrize("notebook", ["examples/bitmask_compression.ipynb"])
 def test_notebook_exec(notebook):
     with open(notebook) as f:
