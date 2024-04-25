@@ -14,7 +14,7 @@
 
 
 from setuptools import setup, find_packages
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 def _setup_long_description() -> Tuple[str, str]:
     return open("README.md", "r", encoding="utf-8").read(), "text/markdown"
