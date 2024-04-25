@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import pytest
 import torch
 from compressed_tensors import load_compressed, save_compressed, save_compressed_model
 from compressed_tensors.config import BitmaskConfig
-from safetensors import safe_open
 from safetensors.torch import save_model
 from transformers import AutoModelForCausalLM
 
@@ -60,22 +61,19 @@ def test_save_compressed_no_compression(tmp_path, tensors):
     assert (tmp_path / "model.safetensors").exists()
 
 
-def test_save_compressed_rubbish_compression_format(tmp_path, tensors):
+def test_save_compressed_error(tmp_path):
+    with pytest.raises(Exception):
+        save_compressed({}, "")
+
+    with pytest.raises(Exception):
+        save_compressed(None, "")
+
     with pytest.raises(Exception):
         save_compressed(
             tensors,
             compression_format="this_is_not_a_valid_format",
             save_path=tmp_path / "model.safetensors",
         )
-
-
-def test_save_compressed_empty():
-    # make sure function raises error
-    with pytest.raises(Exception):
-        save_compressed({}, "")
-
-    with pytest.raises(Exception):
-        save_compressed(None, "")
 
 
 def test_load_compressed_sparse_bitmask(tmp_path, tensors):
@@ -87,7 +85,9 @@ def test_load_compressed_sparse_bitmask(tmp_path, tensors):
     compression_config = BitmaskConfig(
         format="sparse-bitmask",
     )
-    loaded_tensors = load_compressed(tmp_path / "model.safetensors", compression_config)
+    loaded_tensors = dict(
+        load_compressed(tmp_path / "model.safetensors", compression_config)
+    )
     for key in tensors:
         assert torch.allclose(tensors[key], loaded_tensors[key])
 
@@ -98,10 +98,30 @@ def test_load_compressed_dense_sparsity(tmp_path, tensors):
         compression_format="dense-sparsity",
         save_path=tmp_path / "model.safetensors",
     )
+    save_compressed(
+        tensors,
+        save_path=tmp_path / "model_.safetensors",
+    )
 
-    loaded_tensors = load_compressed(tmp_path / "model.safetensors")
-    # loaded_tensors is empty -> decompression returns empty dict
-    assert not loaded_tensors
+    loaded_tensors = dict(load_compressed(tmp_path / "model.safetensors"))
+    loaded_tensors_ = dict(load_compressed(tmp_path / "model_.safetensors"))
+    # loaded_tensors should be equal to loaded_tensors_
+    for key in tensors:
+        assert torch.allclose(loaded_tensors[key], loaded_tensors_[key])
+
+
+def test_load_compressed_sharded(tmp_path, llama_model):
+    sharded_model_path = tmp_path / "shared_model"
+    llama_model.save_pretrained(sharded_model_path, max_shard_size="2MB")
+    # make sure that model is shared on disk
+    assert len(os.listdir(sharded_model_path)) > 1
+    loaded_state_dict = dict(load_compressed(sharded_model_path))
+    for key, value in llama_model.state_dict().items():
+        if key == "lm_head.weight":
+            # lm_head doesn't have separate weights.
+            # It shares its weight tensor with the token embedding layer.
+            continue
+        assert torch.allclose(value, loaded_state_dict[key])
 
 
 def test_save_compressed_model(tmp_path, llama_model):
@@ -119,12 +139,9 @@ def test_save_compressed_model(tmp_path, llama_model):
     size_compressed_kb = path_to_compressed.stat().st_size / 1024
 
     # compare that the are the same after loading
-    state_dict_1 = {}
-    with safe_open(path_to_uncompressed, framework="pt") as f:
-        for key in f.keys():
-            state_dict_1[key] = f.get_tensor(key)
-    state_dict_2 = load_compressed(
-        path_to_compressed, BitmaskConfig(format="sparse-bitmask")
+    state_dict_1 = dict(load_compressed(path_to_uncompressed))
+    state_dict_2 = dict(
+        load_compressed(path_to_compressed, BitmaskConfig(format="sparse-bitmask"))
     )
     assert all(
         torch.allclose(state_dict_1[key], state_dict_2[key]) for key in state_dict_1

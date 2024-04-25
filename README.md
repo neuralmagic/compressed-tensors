@@ -47,7 +47,6 @@ from typing import Dict
 # tensors with large number of zero entries 
 compression_config = BitmaskConfig()
 
-
 tensors: Dict[str, Tensor] = {"tensor_1": Tensor(
     [[0.0, 0.0, 0.0], 
      [1.0, 1.0, 1.0]]
@@ -55,8 +54,10 @@ tensors: Dict[str, Tensor] = {"tensor_1": Tensor(
 # compress tensors using BitmaskConfig compression format (save them efficiently on disk)
 save_compressed(tensors, "model.safetensors", compression_format=compression_config.format)
 
-# decompress tensors (load the uncompressed representation to device memory)
-tensors = load_compressed("model.safetensors", compression_config = compression_config)
+# decompress tensors (load_compressed returns a generator for memory efficiency)
+decompressed_tensors = {}
+for tensor_name, tensor in load_compressed("model.safetensors", compression_config = compression_config):
+    decompressed_tensors[tensor_name] = tensor
 ```
 
 ## Saving/Loading Compressed Models (Bitmask Compression)
@@ -76,6 +77,6 @@ compression_config = BitmaskConfig()
 # save compressed model weights
 save_compressed_model(model, "compressed_model.safetensors", compression_format=compression_config.format)
 
-# load compressed model weights
-state_dict = load_compressed("compressed_model.safetensors", compression_config)
+# load compressed model weights (`dict` turns generator into a dictionary)
+state_dict = dict(load_compressed("compressed_model.safetensors", compression_config))
 ```

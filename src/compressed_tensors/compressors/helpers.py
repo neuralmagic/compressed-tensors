@@ -13,16 +13,14 @@
 # limitations under the License.
 
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Generator, Optional, Tuple, Union
 
 import torch
 from compressed_tensors.base import SPARSITY_CONFIG_NAME
 from compressed_tensors.compressors import ModelCompressor
-from compressed_tensors.config import (
-    CompressionConfig,
-    CompressionFormat,
-    DenseSparsityConfig,
-)
+from compressed_tensors.config import CompressionConfig, CompressionFormat
+from compressed_tensors.utils.safetensors_load import get_weight_mappings
+from safetensors import safe_open
 from safetensors.torch import save_file
 from torch import Tensor
 from transformers import AutoConfig
@@ -97,29 +95,41 @@ def load_compressed(
     compressed_tensors: Union[str, Path],
     compression_config: CompressionConfig = None,
     device: Optional[str] = "cpu",
-) -> Dict[str, Tensor]:
+) -> Generator[Tuple[str, Tensor], None, None]:
     """
-    Load compressed tensors from disk. If tensors are not compressed,
-    load them as is.
+    Load compressed tensors from disk.
+    If tensors are not compressed, load them as is.
 
-    :param compressed_tensors: path to compressed tensors
+    :param compressed_tensors: path to compressed tensors.
+        This can be a path to a file or a directory containing
+        one or multiple safetensor files (if multiple - in the format
+        assumed by huggingface)
     :param compression_config: compression config to use for decompressing tensors.
     :param device: device to move tensors to. If None, tensors are loaded on CPU.
-    :return decompressed tensors
+    :param return_dict: if True, return a dictionary of decompressed tensors
+    :return a generator that yields the name and tensor of the decompressed tensor
     """
-
     if compressed_tensors is None or not Path(compressed_tensors).exists():
         raise ValueError("No compressed tensors provided to load")
 
-    # if no compression_config specified, default to `dense_sparsity`
-    compression_config = compression_config or DenseSparsityConfig()
-
-    # decompress
-    compression_format = compression_config.format
-    compressor = ModelCompressor.load_from_registry(
-        compression_format, config=compression_config
-    )
-    return dict(compressor.decompress(compressed_tensors, device=device))
+    if (
+        compression_config is None
+        or compression_config.format == CompressionFormat.dense_sparsity.value
+    ):
+        # if no compression_config specified, or `dense_sparsity` format specified,
+        # assume tensors are not compressed on disk
+        weight_mappings = get_weight_mappings(compressed_tensors)
+        for weight_name, file_with_weight_name in weight_mappings.items():
+            with safe_open(file_with_weight_name, framework="pt", device=device) as f:
+                weight = f.get_tensor(weight_name)
+                yield weight_name, weight
+    else:
+        # decompress tensors
+        compression_format = compression_config.format
+        compressor = ModelCompressor.load_from_registry(
+            compression_format, config=compression_config
+        )
+        yield from compressor.decompress(compressed_tensors, device=device)
 
 
 def save_compressed_model(
