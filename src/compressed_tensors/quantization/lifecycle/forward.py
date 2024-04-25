@@ -56,6 +56,21 @@ def fake_quantize(
     zero_point: torch.Tensor,
     args: QuantizationArgs,
 ) -> torch.Tensor:
+    """
+    Fake quantize the input tensor x depending on the group_size.
+    if group_size is greater than 0, then q/dq by groups. The groups
+    must be divisible by the column size
+    if group_size is -1, then channel wise q/dq. THe input scale and
+    zero_points are reshaped to support vectorization (Assumes 1 is
+    the channel dimension)
+
+    :param x: Input tensor
+    :param scale: scale tensor
+    :param zero_point: zero point tensor
+    :param args: quantization args that contain group_size info
+    :return: fake quantized tensor
+
+    """
     bit_range = 2**args.num_bits
     max_q = torch.tensor(bit_range / 2 - 1, device=x.device)
     min_q = torch.tensor(-bit_range / 2, device=x.device)
@@ -74,6 +89,9 @@ def fake_quantize(
         # TODO: vectorize the for loop
         # TODO: fix genetric assumption about the tensor size for computing group
         columns = x.shape[1]
+
+        # TODO: make validation step for inputs
+        assert columns % group_size == 0
         for i in range(ceil(columns / group_size)):
             sc = scale[i]
             zp = zero_point[i]
@@ -84,9 +102,13 @@ def fake_quantize(
 
     # channel-wise
     else:  # group_size == -1
-        DQ = torch.zeros_like(x)
-        for i in range(len(x)):
-            DQ[i, :] = quantize(x[i, :], scale[i], zero_point[i], min_q, max_q)
+        # before: scale shape = [channel_size]
+        # after: scale shape = [1, channel_size]
+        scale = scale.unsqueeze(0)
+        zero_point = zero_point.unsqueeze(0)
+
+        Q = quantize(x, scale, zero_point, min_q, max_q)
+        DQ = dequantize(Q, scale, zero_point)
 
     return DQ
 

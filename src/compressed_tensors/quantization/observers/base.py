@@ -77,8 +77,6 @@ class Observer(Module, RegistryMixin):
                 # re-calcualte scale and zero point, update the stored value
                 self._scale, self._zero_point = self.calculate_qparams(observed)
 
-                self.post_calculate_qparams()
-
             elif group_size > 0:  # quantize by groups
                 columns = observed.shape[1]
                 scales, zero_points = [], []
@@ -89,23 +87,35 @@ class Observer(Module, RegistryMixin):
                     scales.append(scale)
                     zero_points.append(zero_point)
 
-                self.post_calculate_qparams()
-
                 self._scale = torch.cat(scales)
                 self._zero_point = torch.cat(zero_points)
 
             elif group_size < 0:  # channel-wise quantization
 
-                # TODO: generalize the logic for reduce_dims
-                scales, zero_points = [], []
-                for observed_c in observed:
-                    scale, zero_point = self.calculate_qparams(observed_c)
-                    scales.append(scale)
-                    zero_points.append(zero_point)
+                # TODO: make a genertic way to get the channel
+                channel = 1
+                self._scale, self._zero_point = self.get_qparams_per_channel(
+                    observed, channel
+                )
 
-                self.post_calculate_qparams()
-
-                self._scale = torch.cat(scales)
-                self._zero_point = torch.cat(zero_points)
-
+        self.post_calculate_qparams()
         return self._scale, self._zero_point
+
+    def get_qparams_per_channel(self, observed, channel: int):
+        # TODO: add documentation that specifies the shape must
+        #   be padded with 1-dims so the scales are along the right channel
+        # TODO: generalize the logic for reduce_dims
+        scales, zero_points = [], []
+
+        # TODO: make a more generic way to get the channel
+        num_channels = observed.shape[channel]
+
+        for channel_idx in range(num_channels):
+            scale, zero_point = self.calculate_qparams(
+                observed.select(dim=channel, index=channel_idx)
+            )
+
+            scales.append(scale)
+            zero_points.append(zero_point)
+
+        return torch.cat(scales), torch.cat(zero_points)
