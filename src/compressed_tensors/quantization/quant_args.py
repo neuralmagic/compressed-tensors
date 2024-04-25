@@ -39,6 +39,7 @@ class QuantizationStrategy(str, Enum):
     CHANNEL = "channel"
     GROUP = "group"
     BLOCK = "block"
+    TOKEN = "token"
 
 
 class QuantizationArgs(BaseModel):

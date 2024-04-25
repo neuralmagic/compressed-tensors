@@ -14,7 +14,7 @@
 
 from typing import Optional, Tuple
 
-from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_args import QuantizationArgs, QuantizationStrategy
 from compressed_tensors.registry.registry import RegistryMixin
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
@@ -64,6 +64,9 @@ class Observer(Module, RegistryMixin):
         :return: tuple of scale and zero point based on last observed value
         """
         if observed is not None:
+            if self.quantization_args.strategy ==  QuantizationStrategy.TOKEN:
+                ...
+                
             # re-calcualte scale and zero point, update the stored value
             self._scale, self._zero_point = self.calculate_qparams(observed)
         return self._scale, self._zero_point
