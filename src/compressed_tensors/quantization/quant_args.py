@@ -53,6 +53,11 @@ class QuantizationArgs(BaseModel):
     :param group_size: group length to use for the group strategy
     :param block_structure: 2d block structure to use for the block strategy, must be
     of the format "2x4", "8x16", etc.
+    :param dynamic: set True to perform dynamic quantization - values will not be
+        calibrated during calibration phase, instead during inference new quantization
+        ranges will be observed with every sample. Defaults to False for static
+        quantization. Note that enabling dynamic quantization will change the default
+        observer to a memoryless one
     """
 
     num_bits: int = 8
