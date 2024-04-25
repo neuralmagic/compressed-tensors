@@ -34,8 +34,8 @@ def quantize(
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
     bit_range = 2**args.num_bits
-    q_min = torch.tensor(bit_range / 2 - 1, device=x.device)
-    q_max = torch.tensor(-bit_range / 2, device=x.device)
+    q_max = torch.tensor(bit_range / 2 - 1, device=x.device)
+    q_min = torch.tensor(-bit_range / 2, device=x.device)
 
     quantized_value = torch.clamp(
         torch.round(

@@ -76,7 +76,8 @@ class BitmaskCompressor(ModelCompressor):
     ) -> Generator[Tuple[str, Tensor], None, None]:
         """
         Reads a bitmask compressed state dict located at path_to_model_or_tensors
-        and returns a generator for sequentially decompressing back to a dense state dict
+        and returns a generator for sequentially decompressing back to a dense state
+        dict
 
         :param model_path: path to compressed safetensors model (directory with
             one or more safetensors files) or compressed tensors file

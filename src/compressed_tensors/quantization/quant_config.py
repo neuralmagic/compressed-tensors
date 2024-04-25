@@ -185,10 +185,20 @@ class QuantizationConfig(BaseModel):
             group_name = "group_" + str(idx)
             config_groups[group_name] = scheme
 
+        # TODO: this is incorrect in compressed mode, since we are overwriting the
+        # original weight we lose the uncompressed bit_depth indo
         compression_ratio = calculate_compression_ratio(model)
+
+        # TODO: replace this with compressor classes like we do for sparsity
+        if quantization_status == QuantizationStatus.COMPRESSED:
+            format = "compressed"
+        else:
+            format = "fakequant"
+
         return QuantizationConfig(
             config_groups=config_groups,
             quantization_status=quantization_status,
             global_compression_ratio=compression_ratio,
+            format=format,
             ignore=consolidated_ignore,
         )
