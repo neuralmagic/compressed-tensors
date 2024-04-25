@@ -50,5 +50,4 @@ def calculate_qparams(
         zero_points = bit_min - torch.round(min_vals / scales)
         zero_points = torch.clamp(zero_points, bit_min, bit_max).to(torch.int8)
 
-    # print("NM SZP", scales, zero_points)
     return scales, zero_points

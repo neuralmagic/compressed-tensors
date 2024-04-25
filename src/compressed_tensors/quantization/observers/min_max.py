@@ -62,5 +62,4 @@ class MovingAverageMinMaxObserver(Observer):
                 max_val - self.max_val
             )
 
-        # print("NM", self.min_val, self.max_val)
         return calculate_qparams(self.min_val, self.max_val, self.quantization_args)
