@@ -15,7 +15,10 @@
 from typing import Optional, Tuple
 
 import torch
-from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_args import (
+    QuantizationArgs,
+    QuantizationStrategy,
+)
 from compressed_tensors.registry.registry import RegistryMixin
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
@@ -72,12 +75,13 @@ class Observer(Module, RegistryMixin):
         """
         if observed is not None:
             group_size = self.quantization_args.group_size
-            if group_size is None:
+            # if group_size is None:
+            if self.quantization_args.strategy == QuantizationStrategy.TENSOR:
 
                 # re-calcualte scale and zero point, update the stored value
                 self._scale, self._zero_point = self.calculate_qparams(observed)
 
-            elif group_size > 0:  # quantize by groups
+            elif self.quantization_args.strategy == QuantizationStrategy.GROUP:
                 columns = observed.shape[1]
                 scales, zero_points = [], []
                 for i in range(0, columns, self.quantization_args.group_size):
@@ -90,7 +94,9 @@ class Observer(Module, RegistryMixin):
                 self._scale = torch.cat(scales)
                 self._zero_point = torch.cat(zero_points)
 
-            elif group_size < 0:  # channel-wise quantization
+            elif (
+                self.quantization_args.strategy == QuantizationStrategy.CHANNEL
+            ):  # channel-wise quantization
 
                 # TODO: make a genertic way to get the channel
                 channel = 1

@@ -15,7 +15,7 @@
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 __all__ = ["QuantizationType", "QuantizationStrategy", "QuantizationArgs"]
@@ -83,3 +83,32 @@ class QuantizationArgs(BaseModel):
         from compressed_tensors.quantization.observers.base import Observer
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
+
+    @validator("strategy", pre=True)
+    def validate_strategy(cls, value, values):
+        group_size = values.get("group_size")
+        if group_size is not None:
+            if group_size > 0:
+                if value != QuantizationStrategy.GROUP:
+                    raise ValueError(
+                        f"group_size={group_size} with strategy {value} is invald. "
+                        "Please set strategy to 'group'"
+                    )
+                return QuantizationStrategy.GROUP
+
+            elif group_size == -1:
+                if value != QuantizationStrategy.CHANNEL:
+                    raise ValueError(
+                        f"group_size={group_size} with strategy {value} is invald. "
+                        "Please set strategy to 'channel'"
+                    )
+                return QuantizationStrategy.CHANNEL
+
+            else:
+                raise ValueError(
+                    f"group_size={group_size} with strategy {value} is invald. "
+                    "group_size > 0 for strategy='group' and "
+                    "group_size = -1 for 'channel'"
+                )
+
+        return value
