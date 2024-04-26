@@ -36,7 +36,7 @@ __all__ = [
     "load_pretrained_quantization",
     "apply_quantization_config",
     "apply_quantization_status",
-    "find_first_name_or_class_match"
+    "find_first_name_or_class_match",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -139,7 +139,9 @@ def find_first_name_or_class_match(
     )
 
 
-def _find_first_match(value: str, targets: Iterable[str], check_contains: bool =False) -> Optional[str]:
+def _find_first_match(
+    value: str, targets: Iterable[str], check_contains: bool = False
+) -> Optional[str]:
     # returns first element of target that matches value either
     # exactly or as a regex after 're:'
     for target in targets:
