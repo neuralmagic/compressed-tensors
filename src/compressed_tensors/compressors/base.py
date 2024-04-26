@@ -71,7 +71,7 @@ class ModelCompressor(RegistryMixin):
         raise NotImplementedError()
 
     def decompress(
-        self, path_to_model_or_tensors: str
+        self, path_to_model_or_tensors: str, device: str = "cpu"
     ) -> Generator[Tuple[str, Tensor], None, None]:
         """
         Reads a compressed state dict located at path_to_model_or_tensors
