@@ -80,3 +80,5 @@ save_compressed_model(model, "compressed_model.safetensors", compression_format=
 # load compressed model weights (`dict` turns generator into a dictionary)
 state_dict = dict(load_compressed("compressed_model.safetensors", compression_config))
 ```
+
+For more in-depth tutorial on bitmask compression, refer to the notebook: `examples/bitmask_compression.ipynb`
