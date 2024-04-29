@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 # compressed_tensors
-=======
-# compressed-tensors
 
 This repository extends a [safetensors](https://github.com/huggingface/safetensors) format to efficiently store sparse and/or quantized tensors on disk. `compressed-tensors` format supports multiple compression types to minimize the disk space and facilitate the tensor manipulation.
 
