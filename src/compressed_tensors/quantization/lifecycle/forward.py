@@ -103,6 +103,9 @@ def fake_quantize(
     elif args.strategy == QuantizationStrategy.CHANNEL:  # group_size == -1
         # before: scale shape = [channel_size]
         # after: scale shape = [1, channel_size]
+
+        breakpoint()
+
         scale = scale.unsqueeze(0)
         zero_point = zero_point.unsqueeze(0)
 
@@ -113,8 +116,8 @@ def fake_quantize(
     elif args.strategy == QuantizationStrategy.TOKEN:
         # before: scale shape = [channel_size]
         # after: scale shape = [channel_size, 1]
-        scale = scale.unsqueeze(0)[::-1]
-        zero_point = zero_point.unsqueeze(0)[::-1]
+        scale = scale.unsqueeze(1)
+        zero_point = zero_point.unsqueeze(1)
 
         Q = quantize(x, scale, zero_point, min_q, max_q)
         DQ = dequantize(Q, scale, zero_point)
