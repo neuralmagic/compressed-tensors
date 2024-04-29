@@ -124,4 +124,4 @@ class Observer(Module, RegistryMixin):
             scales.append(scale)
             zero_points.append(zero_point)
 
-        return torch.cat(scales), torch.cat(zero_points)
+        return torch.stack(scales), torch.stack(zero_points)

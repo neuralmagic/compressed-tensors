@@ -40,7 +40,6 @@ class MovingAverageMinMaxObserver(Observer):
         self.max_val = -float("inf")
         self.averaging_constant = averaging_constant
 
-
     def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
         """
         Updates the observed min and max using a moving average smoothed by the
