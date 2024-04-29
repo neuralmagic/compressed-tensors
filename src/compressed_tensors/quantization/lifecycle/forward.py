@@ -21,13 +21,7 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
 
 
-__all__ = [
-    "wrap_module_forward_quantized",
-    "quantize",
-    "dequantize",
-    "fake_quantize",
-    "maybe_calibrate_or_quantize",
-]
+__all__ = ["wrap_module_forward_quantized", "maybe_calibrate_or_quantize"]
 
 
 @torch.no_grad()
@@ -88,6 +82,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 
         if scheme.weights is not None:
             # calibrate and (fake) quantize weights when applicable
+            unquantized_weight = self.weight.data.clone()
             self.weight.data = maybe_calibrate_or_quantize(
                 module, self.weight, "weight", scheme.weights
             )
@@ -103,6 +98,10 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
                 module, output, "output", scheme.output_activations
             )
 
+        # restore back to unquantized_value
+        if scheme.weights is not None:
+            self.weight.data = unquantized_weight
+
         return output
 
     # bind wrapped forward to module class so reference to `self` is correct
@@ -112,7 +111,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 
 
 def maybe_calibrate_or_quantize(
-    module: Module, value: Module, base_name: str, args: "QuantizationArgs"
+    module: Module, value: torch.Tensor, base_name: str, args: "QuantizationArgs"
 ) -> torch.Tensor:
     # only run quantized for the included stages
     if module.quantization_status not in {
@@ -121,17 +120,24 @@ def maybe_calibrate_or_quantize(
     }:
         return value
 
-    device = next(module.parameters()).device
-    scale = getattr(module, f"{base_name}_scale")
-    zero_point = getattr(module, f"{base_name}_zero_point")
-
-    if module.quantization_status == QuantizationStatus.CALIBRATION:
-        # get observer and get new quant params from observation
+    if args.dynamic:
+        # dynamic quantization - get scale and zero point directly from observer
         observer = getattr(module, f"{base_name}_observer")
-        updated_scale, updated_zero_point = observer(value)
+        scale, zero_point = observer(value)
+    else:
+        # static quantization - get previous scale and zero point from layer
+        scale = getattr(module, f"{base_name}_scale")
+        zero_point = getattr(module, f"{base_name}_zero_point")
 
-        # update scale and zero point
-        scale.data = updated_scale.to(device)
-        zero_point.data = updated_zero_point.to(device)
+        if module.quantization_status == QuantizationStatus.CALIBRATION:
+            # calibration mode - get new quant params from observer
+            observer = getattr(module, f"{base_name}_observer")
+
+            updated_scale, updated_zero_point = observer(value)
+
+            # update scale and zero point
+            device = next(module.parameters()).device
+            scale.data = updated_scale.to(device)
+            zero_point.data = updated_zero_point.to(device)
 
     return fake_quantize(value, scale, zero_point, args)

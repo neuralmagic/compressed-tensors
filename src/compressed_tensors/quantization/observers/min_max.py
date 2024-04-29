@@ -16,64 +16,50 @@ from typing import Tuple
 
 import torch
 from compressed_tensors.quantization.observers.base import Observer
+from compressed_tensors.quantization.observers.helpers import calculate_qparams
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from torch import FloatTensor, IntTensor, Tensor
 
 
-__all__ = ["MinMaxObserver"]
+__all__ = ["MovingAverageMinMaxObserver"]
 
 
 @Observer.register("minmax")
-class MinMaxObserver(Observer):
+class MovingAverageMinMaxObserver(Observer):
     """
     Implements a dynamic quantization observer that sets the scale and
-    zero point based on the latest observed value
+    zero point based on a moving average of the overall min and max observed values
     """
 
-    def __init__(self, quantization_args: QuantizationArgs):
+    def __init__(
+        self, quantization_args: QuantizationArgs, averaging_constant: float = 0.01
+    ):
         super().__init__(quantization_args=quantization_args)
 
         self.min_val = float("inf")
         self.max_val = -float("inf")
-        self.counter = 0
+        self.averaging_constant = averaging_constant
 
     def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
         """
+        Updates the observed min and max using a moving average smoothed by the
+        averaging_constant
+
         :param observed: observed tensor to calculate quantization parameters for
         :return: tuple of scale and zero point derived from the observed tensor
         """
-        # TODO: Add support for full range of quantization Args, only supports 8bit
-        #       per tensor
-        bit_range = 255
-        min_val = torch.tensor([observed.min()])
-        max_val = torch.tensor([observed.max()])
 
-        # update running average
-        if self.counter > 0:
-            self.min_val = (self.min_val * self.counter + min_val) / (self.counter + 1)
-            self.max_val = (self.max_val * self.counter + max_val) / (self.counter + 1)
-        else:
+        min_val, max_val = torch.aminmax(observed)
+
+        if self.min_val == float("inf") and self.max_val == float("-inf"):
             self.min_val = min_val
             self.max_val = max_val
-
-        # ensure that the zeros are in the range
-        min_val = torch.min(self.min_val, torch.zeros_like(self.min_val))
-        max_val = torch.max(self.max_val, torch.zeros_like(self.max_val))
-
-        self.counter += 1
-
-        if self.quantization_args.symmetric:
-            symmetric_range = 2 * max(min_val.abs(), max_val.abs())
-            scale = symmetric_range / bit_range
-            zero_point = torch.tensor(0).to(torch.int8)
         else:
-            # non-symmetric
-            observed_range = max_val - min_val
-            scale = observed_range / bit_range
+            self.min_val = self.min_val + self.averaging_constant * (
+                min_val - self.min_val
+            )
+            self.max_val = self.max_val + self.averaging_constant * (
+                max_val - self.max_val
+            )
 
-            # scales from a 0 range should be set to 1
-            scale[observed_range == 0] = 1
-
-            zero_point = ((0 - min_val) / scale).to(torch.int8)
-
-        return scale, zero_point
+        return calculate_qparams(self.min_val, self.max_val, self.quantization_args)

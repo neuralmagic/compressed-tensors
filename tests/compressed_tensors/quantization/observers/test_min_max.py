@@ -22,7 +22,7 @@ from compressed_tensors.quantization.quant_args import QuantizationArgs
     "symmetric,expected_scale,expected_zero_point",
     [
         (True, 0.0078, 0),
-        (False, 0.0039, 0),
+        (False, 0.0039, -128),
     ],
 )
 def test_min_max_observer(symmetric, expected_scale, expected_zero_point):
@@ -57,6 +57,8 @@ def test_min_max_observer_value_update():
     inp_update_max = torch.tensor([127, 1, 1, 1, 1])
     inp_update_min = torch.tensor([-128, 1, 1, 1, 1])
 
+    delta = 1e-6
+
     # udpate the min, max twice total
     tensors = [
         inp,
@@ -82,8 +84,8 @@ def test_min_max_observer_value_update():
             assert curr_max == 1
             assert curr_min == 1
         elif i < 4:
-            assert curr_max == 43  # (127 + 2) / 3
+            assert abs(curr_max - 2.2600) < delta
             assert curr_min == 1
         else:
-            assert curr_max == 43
-            assert curr_min == -24.8  # (-128 + 4) / 5
+            assert abs(curr_max - 2.2600) < delta
+            assert abs(curr_min - (-0.2900)) < delta

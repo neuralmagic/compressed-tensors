@@ -90,30 +90,33 @@ def test_lifecyle(create_quantization_scheme):
     # check high and low bound of the weights
     assert torch.all(layer.weight.data >= -128) and torch.all(layer.weight.data <= 127)
 
-    initalized_layer = deepcopy(layer)
-
+    initialized_layer_input_zero_point = deepcopy(layer.input_zero_point)
+    initialized_layer_input_scale = deepcopy(layer.input_scale)
+    initialized_layer_weight_scale = deepcopy(layer.weight_scale)
     # calibrate the layers with each iteration
     for _ in range(10):
         layer(torch.randn(4, 4))
 
-    assert initalized_layer.input_zero_point != layer.input_zero_point
-    assert initalized_layer.input_scale != layer.input_scale
-    assert initalized_layer.weight_scale != layer.weight_scale
+    assert initialized_layer_input_zero_point != layer.input_zero_point
+    assert initialized_layer_input_scale != layer.input_scale
+    assert initialized_layer_weight_scale == layer.weight_scale
 
     # check quantization f_q(x) is applied after frozen without update
     input_check_for_quant = torch.randn(4, 4)
     out_calibration = layer(input_check_for_quant)
 
-    layer_before_freeze = deepcopy(layer)
+    layer_before_freeze_input_zero_point = deepcopy(layer.input_zero_point)
+    layer_before_freeze_input_scale = deepcopy(layer.input_scale)
+    layer_before_freeze_weight_scale = deepcopy(layer.weight_scale)
 
     # Freeze, no update after any forward pass
     freeze_module_quantization(layer)
 
     for _ in range(10):
         layer(torch.randn(4, 4))
-    assert layer_before_freeze.input_zero_point == layer.input_zero_point
-    assert layer_before_freeze.input_scale == layer.input_scale
-    assert layer_before_freeze.weight_scale == layer.weight_scale
+    assert layer_before_freeze_input_zero_point == layer.input_zero_point
+    assert layer_before_freeze_input_scale == layer.input_scale
+    assert layer_before_freeze_weight_scale == layer.weight_scale
 
     # check that the same quantization is applied as calibration to frozen
     assert torch.all(out_calibration == layer(input_check_for_quant))
