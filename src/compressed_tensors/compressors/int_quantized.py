@@ -14,16 +14,15 @@
 
 from typing import Dict, Generator, Tuple
 
-from compressed_tensors.compressors import ModelCompressor
+from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
-from torch import Tensor
 from compressed_tensors.quantization import compress_quantized_weights
+from torch import Tensor
 
 
-@ModelCompressor.register(name=CompressionFormat.int_quantized.value)
-class IntQuantizationCompressor(ModelCompressor):
-    """
-    """
+@Compressor.register(name=CompressionFormat.int_quantized.value)
+class IntQuantizationCompressor(Compressor):
+    """ """
 
     def compress(self, model_state: Dict[str, Tensor]) -> Dict[str, Tensor]:
         # TODO: allow for passing in a model or a model state

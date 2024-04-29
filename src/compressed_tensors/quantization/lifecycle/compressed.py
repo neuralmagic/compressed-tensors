@@ -41,7 +41,7 @@ def compress_quantized_weights(module: Module):
     if not scheme or not scheme.weights:
         # no quantization scheme or weights not quantized, nothing to do
         return
-    
+
     if scheme is QuantizationStatus.COMPRESSED:
         # module is already compressed, nothing to do
         return

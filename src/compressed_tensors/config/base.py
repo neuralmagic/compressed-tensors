@@ -19,7 +19,7 @@ from compressed_tensors.registry import RegistryMixin
 from pydantic import BaseModel
 
 
-__all__ = ["CompressionConfig", "CompressionFormat"]
+__all__ = ["SparsityCompressionConfig", "CompressionFormat"]
 
 
 class CompressionFormat(Enum):
@@ -28,9 +28,9 @@ class CompressionFormat(Enum):
     int_quantized = "int-quantized"
 
 
-class CompressionConfig(RegistryMixin, BaseModel):
+class SparsityCompressionConfig(RegistryMixin, BaseModel):
     """
-    Base data class for storing compression parameters
+    Base data class for storing sparsity compression parameters
 
     :param format: name of compression format
     :param global_sparsity: average sparsity of the entire model

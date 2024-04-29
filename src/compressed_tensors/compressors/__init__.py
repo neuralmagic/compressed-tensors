@@ -14,7 +14,7 @@
 
 # flake8: noqa
 
-from .base import ModelCompressor
+from .base import Compressor
 from .dense import DenseCompressor
 from .helpers import load_compressed, save_compressed, save_compressed_model
 from .sparse_bitmask import BitmaskCompressor, BitmaskTensor

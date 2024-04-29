@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Dict, Generator, Optional, Tuple, Union
 
 import torch
-from compressed_tensors.compressors import ModelCompressor
-from compressed_tensors.config import CompressionConfig, CompressionFormat
+from compressed_tensors.compressors import Compressor
+from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from safetensors import safe_open
 from safetensors.torch import save_file
@@ -52,16 +52,16 @@ def save_compressed(
     compression_format = compression_format or CompressionFormat.dense_sparsity.value
 
     if not (
-        compression_format in ModelCompressor.registered_names()
-        or compression_format in ModelCompressor.registered_aliases()
+        compression_format in Compressor.registered_names()
+        or compression_format in Compressor.registered_aliases()
     ):
         raise ValueError(
             f"Unknown compression format: {compression_format}. "
-            f"Must be one of {set(ModelCompressor.registered_names() + ModelCompressor.registered_aliases())}"  # noqa E501
+            f"Must be one of {set(Compressor.registered_names() + Compressor.registered_aliases())}"  # noqa E501
         )
 
     # compress
-    compressor = ModelCompressor.load_from_registry(compression_format)
+    compressor = Compressor.load_from_registry(compression_format)
     # save compressed tensors
     compressed_tensors = compressor.compress(tensors)
     save_file(compressed_tensors, save_path)
@@ -69,7 +69,7 @@ def save_compressed(
 
 def load_compressed(
     compressed_tensors: Union[str, Path],
-    compression_config: CompressionConfig = None,
+    compression_config: SparsityCompressionConfig = None,
     device: Optional[str] = "cpu",
 ) -> Generator[Tuple[str, Tensor], None, None]:
     """
@@ -102,7 +102,7 @@ def load_compressed(
     else:
         # decompress tensors
         compression_format = compression_config.format
-        compressor = ModelCompressor.load_from_registry(
+        compressor = Compressor.load_from_registry(
             compression_format, config=compression_config
         )
         yield from compressor.decompress(compressed_tensors, device=device)
