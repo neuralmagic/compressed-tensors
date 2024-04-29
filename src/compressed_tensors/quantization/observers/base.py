@@ -97,28 +97,27 @@ class Observer(Module, RegistryMixin):
             elif (
                 self.quantization_args.strategy == QuantizationStrategy.CHANNEL
             ):  # channel-wise quantization
-
-                # TODO: make a genertic way to get the channel
-                channel = 1
-                self._scale, self._zero_point = self.get_qparams_per_channel(
-                    observed, channel
+                self._scale, self._zero_point = self.get_qparams_along_dim(observed, 1)
+            elif self.quantization_args.strategy == QuantizationStrategy.TOKEN:
+                dims = observed.ndim
+                self._scale, self._zero_point = self.get_qparams_along_dim(
+                    observed, dim=dims - 1
                 )
 
-        self.post_calculate_qparams()
         return self._scale, self._zero_point
 
-    def get_qparams_per_channel(self, observed, channel: int):
+    def get_qparams_along_dim(self, observed, dim: int):
         # TODO: add documentation that specifies the shape must
         #   be padded with 1-dims so the scales are along the right channel
         # TODO: generalize the logic for reduce_dims
         scales, zero_points = [], []
 
         # TODO: make a more generic way to get the channel
-        num_channels = observed.shape[channel]
+        num_dims = observed.shape[dim]
 
-        for channel_idx in range(num_channels):
+        for dim_idx in range(num_dims):
             scale, zero_point = self.calculate_qparams(
-                observed.select(dim=channel, index=channel_idx)
+                observed.select(dim=dim, index=dim_idx)
             )
 
             scales.append(scale)
