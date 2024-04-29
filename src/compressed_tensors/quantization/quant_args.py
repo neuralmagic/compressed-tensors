@@ -116,7 +116,7 @@ class QuantizationArgs(BaseModel):
                 )
         if value == QuantizationStrategy.GROUP:
             if group_size is None:
-                raise ValueError(f"strategy {value} is need group_size to be set.")
+                raise ValueError(f"strategy {value} requires group_size to be set.")
 
         if value is None:
             return QuantizationStrategy.TENSOR
