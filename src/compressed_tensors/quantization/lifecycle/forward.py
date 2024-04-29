@@ -16,7 +16,10 @@ from functools import wraps
 from math import ceil
 
 import torch
-from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_args import (
+    QuantizationArgs,
+    QuantizationStrategy,
+)
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
@@ -77,12 +80,8 @@ def fake_quantize(
 
     group_size = args.group_size
 
-    if group_size is None or group_size == 0:
-        Q = quantize(x, scale, zero_point, min_q, max_q)
-        DQ = dequantize(Q, scale, zero_point)
-
     # group
-    elif group_size > 0:
+    if args.strategy == QuantizationStrategy.GROUP:
 
         DQ = torch.zeros_like(x)
 
@@ -101,12 +100,26 @@ def fake_quantize(
             DQ[:, idx : (idx + group_size)] = dequantize(Q, sc, zp)
 
     # channel-wise
-    else:  # group_size == -1
+    elif args.strategy == QuantizationStrategy.CHANNEL:  # group_size == -1
         # before: scale shape = [channel_size]
         # after: scale shape = [1, channel_size]
         scale = scale.unsqueeze(0)
         zero_point = zero_point.unsqueeze(0)
 
+        Q = quantize(x, scale, zero_point, min_q, max_q)
+        DQ = dequantize(Q, scale, zero_point)
+
+    # per-token
+    elif args.strategy == QuantizationStrategy.TOKEN:
+        # before: scale shape = [channel_size]
+        # after: scale shape = [channel_size, 1]
+        scale = scale.unsqueeze(0)[::-1]
+        zero_point = zero_point.unsqueeze(0)[::-1]
+
+        Q = quantize(x, scale, zero_point, min_q, max_q)
+        DQ = dequantize(Q, scale, zero_point)
+
+    else:
         Q = quantize(x, scale, zero_point, min_q, max_q)
         DQ = dequantize(Q, scale, zero_point)
 

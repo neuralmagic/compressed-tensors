@@ -101,7 +101,7 @@ class Observer(Module, RegistryMixin):
             elif self.quantization_args.strategy == QuantizationStrategy.TOKEN:
                 dims = observed.ndim
                 self._scale, self._zero_point = self.get_qparams_along_dim(
-                    observed, dim=dims - 1
+                    observed, dim=dims - 2
                 )
 
         return self._scale, self._zero_point

@@ -64,7 +64,7 @@ class QuantizationArgs(BaseModel):
     num_bits: int = 8
     type: QuantizationType = QuantizationType.INT
     symmetric: bool = True
-    strategy: QuantizationStrategy = QuantizationStrategy.TENSOR
+    strategy: Optional[QuantizationStrategy] = None
     group_size: Optional[int] = None
     block_structure: Optional[str] = None
     dynamic: bool = False
@@ -99,21 +99,13 @@ class QuantizationArgs(BaseModel):
     @validator("strategy", pre=True)
     def validate_strategy(cls, value, values):
         group_size = values.get("group_size")
-        if group_size is not None:
+
+        # use group_size to determinine strategy if not given explicity
+        if group_size is not None and value is None:
             if group_size > 0:
-                if value != QuantizationStrategy.GROUP:
-                    raise ValueError(
-                        f"group_size={group_size} with strategy {value} is invald. "
-                        "Please set strategy to 'group'"
-                    )
                 return QuantizationStrategy.GROUP
 
             elif group_size == -1:
-                if value != QuantizationStrategy.CHANNEL:
-                    raise ValueError(
-                        f"group_size={group_size} with strategy {value} is invald. "
-                        "Please set strategy to 'channel'"
-                    )
                 return QuantizationStrategy.CHANNEL
 
             else:
@@ -122,5 +114,11 @@ class QuantizationArgs(BaseModel):
                     "group_size > 0 for strategy='group' and "
                     "group_size = -1 for 'channel'"
                 )
+        if value == QuantizationStrategy.GROUP:
+            if group_size is None:
+                raise ValueError(f"strategy {value} is need group_size to be set.")
+
+        if value is None:
+            return QuantizationStrategy.TENSOR
 
         return value
