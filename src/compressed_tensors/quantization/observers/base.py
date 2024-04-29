@@ -75,7 +75,7 @@ class Observer(Module, RegistryMixin):
         """
         if observed is not None:
             group_size = self.quantization_args.group_size
-            # if group_size is None:
+
             if self.quantization_args.strategy == QuantizationStrategy.TENSOR:
 
                 # re-calculate scale and zero point, update the stored value
@@ -94,14 +94,12 @@ class Observer(Module, RegistryMixin):
                 self._scale = torch.cat(scales)
                 self._zero_point = torch.cat(zero_points)
 
-            elif (
-                self.quantization_args.strategy == QuantizationStrategy.CHANNEL
-            ):  # channel-wise quantization
+            elif self.quantization_args.strategy == QuantizationStrategy.CHANNEL:
                 self._scale, self._zero_point = self.get_qparams_along_dim(observed, 1)
+
             elif self.quantization_args.strategy == QuantizationStrategy.TOKEN:
-                dims = observed.ndim
                 self._scale, self._zero_point = self.get_qparams_along_dim(
-                    observed, dim=dims - 2
+                    observed, dim=0
                 )
 
         return self._scale, self._zero_point

@@ -104,8 +104,6 @@ def fake_quantize(
         # before: scale shape = [channel_size]
         # after: scale shape = [1, channel_size]
 
-        breakpoint()
-
         scale = scale.unsqueeze(0)
         zero_point = zero_point.unsqueeze(0)
 
