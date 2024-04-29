@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from compressed_tensors.base import QUANTIZATION_CONFIG_NAME
+from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     calculate_compression_ratio,
@@ -139,7 +140,9 @@ class QuantizationConfig(BaseModel):
         return QuantizationConfig.parse_obj(quantization_config)
 
     @staticmethod
-    def from_pretrained(model: Module, format: str) -> "QuantizationConfig":
+    def from_pretrained(
+        model: Module, format: Optional[str] = None
+    ) -> "QuantizationConfig":
         """
         Converts a model into its associated QuantizationConfig based on the
         QuantizationScheme attached to each quanitzed module
@@ -188,6 +191,12 @@ class QuantizationConfig(BaseModel):
         # TODO: this is incorrect in compressed mode, since we are overwriting the
         # original weight we lose the uncompressed bit_depth indo
         compression_ratio = calculate_compression_ratio(model)
+
+        if format is None:
+            if quantization_status == QuantizationStatus.COMPRESSED:
+                format = CompressionFormat.int_quantized
+            else:
+                format = CompressionFormat.dense
 
         return QuantizationConfig(
             config_groups=config_groups,

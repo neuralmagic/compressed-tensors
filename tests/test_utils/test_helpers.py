@@ -47,7 +47,7 @@ def test_save_compressed_sparse_bitmask(tmp_path, tensors):
 def test_save_compressed_dense(tmp_path, tensors):
     save_compressed(
         tensors,
-        compression_format="dense-sparsity",
+        compression_format="dense",
         save_path=tmp_path / "model.safetensors",
     )
     assert (tmp_path / "model.safetensors").exists()
@@ -95,7 +95,7 @@ def test_load_compressed_sparse_bitmask(tmp_path, tensors):
 def test_load_compressed_dense(tmp_path, tensors):
     save_compressed(
         tensors,
-        compression_format="dense-sparsity",
+        compression_format="dense",
         save_path=tmp_path / "model.safetensors",
     )
     save_compressed(
