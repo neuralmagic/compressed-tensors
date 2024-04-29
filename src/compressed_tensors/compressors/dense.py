@@ -12,20 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, Tuple, Union
 
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
 from torch import Tensor
+from torch.nn import Module
 
 
-@Compressor.register(name=CompressionFormat.dense_sparsity.value)
+@Compressor.register(name=CompressionFormat.dense.value)
 class DenseCompressor(Compressor):
     """
     Identity compressor for dense models, returns the original state_dict
     """
 
-    def compress(self, model_state: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    def compress(
+        self, model_state: Union[Module, Dict[str, Tensor]]
+    ) -> Dict[str, Tensor]:
         return model_state
 
     def decompress(

@@ -22,6 +22,7 @@ from compressed_tensors.config import CompressionFormat
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
 from safetensors import safe_open
 from torch import Tensor
+from torch.nn import Module
 from tqdm import tqdm
 
 
@@ -46,13 +47,18 @@ class BitmaskCompressor(Compressor):
 
     COMPRESSION_PARAM_NAMES = ["shape", "compressed", "bitmask", "row_offsets"]
 
-    def compress(self, model_state: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    def compress(
+        self, model_state: Union[Module, Dict[str, Tensor]]
+    ) -> Dict[str, Tensor]:
         """
-        Compresses a dense state dict using bitmask compression
+        Compresses a dense model or state dict using bitmask compression
 
-        :param model_state: state dict of uncompressed model
+        :param model_state: model or state dict of uncompressed model
         :return: compressed state dict
         """
+        if isinstance(model_state, Module):
+            model_state = model_state.state_dict()
+
         compressed_dict = {}
         _LOGGER.debug(
             f"Compressing model with {len(model_state)} parameterized layers..."

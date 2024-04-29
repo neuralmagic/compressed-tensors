@@ -44,7 +44,7 @@ def test_save_compressed_sparse_bitmask(tmp_path, tensors):
     assert (tmp_path / "model.safetensors").exists()
 
 
-def test_save_compressed_dense_sparsity(tmp_path, tensors):
+def test_save_compressed_dense(tmp_path, tensors):
     save_compressed(
         tensors,
         compression_format="dense-sparsity",
@@ -92,7 +92,7 @@ def test_load_compressed_sparse_bitmask(tmp_path, tensors):
         assert torch.allclose(tensors[key], loaded_tensors[key])
 
 
-def test_load_compressed_dense_sparsity(tmp_path, tensors):
+def test_load_compressed_dense(tmp_path, tensors):
     save_compressed(
         tensors,
         compression_format="dense-sparsity",

@@ -48,8 +48,8 @@ def save_compressed(
     if tensors is None or len(tensors) == 0:
         raise ValueError("No tensors or empty tensors provided to compress")
 
-    # if no compression_format specified, default to `dense_sparsity`
-    compression_format = compression_format or CompressionFormat.dense_sparsity.value
+    # if no compression_format specified, default to `dense`
+    compression_format = compression_format or CompressionFormat.dense.value
 
     if not (
         compression_format in Compressor.registered_names()
@@ -90,9 +90,9 @@ def load_compressed(
 
     if (
         compression_config is None
-        or compression_config.format == CompressionFormat.dense_sparsity.value
+        or compression_config.format == CompressionFormat.dense.value
     ):
-        # if no compression_config specified, or `dense_sparsity` format specified,
+        # if no compression_config specified, or `dense` format specified,
         # assume tensors are not compressed on disk
         weight_mappings = get_weight_mappings(compressed_tensors)
         for weight_name, file_with_weight_name in weight_mappings.items():

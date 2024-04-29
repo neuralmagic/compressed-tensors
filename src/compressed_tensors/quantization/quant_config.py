@@ -139,7 +139,7 @@ class QuantizationConfig(BaseModel):
         return QuantizationConfig.parse_obj(quantization_config)
 
     @staticmethod
-    def from_pretrained(model: Module) -> "QuantizationConfig":
+    def from_pretrained(model: Module, format: str) -> "QuantizationConfig":
         """
         Converts a model into its associated QuantizationConfig based on the
         QuantizationScheme attached to each quanitzed module
@@ -188,12 +188,6 @@ class QuantizationConfig(BaseModel):
         # TODO: this is incorrect in compressed mode, since we are overwriting the
         # original weight we lose the uncompressed bit_depth indo
         compression_ratio = calculate_compression_ratio(model)
-
-        # TODO: replace this with compressor classes like we do for sparsity
-        if quantization_status == QuantizationStatus.COMPRESSED:
-            format = "compressed"
-        else:
-            format = "fakequant"
 
         return QuantizationConfig(
             config_groups=config_groups,

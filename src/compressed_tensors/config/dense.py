@@ -20,7 +20,7 @@ from compressed_tensors.config import CompressionFormat, SparsityCompressionConf
 __all__ = ["DenseSparsityConfig"]
 
 
-@SparsityCompressionConfig.register(name=CompressionFormat.dense_sparsity.value)
+@SparsityCompressionConfig.register(name=CompressionFormat.dense.value)
 class DenseSparsityConfig(SparsityCompressionConfig):
     """
     Identity configuration for storing a sparse model in
@@ -31,6 +31,6 @@ class DenseSparsityConfig(SparsityCompressionConfig):
     "unstructured", "2:4", "8:16" etc
     """
 
-    format: str = CompressionFormat.dense_sparsity.value
+    format: str = CompressionFormat.dense.value
     global_sparsity: Optional[float] = 0.0
     sparsity_structure: Optional[str] = "unstructured"

@@ -12,23 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, Tuple, Union
 
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import compress_quantized_weights
 from torch import Tensor
+from torch.nn import Module
 
 
 @Compressor.register(name=CompressionFormat.int_quantized.value)
 class IntQuantizationCompressor(Compressor):
     """ """
 
-    def compress(self, model_state: Dict[str, Tensor]) -> Dict[str, Tensor]:
-        # TODO: allow for passing in a model or a model state
+    def compress(
+        self, model_state: Union[Module, Dict[str, Tensor]]
+    ) -> Dict[str, Tensor]:
+        # TODO: should we add in support for the state_dict case here?
 
         model_state.apply(compress_quantized_weights)
-        return model_state
+        return model_state.state_dict()
 
     def decompress(
         self, path_to_model_or_tensors: str, device: str

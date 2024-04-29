@@ -23,7 +23,7 @@ __all__ = ["SparsityCompressionConfig", "CompressionFormat"]
 
 
 class CompressionFormat(Enum):
-    dense_sparsity = "dense-sparsity"
+    dense = "dense"
     sparse_bitmask = "sparse-bitmask"
     int_quantized = "int-quantized"
 
