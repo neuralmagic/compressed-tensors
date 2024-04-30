@@ -142,7 +142,7 @@ class QuantizationConfig(BaseModel):
     @staticmethod
     def from_pretrained(
         model: Module, format: Optional[str] = None
-    ) -> "QuantizationConfig":
+    ) -> Optional["QuantizationConfig"]:
         """
         Converts a model into its associated QuantizationConfig based on the
         QuantizationScheme attached to each quanitzed module
@@ -173,6 +173,9 @@ class QuantizationConfig(BaseModel):
                 if not match_found:
                     quant_scheme_to_layers.append(scheme)
 
+        if len(quant_scheme_to_layers) == 0:  # No quantized layers
+            return None
+
         # clean up ignore list, we can leave out layers types if none of the
         # instances are quantized
         consolidated_ignore = []
@@ -194,9 +197,9 @@ class QuantizationConfig(BaseModel):
 
         if format is None:
             if quantization_status == QuantizationStatus.COMPRESSED:
-                format = CompressionFormat.int_quantized
+                format = CompressionFormat.int_quantized.value
             else:
-                format = CompressionFormat.dense
+                format = CompressionFormat.dense.value
 
         return QuantizationConfig(
             config_groups=config_groups,

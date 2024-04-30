@@ -17,4 +17,5 @@
 from .base import Compressor
 from .dense import DenseCompressor
 from .helpers import load_compressed, save_compressed, save_compressed_model
+from .model_compressor import ModelCompressor
 from .sparse_bitmask import BitmaskCompressor, BitmaskTensor

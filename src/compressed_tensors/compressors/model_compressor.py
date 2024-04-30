@@ -57,10 +57,11 @@ class ModelCompressor:
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
         compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
-        sparsity_config = getattr(compression_config, SPARSITY_CONFIG_NAME, None)
-        quantization_config = getattr(
-            compression_config, QUANTIZATION_CONFIG_NAME, None
-        )
+        if compression_config is None:
+            return None
+
+        sparsity_config = compression_config.get(SPARSITY_CONFIG_NAME, None)
+        quantization_config = compression_config.get(QUANTIZATION_CONFIG_NAME, None)
 
         if sparsity_config is None and quantization_config is None:
             return None
@@ -90,13 +91,8 @@ class ModelCompressor:
                 sparsity_config
             )
 
-        if sparsity_config is not None:
-            format = sparsity_config.get("format")
-            sparsity_config = SparsityCompressionConfig.load_from_registry(
-                format, **sparsity_config
-            )
-        if quantization_config is not None:
-            quantization_config = QuantizationConfig.parse_obj(quantization_config)
+        if sparsity_config is None and quantization_config is None:
+            return None
 
         return cls(
             sparsity_config=sparsity_config, quantization_config=quantization_config
@@ -138,7 +134,7 @@ class ModelCompressor:
             self.quantization_compressor.compress(model)
 
         if self.sparsity_compressor is not None:
-            compressed_state_dict = self.quantization_compressor.compress(state_dict)
+            compressed_state_dict = self.sparsity_compressor.compress(state_dict)
 
         return compressed_state_dict
 
@@ -167,12 +163,12 @@ class ModelCompressor:
 
         config_data[COMPRESSION_CONFIG_NAME] = {}
         if self.quantization_config is not None:
-            quant_config_data = self.quantization_config.model_dump(exclude_unset=True)
+            quant_config_data = self.quantization_config.model_dump()
             config_data[COMPRESSION_CONFIG_NAME][
                 QUANTIZATION_CONFIG_NAME
             ] = quant_config_data
         if self.sparsity_config is not None:
-            sparsity_config_data = self.sparsity_config.model_dump(exclude_unset=True)
+            sparsity_config_data = self.sparsity_config.model_dump()
             config_data[COMPRESSION_CONFIG_NAME][
                 SPARSITY_CONFIG_NAME
             ] = sparsity_config_data
@@ -180,7 +176,7 @@ class ModelCompressor:
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)
 
-    def _replace_weights(dense_weight_generator, model):
+    def _replace_weights(self, dense_weight_generator, model):
         for name, data in tqdm(dense_weight_generator, desc="Decompressing model"):
             # loading the decompressed weights into the model
             model_device = operator.attrgetter(name)(model).device
