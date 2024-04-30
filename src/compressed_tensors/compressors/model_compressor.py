@@ -24,7 +24,12 @@ from compressed_tensors.base import (
 )
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import SparsityCompressionConfig
-from compressed_tensors.quantization import QuantizationConfig
+from compressed_tensors.quantization import (
+    QuantizationConfig,
+    QuantizationStatus,
+    apply_quantization_config,
+    load_pretrained_quantization,
+)
 from compressed_tensors.utils import get_safetensors_folder
 from torch import Tensor
 from torch.nn import Module, Parameter
@@ -83,9 +88,13 @@ class ModelCompressor:
         cls,
         model: Module,
         sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
+        quantization_compression: Optional[str] = None,
     ) -> Optional["ModelCompressor"]:
         """ """
-        quantization_config = QuantizationConfig.from_pretrained(model)
+        quantization_config = QuantizationConfig.from_pretrained(
+            model, format=quantization_compression
+        )
+
         if isinstance(sparsity_config, str):  # we passed in a sparsity format
             sparsity_config = SparsityCompressionConfig.load_from_registry(
                 sparsity_config
@@ -152,8 +161,15 @@ class ModelCompressor:
             setattr(model, SPARSITY_CONFIG_NAME, self.sparsity_compressor.config)
 
         if self.quantization_compressor is not None:
+            apply_quantization_config(model, self.quantization_config)
+            load_pretrained_quantization(model, model_path)
             dense_gen = self.quantization_compressor.decompress(model_path)
             self._replace_weights(dense_gen, model)
+
+            def update_status(module):
+                module.quantization_status = QuantizationStatus.FROZEN
+
+            model.apply(update_status)
             setattr(model, QUANTIZATION_CONFIG_NAME, self.quantization_config)
 
     def update_config(self, save_directory: str):
