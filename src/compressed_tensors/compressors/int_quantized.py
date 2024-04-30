@@ -12,19 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Generator, Tuple, Union
+import logging
+from typing import Dict, Generator, Tuple
 
+import torch
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization import compress_quantized_weights
-from compressed_tensors.quantization.lifecycle.forward import dequantize
+from compressed_tensors.quantization.lifecycle.forward import dequantize, quantize
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
 from safetensors import safe_open
 from torch import Tensor
-from torch.nn import Module
+from tqdm import tqdm
 
 
 __all__ = ["IntQuantizationCompressor"]
+
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 @Compressor.register(name=CompressionFormat.int_quantized.value)
@@ -37,14 +40,38 @@ class IntQuantizationCompressor(Compressor):
 
     COMPRESSION_PARAM_NAMES = ["weight", "weight_scale", "weight_zero_point"]
 
-    def compress(
-        self, model_state: Union[Module, Dict[str, Tensor]]
-    ) -> Dict[str, Tensor]:
-        # TODO: should we add in support for the state_dict case here? Right now the
-        # compression is going to occur in place and cause problems for checkpointing
+    def compress(self, model_state: Dict[str, Tensor], **kwargs) -> Dict[str, Tensor]:
+        model_quant_args = kwargs["model_quant_args"]
+        compressed_dict = {}
+        _LOGGER.debug(
+            f"Compressing model with {len(model_state)} parameterized layers..."
+        )
 
-        model_state.apply(compress_quantized_weights)
-        return model_state.state_dict()
+        for name, value in tqdm(model_state.items(), desc="Compressing model"):
+            if name.endswith(".weight"):
+                prefix = name.removesuffix(".weight")
+                scale = model_state.get(merge_names(prefix, "weight_scale"), None)
+                zp = model_state.get(merge_names(prefix, "weight_zero_point"), None)
+                if scale is not None and zp is not None:
+                    # weight is quantized, compress it
+                    quant_args = model_quant_args[prefix]
+                    try:
+                        bit_depth = torch.finfo(value.dtype).bits
+                    except TypeError:
+                        bit_depth = torch.iinfo(value.dtype).bits
+                    if bit_depth > quant_args.num_bits:
+                        # only quantize if not already quantized
+                        value = quantize(
+                            x=value,
+                            scale=scale,
+                            zero_point=zp,
+                            args=quant_args,
+                            dtype=torch.int8,
+                        )
+
+            compressed_dict[name] = value.to("cpu")
+
+        return compressed_dict
 
     def decompress(
         self, path_to_model_or_tensors: str, device: str = "cpu"

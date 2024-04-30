@@ -31,6 +31,10 @@ from compressed_tensors.quantization import (
     apply_quantization_config,
     load_pretrained_quantization,
 )
+from compressed_tensors.quantization.utils import (
+    is_module_quantized,
+    iter_named_leaf_modules,
+)
 from compressed_tensors.utils import get_safetensors_folder
 from torch import Tensor
 from torch.nn import Module, Parameter
@@ -154,9 +158,12 @@ class ModelCompressor:
         if state_dict is None:
             state_dict = model.state_dict()
 
-        compressed_state_dict = None
+        compressed_state_dict = state_dict
+        quantized_modules_to_args = _get_weight_arg_mappings(model)
         if self.quantization_compressor is not None:
-            self.quantization_compressor.compress(model)
+            compressed_state_dict = self.quantization_compressor.compress(
+                state_dict, model_quant_args=quantized_modules_to_args
+            )
 
         if self.sparsity_compressor is not None:
             compressed_state_dict = self.sparsity_compressor.compress(state_dict)
@@ -229,3 +236,13 @@ class ModelCompressor:
             data_new = Parameter(data.to(model_device))
             data_old = operator.attrgetter(name)(model)
             data_old.data = data_new.data
+
+
+def _get_weight_arg_mappings(model: Module) -> Dict:
+    quantized_modules_to_args = {}
+    for name, submodule in iter_named_leaf_modules(model):
+        if is_module_quantized(submodule):
+            if submodule.quantization_scheme.weights is not None:
+                quantized_modules_to_args[name] = submodule.quantization_scheme.weights
+
+    return quantized_modules_to_args

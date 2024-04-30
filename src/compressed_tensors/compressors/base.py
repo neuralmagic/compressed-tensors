@@ -18,7 +18,6 @@ from compressed_tensors.config import SparsityCompressionConfig
 from compressed_tensors.quantization import QuantizationConfig
 from compressed_tensors.registry import RegistryMixin
 from torch import Tensor
-from torch.nn import Module
 
 
 __all__ = ["Compressor"]
@@ -36,14 +35,11 @@ class Compressor(RegistryMixin):
     ):
         self.config = config
 
-    def compress(
-        self, model_state: Union[Module, Dict[str, Tensor]]
-    ) -> Dict[str, Tensor]:
+    def compress(self, model_state: Dict[str, Tensor], **kwargs) -> Dict[str, Tensor]:
         """
-        Compresses a dense model or state dict. Compression occurs in-place when passing
-        in a model as a pytorch module.
+        Compresses a dense state dict
 
-        :param model_state: uncompressed model or state dict of uncompressed model
+        :param model_state: state dict of uncompressed model
         :return: compressed state dict
         """
         raise NotImplementedError()
