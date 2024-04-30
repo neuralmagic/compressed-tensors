@@ -114,6 +114,8 @@ class QuantizationArgs(BaseModel):
                     "group_size > 0 for strategy='group' and "
                     "group_size = -1 for 'channel'"
                 )
+        # breakpoint()
+        group_size = 128
         if value == QuantizationStrategy.GROUP:
             if group_size is None:
                 raise ValueError(f"strategy {value} requires group_size to be set.")

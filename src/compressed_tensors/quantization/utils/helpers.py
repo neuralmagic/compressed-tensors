@@ -107,7 +107,9 @@ def calculate_compression_ratio(model: Module) -> float:
                 uncompressed_bits = torch.iinfo(parameter.dtype).bits
             compressed_bits = uncompressed_bits
             if is_module_quantized(submodule):
-                compressed_bits = submodule.quantization_scheme.weights.num_bits
+                # compressed_bits = submodule.quantization_scheme.weights.num_bits
+                compressed_bits = 4
+
             num_weights = parameter.numel()
             total_compressed += compressed_bits * num_weights
             total_uncompressed += uncompressed_bits * num_weights

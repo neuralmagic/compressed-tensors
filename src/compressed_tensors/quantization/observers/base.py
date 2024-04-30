@@ -88,18 +88,26 @@ class Observer(Module, RegistryMixin):
                     scale, zero_point = self.calculate_qparams(
                         observed[:, i : (i + group_size)]
                     )
+                    # 2048 x 16
                     scales.append(scale)
                     zero_points.append(zero_point)
+                    print(i, scales)
 
-                self._scale = torch.cat(scales)
-                self._zero_point = torch.cat(zero_points)
+                breakpoint()
+                self._scale = torch.stack(scales)
+                self._zero_point = torch.stack(zero_points)
 
             elif self.quantization_args.strategy == QuantizationStrategy.CHANNEL:
-                self._scale, self._zero_point = self.get_qparams_along_dim(observed, 1)
+                # assume observed is transposed, because its the output, hence use dim 0
+                self._scale, self._zero_point = self.get_qparams_along_dim(observed, 0)
 
             elif self.quantization_args.strategy == QuantizationStrategy.TOKEN:
+
+                # use dim 1, assume the obsersed.shape = [batch, token, hidden]
+                # should be batch, token
+
                 self._scale, self._zero_point = self.get_qparams_along_dim(
-                    observed, dim=0
+                    observed, dim=1
                 )
 
         return self._scale, self._zero_point

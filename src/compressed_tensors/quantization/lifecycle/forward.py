@@ -103,7 +103,7 @@ def fake_quantize(
     elif args.strategy == QuantizationStrategy.CHANNEL:  # group_size == -1
         # before: scale shape = [channel_size]
         # after: scale shape = [1, channel_size]
-
+        breakpoint()
         scale = scale.unsqueeze(0)
         zero_point = zero_point.unsqueeze(0)
 
@@ -114,6 +114,7 @@ def fake_quantize(
     elif args.strategy == QuantizationStrategy.TOKEN:
         # before: scale shape = [channel_size]
         # after: scale shape = [channel_size, 1]
+
         scale = scale.unsqueeze(1)
         zero_point = zero_point.unsqueeze(1)
 
@@ -145,6 +146,8 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         if scheme.weights is not None:
             # calibrate and (fake) quantize weights when applicable
             unquantized_weight = self.weight.data.clone()
+            print(11111111)
+            breakpoint()
             self.weight.data = _maybe_calibrate_or_quantize(
                 module, self.weight, "weight", scheme.weights
             )
@@ -194,6 +197,7 @@ def _maybe_calibrate_or_quantize(
         if module.quantization_status == QuantizationStatus.CALIBRATION:
             # calibration mode - get new quant params from observer
             observer = getattr(module, f"{base_name}_observer")
+            breakpoint()
             updated_scale, updated_zero_point = observer(value)
 
             # update scale and zero point
