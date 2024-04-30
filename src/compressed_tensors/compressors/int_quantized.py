@@ -24,16 +24,24 @@ from torch import Tensor
 from torch.nn import Module
 
 
+__all__ = ["IntQuantizationCompressor"]
+
+
 @Compressor.register(name=CompressionFormat.int_quantized.value)
 class IntQuantizationCompressor(Compressor):
-    """ """
+    """
+    Integer compression for quantized models. Weight of each quantized layer is
+    converted from its original float type to the format specified by the layer's
+    quantization scheme.
+    """
 
     COMPRESSION_PARAM_NAMES = ["weight", "weight_scale", "weight_zero_point"]
 
     def compress(
         self, model_state: Union[Module, Dict[str, Tensor]]
     ) -> Dict[str, Tensor]:
-        # TODO: should we add in support for the state_dict case here?
+        # TODO: should we add in support for the state_dict case here? Right now the
+        # compression is going to occur in place and cause problems for checkpointing
 
         model_state.apply(compress_quantized_weights)
         return model_state.state_dict()

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+import logging
 import operator
 import os
 from typing import Dict, Optional, Union
@@ -40,12 +41,16 @@ from transformers.file_utils import CONFIG_NAME
 
 __all__ = ["ModelCompressor"]
 
+_LOGGER: logging.Logger = logging.getLogger(__name__)
+
 
 class ModelCompressor:
     """
-    Base class representing a model compression algorithm.
+    Handles compression and decompression of a model with a sparsity config and/or
+    quantization config
 
-    :param config: config specifying compression parameters
+    :param sparsity_config: config specifying sparsity compression parameters
+    :param quantization_config: config specifying quantization compression parameters
     """
 
     @classmethod
@@ -54,11 +59,11 @@ class ModelCompressor:
         pretrained_model_name_or_path: str,
     ) -> Optional["ModelCompressor"]:
         """
-        Given a path to a model config, extract a sparsity config if it exists and
-        return the associated Compressor
+        Given a path to a model config, extract the sparsity and/or quantization
+        configs and load a ModelCompressor
 
         :param pretrained_model_name_or_path: path to model config on disk or HF hub
-        :return: matching compressor if config contains a sparsity config
+        :return: compressor for the extracted configs
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
         compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
@@ -88,11 +93,21 @@ class ModelCompressor:
         cls,
         model: Module,
         sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
-        quantization_compression: Optional[str] = None,
+        quantization_format: Optional[str] = None,
     ) -> Optional["ModelCompressor"]:
-        """ """
+        """
+        Given a pytorch model and optional sparsity and/or quantization configs,
+        load the appropriate compressors
+
+        :param model: pytorch model to target for compression
+        :param sparsity_config: a filled in sparsity config or string corresponding
+        to a sparsity compression algorithm
+        :param quantization_format: string corresponding to a quantization compression
+        algorithm
+        :return: compressor for the extracted configs
+        """
         quantization_config = QuantizationConfig.from_pretrained(
-            model, format=quantization_compression
+            model, format=quantization_format
         )
 
         if isinstance(sparsity_config, str):  # we passed in a sparsity format
@@ -130,9 +145,10 @@ class ModelCompressor:
         self, model: Module, state_dict: Optional[Dict[str, Tensor]] = None
     ) -> Dict[str, Tensor]:
         """
-        Compresses a dense state dict or model
+        Compresses a dense state dict or model with sparsity and/or quantization
 
-        :param model_state: state dict of uncompressed model
+        :param model: uncompressed model to compress
+        :param model_state: optional uncompressed state_dict to insert into model
         :return: compressed state dict
         """
         if state_dict is None:
@@ -161,6 +177,7 @@ class ModelCompressor:
             setattr(model, SPARSITY_CONFIG_NAME, self.sparsity_compressor.config)
 
         if self.quantization_compressor is not None:
+            # TODO: maybe move this out of the compressor and back to SparseAutoModel
             apply_quantization_config(model, self.quantization_config)
             load_pretrained_quantization(model, model_path)
             dense_gen = self.quantization_compressor.decompress(model_path)
@@ -173,7 +190,20 @@ class ModelCompressor:
             setattr(model, QUANTIZATION_CONFIG_NAME, self.quantization_config)
 
     def update_config(self, save_directory: str):
+        """
+        Update the model config located at save_directory with compression configs
+        for sparsity and/or quantization
+
+        :param save_directory: path to a folder containing a HF model config
+        """
         config_file_path = os.path.join(save_directory, CONFIG_NAME)
+        if not os.path.exists(config_file_path):
+            _LOGGER.warning(
+                f"Could not find a valid model config file in "
+                f"{save_directory}. Compression config will not be saved."
+            )
+            return
+
         with open(config_file_path, "r") as config_file:
             config_data = json.load(config_file)
 

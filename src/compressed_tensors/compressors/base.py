@@ -43,7 +43,7 @@ class Compressor(RegistryMixin):
         Compresses a dense model or state dict. Compression occurs in-place when passing
         in a model as a pytorch module.
 
-        :param model_state: uncompressed mode or state dict of uncompressed model
+        :param model_state: uncompressed model or state dict of uncompressed model
         :return: compressed state dict
         """
         raise NotImplementedError()
