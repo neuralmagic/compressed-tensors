@@ -33,7 +33,7 @@ __all__ = ["PackedQuantizationCompressor", "pack_4bit_ints"]
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-@Compressor.register(name=CompressionFormat.int_quantized.value)
+@Compressor.register(name=CompressionFormat.pack_quantized.value)
 class PackedQuantizationCompressor(Compressor):
     """
     Compresses a quantized model by packing every 4 4-bit weights into a torch.int32
@@ -115,3 +115,18 @@ def pack_4bit_ints(value: torch.Tensor):
     compressed = np.ascontiguousarray(compressed).view(np.int32)
 
     return torch.from_numpy(compressed)
+
+
+def unpack_4bit_ints(value: torch.Tensor):
+    if value.dtype is not torch.int32:
+        raise ValueError(
+            f"Expected {torch.int32} but got {value.dtype}, Aborting unpack."
+        )
+
+    as_uint8 = value.numpy().view(np.uint8)
+    bits = np.unpackbits(as_uint8, axis=-1, bitorder="little")
+    # TODO: need orignal shape to get rid of padding
+    # then undo the padding
+    # then insert zeros to get back to 8 bits
+    # then repack
+    # then add the offset back
