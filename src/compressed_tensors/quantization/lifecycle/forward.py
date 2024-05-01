@@ -36,6 +36,7 @@ def quantize(
     q_min: torch.Tensor,
     q_max: torch.Tensor,
 ) -> torch.Tensor:
+
     return torch.clamp(
         torch.round(x / scale + zero_point),
         q_min,
@@ -87,13 +88,22 @@ def fake_quantize(
 
         # TODO: vectorize the for loop
         # TODO: fix genetric assumption about the tensor size for computing group
-        columns = x.shape[1]
 
         # TODO: make validation step for inputs
-        assert columns % group_size == 0
+
+        while scale.ndim < 2:
+            scale = scale.unsqueeze(1)
+            zero_point = zero_point.unsqueeze(1)
+
+        columns = x.shape[1]
+        if columns >= group_size:
+            assert columns % group_size == 0
         for i in range(ceil(columns / group_size)):
-            sc = scale[i]
-            zp = zero_point[i]
+
+            # scale.shape should be [nchan, ndim]
+            # sc.shape should be [nchan, 1] after unsqueeze
+            sc = scale[:, i].unsqueeze(1)
+            zp = zero_point[:, i].unsqueeze(1)
 
             idx = i * group_size
             Q = quantize(x[:, idx : (idx + group_size)], sc, zp, min_q, max_q)
@@ -103,7 +113,6 @@ def fake_quantize(
     elif args.strategy == QuantizationStrategy.CHANNEL:  # group_size == -1
         # before: scale shape = [channel_size]
         # after: scale shape = [1, channel_size]
-        breakpoint()
         scale = scale.unsqueeze(0)
         zero_point = zero_point.unsqueeze(0)
 
@@ -146,8 +155,6 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         if scheme.weights is not None:
             # calibrate and (fake) quantize weights when applicable
             unquantized_weight = self.weight.data.clone()
-            print(11111111)
-            breakpoint()
             self.weight.data = _maybe_calibrate_or_quantize(
                 module, self.weight, "weight", scheme.weights
             )
@@ -197,12 +204,10 @@ def _maybe_calibrate_or_quantize(
         if module.quantization_status == QuantizationStatus.CALIBRATION:
             # calibration mode - get new quant params from observer
             observer = getattr(module, f"{base_name}_observer")
-            breakpoint()
             updated_scale, updated_zero_point = observer(value)
 
             # update scale and zero point
             device = next(module.parameters()).device
             scale.data = updated_scale.to(device)
             zero_point.data = updated_zero_point.to(device)
-
     return fake_quantize(value, scale, zero_point, args)
