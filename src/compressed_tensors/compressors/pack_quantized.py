@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import logging
+import math
 from typing import Dict, Generator, Tuple
 
+import numpy as np
 import torch
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
@@ -26,17 +28,15 @@ from torch import Tensor
 from tqdm import tqdm
 
 
-__all__ = ["IntQuantizationCompressor"]
+__all__ = ["PackedQuantizationCompressor", "pack_4bit_ints"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 @Compressor.register(name=CompressionFormat.int_quantized.value)
-class IntQuantizationCompressor(Compressor):
+class PackedQuantizationCompressor(Compressor):
     """
-    Integer compression for quantized models. Weight of each quantized layer is
-    converted from its original float type to the format specified by the layer's
-    quantization scheme.
+    Compresses a quantized model by packing every 4 4-bit weights into a torch.int32
     """
 
     COMPRESSION_PARAM_NAMES = ["weight", "weight_scale", "weight_zero_point"]
@@ -58,7 +58,7 @@ class IntQuantizationCompressor(Compressor):
                     quant_args = model_quant_args[prefix]
                     bit_depth = get_torch_bit_depth(value)
                     if bit_depth > quant_args.num_bits:
-                        # only quantize if not already quantized
+                        # convert weight to an int if needed
                         value = quantize(
                             x=value,
                             scale=scale,
@@ -66,6 +66,7 @@ class IntQuantizationCompressor(Compressor):
                             args=quant_args,
                             dtype=torch.int8,
                         )
+                        value = pack_4bit_ints(value)
 
             compressed_dict[name] = value.to("cpu")
 
@@ -91,3 +92,26 @@ class IntQuantizationCompressor(Compressor):
                     zero_point=weight_data["weight_zero_point"],
                 )
                 yield merge_names(weight_name, "weight"), decompressed
+
+
+def pack_4bit_ints(value: torch.Tensor):
+    if value.dtype is not torch.int8:
+        raise ValueError("Tensor must be quantized to torch.int8 before packing")
+
+    # convert to unsigned so we can pack
+    pack_depth = 32
+    temp = (value - 8).to(torch.uint8)
+    bits = np.unpackbits(temp.numpy(), axis=-1, bitorder="little")
+    ranges = np.array([range(x, x + 4) for x in range(0, bits.shape[1], 8)]).flatten()
+    only_4_bits = bits[:, ranges]
+
+    padding = (
+        math.ceil(only_4_bits.shape[1] / pack_depth) * pack_depth - only_4_bits.shape[1]
+    )
+    padded_bits = np.pad(
+        only_4_bits, pad_width=[(0, 0), (0, padding)], constant_values=0
+    )
+    compressed = np.packbits(padded_bits, axis=-1, bitorder="little")
+    compressed = np.ascontiguousarray(compressed).view(np.int32)
+
+    return torch.from_numpy(compressed)

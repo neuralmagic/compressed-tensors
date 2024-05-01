@@ -26,6 +26,8 @@ __all__ = [
     "iter_named_leaf_modules",
     "module_type",
     "calculate_compression_ratio",
+    "get_torch_bit_depth",
+    "torch_dtype_from_quant_args",
 ]
 
 
@@ -101,6 +103,15 @@ def iter_named_leaf_modules(model: Module) -> Tuple[str, Module]:
             yield name, submodule
 
 
+def get_torch_bit_depth(value: torch.Tensor):
+    try:
+        bit_depth = torch.finfo(value.dtype).bits
+    except TypeError:
+        bit_depth = torch.iinfo(value.dtype).bits
+
+    return bit_depth
+
+
 def calculate_compression_ratio(model: Module) -> float:
     """
     Calculates the quantization compression ratio of a pytorch model, based on the
@@ -117,10 +128,7 @@ def calculate_compression_ratio(model: Module) -> float:
         desc="Calculating quantization compression ratio",
     ):
         for parameter in model.parameters():
-            try:
-                uncompressed_bits = torch.finfo(parameter.dtype).bits
-            except TypeError:
-                uncompressed_bits = torch.iinfo(parameter.dtype).bits
+            uncompressed_bits = get_torch_bit_depth(parameter)
             compressed_bits = uncompressed_bits
             if is_module_quantized(submodule):
                 compressed_bits = submodule.quantization_scheme.weights.num_bits
@@ -129,3 +137,16 @@ def calculate_compression_ratio(model: Module) -> float:
             total_uncompressed += uncompressed_bits * num_weights
 
     return total_uncompressed / total_compressed
+
+
+def torch_dtype_from_quant_args(quant_args: "QuantizationArgs") -> torch.dtype:  # noqa
+    # TODO: will need to expand this function for float8 support
+    num_bits = quant_args.num_bits
+    root_type = quant_args.type.value
+    if root_type == "int":
+        if num_bits == 32:
+            return torch.int32
+        else:
+            return torch.int8
+
+    return torch.float32
