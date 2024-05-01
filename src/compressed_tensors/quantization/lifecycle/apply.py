@@ -30,7 +30,10 @@ from compressed_tensors.quantization.quant_config import (
     QuantizationConfig,
     QuantizationStatus,
 )
-from compressed_tensors.quantization.utils import iter_named_leaf_modules
+from compressed_tensors.quantization.utils import (
+    infer_quantization_status,
+    iter_named_leaf_modules,
+)
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
 
@@ -120,7 +123,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     :param model: model to apply quantization to
     :param status: status to update the module to
     """
-    current_status = _infer_status(model)
+    current_status = infer_quantization_status(model)
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
         model.apply(initialize_module_for_quantization)
@@ -158,14 +161,6 @@ def _find_first_match(value: str, targets: Iterable[str]) -> Optional[str]:
                 return target
         elif target == value:
             return target
-    return None
-
-
-def _infer_status(model: Module) -> Optional[QuantizationStatus]:
-    for module in model.modules():
-        status = getattr(module, "quantization_status", None)
-        if status is not None:
-            return status
     return None
 
 

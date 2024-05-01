@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from torch.nn import Module
@@ -20,12 +20,28 @@ from tqdm import tqdm
 
 
 __all__ = [
+    "infer_quantization_status",
     "is_module_quantized",
     "is_model_quantized",
     "iter_named_leaf_modules",
     "module_type",
     "calculate_compression_ratio",
 ]
+
+
+def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]:  # noqa
+    """
+    Checks the quantization status of a model. Assumes all modules in the model have
+    the same status, so only the first quantized model is checked.
+
+    :param model: model to check quantization status for
+    :return: quantization status if the model is quantized, otherwise None
+    """
+    for module in model.modules():
+        status = getattr(module, "quantization_status", None)
+        if status is not None:
+            return status
+    return None
 
 
 def is_module_quantized(module: Module) -> bool:
