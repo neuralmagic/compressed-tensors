@@ -98,11 +98,15 @@ def fake_quantize(
 
         columns = x.shape[1]
         if columns >= group_size:
-            assert columns % group_size == 0
+            if columns % group_size != 0:
+                raise ValueError(
+                    "tesnor column shape must be divisble "
+                    f"by the given group_size {group_size}"
+                )
         for i in range(ceil(columns / group_size)):
-
             # scale.shape should be [nchan, ndim]
             # sc.shape should be [nchan, 1] after unsqueeze
+
             sc = scale[:, i].unsqueeze(1)
             zp = zero_point[:, i].unsqueeze(1)
 
@@ -122,8 +126,10 @@ def fake_quantize(
 
     # per-token
     elif args.strategy == QuantizationStrategy.TOKEN:
-        # before: scale shape = [channel_size]
-        # after: scale shape = [channel_size, 1]
+        # before: scale shape = [num_tokens]
+        # after: scale shape = [num_tokens, 1]
+        # x.shape = 1, num_tokens, 1]
+        # scale gets broadcasted as expected withput having [1, num_tokens, 1] shape
 
         scale = scale.unsqueeze(1)
         zero_point = zero_point.unsqueeze(1)
