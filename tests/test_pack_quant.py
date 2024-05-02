@@ -14,18 +14,19 @@
 
 
 import math
-import shutil
 
 import pytest
 import torch
-from compressed_tensors import PackQuantizationCompressor
+from compressed_tensors import PackedQuantizationCompressor
+from compressed_tensors.compressors.pack_quantized import (
+    pack_4bit_ints,
+    unpack_4bit_ints,
+)
 from compressed_tensors.quantization import (
     QuantizationArgs,
     QuantizationConfig,
     QuantizationScheme,
 )
-from compressed_tensors.quantization.lifecycle.forward import fake_quantize
-from safetensors.torch import save_file
 
 
 def get_dummy_quant_config():
@@ -58,22 +59,43 @@ def test_quant_format(shape):
     }
     quant_config = get_dummy_quant_config()
 
-    compressor = PackQuantizationCompressor(config=quant_config)
+    compressor = PackedQuantizationCompressor(config=quant_config)
     quantized_modules_to_args = {"dummy": quant_config.config_groups["group_1"].weights}
     compressed_state_dict = compressor.compress(
         dense_state_dict, model_quant_args=quantized_modules_to_args
     )
 
-    # state_dict params should be the same
-    assert len(dense_state_dict) == len(compressed_state_dict)
+    # compressed state_dict adds one entry for shape
+    assert len(dense_state_dict) + 1 == len(compressed_state_dict)
 
     # check compressed and packed
     assert compressed_state_dict["dummy.weight"].dtype == torch.int32
     expected_rows = shape[0]
-    expected_columns = math.ceil(shape[1] / 4)  # round each row up to nearest int32
+    expected_columns = math.ceil(shape[1] / 8)  # round each row up to nearest int32
     assert compressed_state_dict["dummy.weight"].shape == (
         expected_rows,
         expected_columns,
     )
+
+    assert torch.equal(compressed_state_dict["dummy.weight_shape"], torch.tensor(shape))
     assert compressed_state_dict["dummy.weight_scale"].dtype == torch.float32
     assert compressed_state_dict["dummy.weight_zero_point"].dtype == torch.int32
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        torch.tensor([[1, 2], [3, 4]]),
+        torch.tensor([[1, 2, 3, 4, 5, 6, 7, 0], [-1, -2, -3, -4, -5, -6, -7, -8]]),
+        (torch.rand((32, 100)) * 16 - 8),
+    ],
+)
+def test_repack(value):
+    value = value.to(torch.int8)
+    shape = value.shape
+    assert not torch.any(value > 7).item()
+    assert not torch.any(value < -8).item()
+
+    packed = pack_4bit_ints(value)
+    unpacked = unpack_4bit_ints(packed, shape)
+    assert torch.equal(value, unpacked)

@@ -28,7 +28,7 @@ from torch import Tensor
 from tqdm import tqdm
 
 
-__all__ = ["PackedQuantizationCompressor", "pack_4bit_ints"]
+__all__ = ["PackedQuantizationCompressor", "pack_4bit_ints", "unpack_4bit_ints"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -39,7 +39,12 @@ class PackedQuantizationCompressor(Compressor):
     Compresses a quantized model by packing every 4 4-bit weights into a torch.int32
     """
 
-    COMPRESSION_PARAM_NAMES = ["weight", "weight_scale", "weight_zero_point"]
+    COMPRESSION_PARAM_NAMES = [
+        "weight",
+        "weight_scale",
+        "weight_zero_point",
+        "weight_shape",
+    ]
 
     def compress(self, model_state: Dict[str, Tensor], **kwargs) -> Dict[str, Tensor]:
         model_quant_args = kwargs["model_quant_args"]
@@ -53,6 +58,7 @@ class PackedQuantizationCompressor(Compressor):
                 prefix = name.removesuffix(".weight")
                 scale = model_state.get(merge_names(prefix, "weight_scale"), None)
                 zp = model_state.get(merge_names(prefix, "weight_zero_point"), None)
+                shape = torch.tensor(value.shape)
                 if scale is not None and zp is not None:
                     # weight is quantized, compress it
                     quant_args = model_quant_args[prefix]
@@ -67,6 +73,7 @@ class PackedQuantizationCompressor(Compressor):
                             dtype=torch.int8,
                         )
                         value = pack_4bit_ints(value)
+                    compressed_dict[merge_names(prefix, "weight_shape")] = shape
 
             compressed_dict[name] = value.to("cpu")
 
@@ -86,8 +93,11 @@ class PackedQuantizationCompressor(Compressor):
                     weight_data[param_name] = f.get_tensor(full_name)
 
             if len(weight_data) == len(self.COMPRESSION_PARAM_NAMES):
+                weight = weight_data["weight"]
+                original_shape = torch.Size(weight_data["weigh_shape"])
+                unpacked = unpack_4bit_ints(weight, original_shape)
                 decompressed = dequantize(
-                    x_q=weight_data["weight"],
+                    x_q=unpacked,
                     scale=weight_data["weight_scale"],
                     zero_point=weight_data["weight_zero_point"],
                 )
@@ -98,35 +108,54 @@ def pack_4bit_ints(value: torch.Tensor):
     if value.dtype is not torch.int8:
         raise ValueError("Tensor must be quantized to torch.int8 before packing")
 
-    # convert to unsigned so we can pack
-    pack_depth = 32
+    # need to convert to unsigned 8bit to use numpy's pack/unpack
     temp = (value - 8).to(torch.uint8)
     bits = np.unpackbits(temp.numpy(), axis=-1, bitorder="little")
     ranges = np.array([range(x, x + 4) for x in range(0, bits.shape[1], 8)]).flatten()
-    only_4_bits = bits[:, ranges]
+    only_4_bits = bits[:, ranges]  # top 4 bits are 0 because we're really uint4
 
+    # pad each row to fill a full 32bit int
+    pack_depth = 32
     padding = (
         math.ceil(only_4_bits.shape[1] / pack_depth) * pack_depth - only_4_bits.shape[1]
     )
     padded_bits = np.pad(
         only_4_bits, pad_width=[(0, 0), (0, padding)], constant_values=0
     )
+
+    # after packbits each uint8 is two packed uint4s
+    # then we keep the bit pattern the same but convert to int32
     compressed = np.packbits(padded_bits, axis=-1, bitorder="little")
     compressed = np.ascontiguousarray(compressed).view(np.int32)
 
     return torch.from_numpy(compressed)
 
 
-def unpack_4bit_ints(value: torch.Tensor):
+def unpack_4bit_ints(value: torch.Tensor, shape: torch.Size):
     if value.dtype is not torch.int32:
         raise ValueError(
             f"Expected {torch.int32} but got {value.dtype}, Aborting unpack."
         )
 
+    # unpack bits and undo padding to nearest int32 bits
+    individual_depth = 4
     as_uint8 = value.numpy().view(np.uint8)
     bits = np.unpackbits(as_uint8, axis=-1, bitorder="little")
-    # TODO: need orignal shape to get rid of padding
-    # then undo the padding
-    # then insert zeros to get back to 8 bits
-    # then repack
-    # then add the offset back
+    original_row_size = int(shape[1] * individual_depth)
+    bits = bits[:, :original_row_size]
+
+    # reformat each packed uint4 to a uint8 by filling to top 4 bits with zeros
+    # (uint8 format is required by np.packbits)
+    shape_8bit = (bits.shape[0], bits.shape[1] * 2)
+    bits_as_8bit = np.zeros(shape_8bit, dtype=np.uint8)
+    ranges = np.array([range(x, x + 4) for x in range(0, shape_8bit[1], 8)]).flatten()
+    bits_as_8bit[:, ranges] = bits
+
+    # repack the bits to uint8
+    repacked = np.packbits(bits_as_8bit, axis=-1, bitorder="little")
+
+    # bits are packed in unsigned format, reformat to signed
+    # update the value range from uint4 to int4
+    final = repacked.astype(np.int8) - 8
+
+    return torch.from_numpy(final)

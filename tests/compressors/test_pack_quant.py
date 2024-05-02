@@ -14,7 +14,6 @@
 
 
 import math
-import shutil
 
 import pytest
 import torch
@@ -24,8 +23,6 @@ from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationScheme,
 )
-from compressed_tensors.quantization.lifecycle.forward import fake_quantize
-from safetensors.torch import save_file
 
 
 def get_dummy_quant_config():
