@@ -92,6 +92,7 @@ def fake_quantize(
         # TODO: make validation step for inputs
 
         while scale.ndim < 2:
+            # pad scale and zero point dims for slicing
             scale = scale.unsqueeze(1)
             zero_point = zero_point.unsqueeze(1)
 
