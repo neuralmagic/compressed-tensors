@@ -59,11 +59,13 @@ class Observer(Module, RegistryMixin):
         Convenience function to wrap overwritten calculate_qparams
         adds support to make observed tensor optional and support for tracking latest
         calculated scale and zero point
+        
         :param observed: optional observed tensor to calculate quantization parameters
-            from
+            from. If the tensor is empty or None, skip the calculation
+            of qparams
         :return: tuple of scale and zero point based on last observed value
         """
-        if observed is not None:
+        if observed is not None and bool(observed.nelement()):
             # re-calcualte scale and zero point, update the stored value
             self._scale, self._zero_point = self.calculate_qparams(observed)
         return self._scale, self._zero_point
