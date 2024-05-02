@@ -27,7 +27,6 @@ __all__ = [
     "module_type",
     "calculate_compression_ratio",
     "get_torch_bit_depth",
-    "torch_dtype_from_quant_args",
 ]
 
 
@@ -137,16 +136,3 @@ def calculate_compression_ratio(model: Module) -> float:
             total_uncompressed += uncompressed_bits * num_weights
 
     return total_uncompressed / total_compressed
-
-
-def torch_dtype_from_quant_args(quant_args: "QuantizationArgs") -> torch.dtype:  # noqa
-    # TODO: will need to expand this function for float8 support
-    num_bits = quant_args.num_bits
-    root_type = quant_args.type.value
-    if root_type == "int":
-        if num_bits == 32:
-            return torch.int32
-        else:
-            return torch.int8
-
-    return torch.float32
