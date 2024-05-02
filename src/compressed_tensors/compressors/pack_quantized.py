@@ -94,7 +94,7 @@ class PackedQuantizationCompressor(Compressor):
 
             if len(weight_data) == len(self.COMPRESSION_PARAM_NAMES):
                 weight = weight_data["weight"]
-                original_shape = torch.Size(weight_data["weigh_shape"])
+                original_shape = torch.Size(weight_data["weight_shape"])
                 unpacked = unpack_4bit_ints(weight, original_shape)
                 decompressed = dequantize(
                     x_q=unpacked,

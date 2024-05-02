@@ -14,6 +14,7 @@
 
 
 import math
+import shutil
 
 import pytest
 import torch
@@ -27,11 +28,15 @@ from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationScheme,
 )
+from compressed_tensors.quantization.lifecycle.forward import fake_quantize
+from safetensors.torch import save_file
 
 
 def get_dummy_quant_config():
     config_groups = {
-        "group_1": QuantizationScheme(targets=["Linear"], weights=QuantizationArgs()),
+        "group_1": QuantizationScheme(
+            targets=["Linear"], weights=QuantizationArgs(num_bits=4)
+        ),
     }
     ignore = ["lm_head"]
     quant_config = QuantizationConfig(
@@ -99,3 +104,51 @@ def test_repack(value):
     packed = pack_4bit_ints(value)
     unpacked = unpack_4bit_ints(packed, shape)
     assert torch.equal(value, unpacked)
+
+
+def test_reload_match(tmp_path):
+    dense_state_dict = {
+        "dummy.weight": torch.rand((511, 350)),
+        "dummy.weight_scale": torch.tensor(0.01, dtype=torch.float32),
+        "dummy.weight_zero_point": torch.tensor(0, dtype=torch.int32),
+        "dummy2.weight": torch.rand((128, 280)),
+        "dummy2.weight_scale": torch.tensor(0.02, dtype=torch.float32),
+        "dummy2.weight_zero_point": torch.tensor(15, dtype=torch.int32),
+    }
+    quant_config = get_dummy_quant_config()
+
+    compressor = PackedQuantizationCompressor(config=quant_config)
+    quantized_modules_to_args = {
+        "dummy": quant_config.config_groups["group_1"].weights,
+        "dummy2": quant_config.config_groups["group_1"].weights,
+    }
+    compressed_state_dict = compressor.compress(
+        dense_state_dict, model_quant_args=quantized_modules_to_args
+    )
+    save_file(compressed_state_dict, tmp_path / "model.safetensors")
+    reconstructed_dense_gen = compressor.decompress(tmp_path)
+    reconstructed_dense = {}
+    for name, value in reconstructed_dense_gen:
+        reconstructed_dense[name] = value
+
+    fake_quant_dummy = fake_quantize(
+        dense_state_dict["dummy.weight"],
+        scale=dense_state_dict["dummy.weight_scale"],
+        zero_point=dense_state_dict["dummy.weight_zero_point"],
+        args=quantized_modules_to_args["dummy"],
+    )
+    assert torch.equal(
+        fake_quant_dummy, reconstructed_dense["dummy.weight"].to(torch.float32)
+    )
+
+    fake_quant_dummy2 = fake_quantize(
+        dense_state_dict["dummy2.weight"],
+        scale=dense_state_dict["dummy2.weight_scale"],
+        zero_point=dense_state_dict["dummy2.weight_zero_point"],
+        args=quantized_modules_to_args["dummy2"],
+    )
+    assert torch.equal(
+        fake_quant_dummy2, reconstructed_dense["dummy2.weight"].to(torch.float32)
+    )
+
+    shutil.rmtree(tmp_path)
