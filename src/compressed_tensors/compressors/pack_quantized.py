@@ -85,7 +85,7 @@ class PackedQuantizationCompressor(Compressor):
                             args=quant_args,
                             dtype=torch.int8,
                         )
-                        value = pack_4bit_ints(value)
+                        value = pack_4bit_ints(value.cpu())
                     compressed_dict[merge_names(prefix, "weight_shape")] = shape
 
             compressed_dict[name] = value.to("cpu")
