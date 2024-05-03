@@ -51,7 +51,22 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 class ModelCompressor:
     """
     Handles compression and decompression of a model with a sparsity config and/or
-    quantization config
+    quantization config.
+
+    Compression LifeCycle
+        - compressor = ModelCompressor.from_pretrained_model(model)
+        - compressed_state_dict = compressor.compress(model, state_dict)
+            - compressor.quantization_compressor.compress(model, state_dict)
+            - compressor.sparsity_compressor.compress(model, state_dict)
+        - model.save_pretrained(output_dir, state_dict=compressed_state_dict)
+        - compressor.update_config(output_dir)
+
+    Decompression LifeCycle
+        - compressor = ModelCompressor.from_pretrained(comp_model_path)
+        - model = AutoModel.from_pretrained(comp_model_path)
+        - compressor.decompress(comp_model_path, model)
+            - compressor.sparsity_compressor.decompress(comp_model_path, model)
+            - compressor.quantization_compressor.decompress(comp_model_path, model)
 
     :param sparsity_config: config specifying sparsity compression parameters
     :param quantization_config: config specifying quantization compression parameters
@@ -105,9 +120,9 @@ class ModelCompressor:
 
         :param model: pytorch model to target for compression
         :param sparsity_config: a filled in sparsity config or string corresponding
-        to a sparsity compression algorithm
+            to a sparsity compression algorithm
         :param quantization_format: string corresponding to a quantization compression
-        algorithm
+            algorithm
         :return: compressor for the extracted configs
         """
         quantization_config = QuantizationConfig.from_pretrained(
@@ -166,7 +181,9 @@ class ModelCompressor:
             )
 
         if self.sparsity_compressor is not None:
-            compressed_state_dict = self.sparsity_compressor.compress(state_dict)
+            compressed_state_dict = self.sparsity_compressor.compress(
+                compressed_state_dict
+            )
 
         return compressed_state_dict
 
@@ -184,7 +201,6 @@ class ModelCompressor:
             setattr(model, SPARSITY_CONFIG_NAME, self.sparsity_compressor.config)
 
         if self.quantization_compressor is not None:
-            # TODO: maybe move this out of the compressor and back to SparseAutoModel
             apply_quantization_config(model, self.quantization_config)
             load_pretrained_quantization(model, model_path)
             dense_gen = self.quantization_compressor.decompress(model_path)
