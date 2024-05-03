@@ -181,7 +181,9 @@ class ModelCompressor:
             )
 
         if self.sparsity_compressor is not None:
-            compressed_state_dict = self.sparsity_compressor.compress(state_dict)
+            compressed_state_dict = self.sparsity_compressor.compress(
+                compressed_state_dict
+            )
 
         return compressed_state_dict
 
