@@ -117,7 +117,13 @@ def iter_named_leaf_modules(model: Module) -> Tuple[str, Module]:
                 yield name, submodule
 
 
-def get_torch_bit_depth(value: torch.Tensor):
+def get_torch_bit_depth(value: torch.Tensor) -> int:
+    """
+    Determine the number of bits used to represent the dtype of a tensor
+
+    :param value: tensor to check bit depth of
+    :return: bit depth of each element in the value tensor
+    """
     try:
         bit_depth = torch.finfo(value.dtype).bits
     except TypeError:

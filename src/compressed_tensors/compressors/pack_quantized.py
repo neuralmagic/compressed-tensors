@@ -20,6 +20,7 @@ import numpy as np
 import torch
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
+from compressed_tensors.quantization import QuantizationArgs
 from compressed_tensors.quantization.lifecycle.forward import dequantize, quantize
 from compressed_tensors.quantization.utils import get_torch_bit_depth
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
@@ -36,7 +37,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 @Compressor.register(name=CompressionFormat.pack_quantized.value)
 class PackedQuantizationCompressor(Compressor):
     """
-    Compresses a quantized model by packing every 4 4-bit weights into a torch.int32
+    Compresses a quantized model by packing every eight 4-bit weights into an int32
     """
 
     COMPRESSION_PARAM_NAMES = [
@@ -46,8 +47,20 @@ class PackedQuantizationCompressor(Compressor):
         "weight_shape",
     ]
 
-    def compress(self, model_state: Dict[str, Tensor], **kwargs) -> Dict[str, Tensor]:
-        model_quant_args = kwargs["model_quant_args"]
+    def compress(
+        self,
+        model_state: Dict[str, Tensor],
+        model_quant_args: Dict[str, QuantizationArgs],
+        **kwargs,
+    ) -> Dict[str, Tensor]:
+        """
+        Compresses a dense state dict
+
+        :param model_state: state dict of uncompressed model
+        :param model_quant_args: quantization args for each quantized weight, needed for
+        quantize function to calculate bit depth
+        :return: compressed state dict
+        """
         compressed_dict = {}
         _LOGGER.debug(
             f"Compressing model with {len(model_state)} parameterized layers..."
@@ -64,7 +77,7 @@ class PackedQuantizationCompressor(Compressor):
                     quant_args = model_quant_args[prefix]
                     bit_depth = get_torch_bit_depth(value)
                     if bit_depth > quant_args.num_bits:
-                        # convert weight to an int if needed
+                        # convert weight to an int if not already compressed
                         value = quantize(
                             x=value,
                             scale=scale,
@@ -82,6 +95,16 @@ class PackedQuantizationCompressor(Compressor):
     def decompress(
         self, path_to_model_or_tensors: str, device: str = "cpu"
     ) -> Generator[Tuple[str, Tensor], None, None]:
+        """
+        Reads a compressed state dict located at path_to_model_or_tensors
+        and returns a generator for sequentially decompressing back to a
+        dense state dict
+
+        :param model_path: path to compressed safetensors model (directory with
+            one or more safetensors files) or compressed tensors file
+        :param device: optional device to load intermediate weights into
+        :return: compressed state dict
+        """
         weight_mappings = get_nested_weight_mappings(
             path_to_model_or_tensors, self.COMPRESSION_PARAM_NAMES
         )
@@ -104,7 +127,13 @@ class PackedQuantizationCompressor(Compressor):
                 yield merge_names(weight_name, "weight"), decompressed
 
 
-def pack_4bit_ints(value: torch.Tensor):
+def pack_4bit_ints(value: torch.Tensor) -> torch.Tensor:
+    """
+    Packs a tensor of int4 weights stored in int8 into int32s with padding
+
+    :param value: tensor to pack
+    :returns: packed int32 tensor
+    """
     if value.dtype is not torch.int8:
         raise ValueError("Tensor must be quantized to torch.int8 before packing")
 
@@ -131,7 +160,15 @@ def pack_4bit_ints(value: torch.Tensor):
     return torch.from_numpy(compressed)
 
 
-def unpack_4bit_ints(value: torch.Tensor, shape: torch.Size):
+def unpack_4bit_ints(value: torch.Tensor, shape: torch.Size) -> torch.Tensor:
+    """
+    Unpacks a tensor packed int4 weights into individual int8s, maintaining the
+    original their int4 range
+
+    :param value: tensor to upack
+    :param shape: shape to unpack into, used to remove padding
+    :returns: unpacked int8 tensor
+    """
     if value.dtype is not torch.int32:
         raise ValueError(
             f"Expected {torch.int32} but got {value.dtype}, Aborting unpack."
