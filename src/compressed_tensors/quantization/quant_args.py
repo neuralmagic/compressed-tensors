@@ -64,8 +64,8 @@ class QuantizationArgs(BaseModel):
     num_bits: int = 8
     type: QuantizationType = QuantizationType.INT
     symmetric: bool = True
-    strategy: Optional[QuantizationStrategy] = None
     group_size: Optional[int] = None
+    strategy: Optional[QuantizationStrategy] = None
     block_structure: Optional[str] = None
     dynamic: bool = False
     observer: str = Field(
@@ -96,7 +96,7 @@ class QuantizationArgs(BaseModel):
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
 
-    @validator("strategy", pre=True)
+    @validator("strategy", pre=True, always=True)
     def validate_strategy(cls, value, values):
         group_size = values.get("group_size")
 
@@ -114,8 +114,7 @@ class QuantizationArgs(BaseModel):
                     "group_size > 0 for strategy='group' and "
                     "group_size = -1 for 'channel'"
                 )
-        # breakpoint()
-        group_size = 128
+
         if value == QuantizationStrategy.GROUP:
             if group_size is None:
                 raise ValueError(f"strategy {value} requires group_size to be set.")
