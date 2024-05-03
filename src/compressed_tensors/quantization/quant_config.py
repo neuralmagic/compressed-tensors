@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from compressed_tensors.base import QUANTIZATION_CONFIG_NAME
+from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     calculate_compression_ratio,
@@ -139,7 +140,9 @@ class QuantizationConfig(BaseModel):
         return QuantizationConfig.parse_obj(quantization_config)
 
     @staticmethod
-    def from_pretrained(model: Module) -> "QuantizationConfig":
+    def from_pretrained(
+        model: Module, format: Optional[str] = None
+    ) -> Optional["QuantizationConfig"]:
         """
         Converts a model into its associated QuantizationConfig based on the
         QuantizationScheme attached to each quanitzed module
@@ -170,6 +173,9 @@ class QuantizationConfig(BaseModel):
                 if not match_found:
                     quant_scheme_to_layers.append(scheme)
 
+        if len(quant_scheme_to_layers) == 0:  # No quantized layers
+            return None
+
         # clean up ignore list, we can leave out layers types if none of the
         # instances are quantized
         consolidated_ignore = []
@@ -189,11 +195,11 @@ class QuantizationConfig(BaseModel):
         # original weight we lose the uncompressed bit_depth indo
         compression_ratio = calculate_compression_ratio(model)
 
-        # TODO: replace this with compressor classes like we do for sparsity
-        if quantization_status == QuantizationStatus.COMPRESSED:
-            format = "compressed"
-        else:
-            format = "fakequant"
+        if format is None:
+            if quantization_status == QuantizationStatus.COMPRESSED:
+                format = CompressionFormat.int_quantized.value
+            else:
+                format = CompressionFormat.dense.value
 
         return QuantizationConfig(
             config_groups=config_groups,

@@ -42,6 +42,10 @@ def compress_quantized_weights(module: Module):
         # no quantization scheme or weights not quantized, nothing to do
         return
 
+    if scheme is QuantizationStatus.COMPRESSED:
+        # module is already compressed, nothing to do
+        return
+
     weight = getattr(module, "weight", None)
     scale = getattr(module, "weight_scale", None)
     zero_point = getattr(module, "weight_zero_point", None)
@@ -49,8 +53,8 @@ def compress_quantized_weights(module: Module):
     if weight is None or scale is None or zero_point is None:
         # no weight, scale, or ZP, nothing to do
 
-        # TODO: Should we mark as compressed anyway here to maintain consistent
-        # status throughout the model?
+        # mark as compressed here to maintain consistent status throughout the model
+        module.quantization_status = QuantizationStatus.COMPRESSED
         return
 
     module.weight.requires_grad = False  # cannot use auto grad after compression
