@@ -31,7 +31,7 @@ config_file = "example_quant_config.json"
 model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
 dataset_name = "open_platypus"
 split = "train"
-num_calibration_samples = 512
+num_calibration_samples = 32
 max_seq_length = 1024
 pad_to_max_length = False
 output_dir = "./llama1.1b_new_quant_out"
@@ -79,8 +79,9 @@ with torch.no_grad():
 # freeze params after calibration
 model.apply(freeze_module_quantization)
 
-# this functionality will move but for now we need to get the save override from
-# SparseML in order to save the config
-from sparseml.transformers.compression import modify_save_pretrained
+# save quantized model
+from sparseml.transformers.sparsification.compressed_tensors_utils import (
+    modify_save_pretrained,
+)
 modify_save_pretrained(model) 
 model.save_pretrained(output_dir)

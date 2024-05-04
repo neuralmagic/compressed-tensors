@@ -56,7 +56,6 @@ class IntQuantizationCompressor(Compressor):
         quantize function to calculate bit depth
         :return: compressed state dict
         """
-        model_quant_args = kwargs["model_quant_args"]
         compressed_dict = {}
         _LOGGER.debug(
             f"Compressing model with {len(model_state)} parameterized layers..."
