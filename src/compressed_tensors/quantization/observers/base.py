@@ -96,8 +96,8 @@ class Observer(Module, RegistryMixin):
                 self._zero_point = torch.stack(zero_points, dim=1)
 
             elif self.quantization_args.strategy == QuantizationStrategy.CHANNEL:
-                # assume observed is transposed, because its the output, hence use dim 0
-                self._scale, self._zero_point = self.get_qparams_along_dim(observed, 0)
+                # assume observed is not transposed (output) hence use dim 1
+                self._scale, self._zero_point = self.get_qparams_along_dim(observed, 1)
 
             elif self.quantization_args.strategy == QuantizationStrategy.TOKEN:
 
