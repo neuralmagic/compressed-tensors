@@ -169,6 +169,14 @@ def _find_first_match(
     return None
 
 
+def _infer_status(model: Module) -> Optional[QuantizationStatus]:
+    for module in model.modules():
+        status = getattr(module, "quantization_status", None)
+        if status is not None:
+            return status
+    return None
+
+
 def _load_quant_args_from_state_dict(
     base_name: str, module_name: str, module: Module, state_dict: Dict
 ):
