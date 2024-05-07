@@ -13,7 +13,10 @@
 # limitations under the License.
 
 
-from compressed_tensors.quantization.quant_config import QuantizationStatus
+from compressed_tensors.quantization.quant_config import (
+    ObserverTypes,
+    QuantizationStatus,
+)
 from torch.nn import Module
 
 
@@ -37,10 +40,10 @@ def freeze_module_quantization(module: Module):
 
     # delete observers from module if not dynamic
     if scheme.input_activations and not scheme.input_activations.dynamic:
-        delattr(module, "input_observer")
+        delattr(module, ObserverTypes.INPUT.value)
     if scheme.weights and not scheme.weights.dynamic:
-        delattr(module, "weight_observer")
+        delattr(module, ObserverTypes.WEIGHT.value)
     if scheme.output_activations and not scheme.output_activations.dynamic:
-        delattr(module, "output_observer")
+        delattr(module, ObserverTypes.OUTPUT.value)
 
     module.quantization_status = QuantizationStatus.FROZEN

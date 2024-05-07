@@ -32,7 +32,22 @@ __all__ = [
     "QuantizationStatus",
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
+    "ObserverTypes",
 ]
+
+
+class ObserverTypes(str, Enum):
+    """
+    Enum storing the different types of observers that can be attached to a module
+
+    INPUT: observer that tracks the input activations of a module
+    WEIGHT: observer that tracks the weights of a module
+    OUTPUT: observer that tracks the output activations of a module
+    """
+
+    INPUT = "input_observer"
+    WEIGHT = "weight_observer"
+    OUTPUT = "output_observer"
 
 
 class QuantizationStatus(str, Enum):

@@ -27,47 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = ["Observer"]
 
 
-class TokenCounter:
-    """
-    The goal of the class is to keep track of the number of tokens
-    observed during the forward pass through the module. The class is keeping
-    track of the number of tokens passed through each expert layer of a MOE
-    (Mixture of Experts) model.
-
-    It has been implemented as a mixin class to be used by the Observer class,
-    because classes that inherit from torch.nn.Module have hard time dealing
-    with properties.
-    """
-
-    def __init__(self):
-        self._tokens_per_batch = None
-
-    @property
-    def tokens_per_batch(self) -> int:
-        """
-        Returns the number of tokens observed
-        during the forward pass of a model."""
-        return self._tokens_per_batch
-
-    @tokens_per_batch.setter
-    def tokens_per_batch(self, batch_tensor: Tensor):
-        if not isinstance(batch_tensor, Tensor):
-            raise ValueError(f"Expected value to be a tensor, got {type(batch_tensor)}")
-
-        if batch_tensor.ndim != 2:
-            _LOGGER.debug(
-                "The input tensor is expected to have two dimensions "
-                "(batch_size * sequence_length, num_features). "
-                f"The input tensor has {batch_tensor.ndim} dimensions."
-            )
-            return
-        # batch_tensor (batch_size * sequence_length, num_features)
-        # observed_tokens (batch_size * sequence_length)
-        observed_tokens, _ = batch_tensor.shape
-        self._tokens_per_batch = observed_tokens
-
-
-class Observer(Module, RegistryMixin, TokenCounter):
+class Observer(Module, RegistryMixin):
     """
     Base Observer class to be subclassed for specific implementation.
     Subclasses should override `calculate_qparams` to return a scale, zero_point
@@ -79,6 +39,9 @@ class Observer(Module, RegistryMixin, TokenCounter):
         super().__init__()
         self._scale = None
         self._zero_point = None
+        # how many tokens were observed during the forward pass
+        # (cannot set a property due to inheritance from torch.nn.Module)
+        self._tokens_per_batch = None
 
     def forward(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
         """
@@ -87,7 +50,7 @@ class Observer(Module, RegistryMixin, TokenCounter):
             from
         :return: tuple of scale and zero point based on last observed value
         """
-        self.tokens_per_batch = observed
+        self.record_tokens_per_batch(observed)
         return self.get_qparams(observed=observed)
 
     def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
@@ -108,7 +71,36 @@ class Observer(Module, RegistryMixin, TokenCounter):
             from
         :return: tuple of scale and zero point based on last observed value
         """
-        if observed is not None:
+        if observed is not None and observed.numel() > 0:
             # re-calculate scale and zero point, update the stored value
             self._scale, self._zero_point = self.calculate_qparams(observed)
         return self._scale, self._zero_point
+
+    def record_tokens_per_batch(self, batch_tensor: Tensor):
+        """
+        Records the number of tokens observed during the forward pass, by
+        setting the _tokens_per_batch attribute of the class.
+
+        Note: The batch_tensor is expected to have two dimensions
+            (batch_size * sequence_length, num_features). This is the
+            general shape expected by the forward pass of the expert
+            layers in a MOE model. If the input tensor does not have
+            two dimensions, the _tokens_per_batch attribute will be set
+            to None.
+        """
+        if not isinstance(batch_tensor, Tensor):
+            raise ValueError(f"Expected value to be a tensor, got {type(batch_tensor)}")
+
+        if batch_tensor.ndim != 2:
+            _LOGGER.debug(
+                "The input tensor is expected to have two dimensions "
+                "(batch_size * sequence_length, num_features). "
+                f"The input tensor has {batch_tensor.ndim} dimensions."
+            )
+            observed_tokens = None
+        else:
+            # batch_tensor (batch_size * sequence_length, num_features)
+            # observed_tokens (batch_size * sequence_length)
+            observed_tokens, _ = batch_tensor.shape
+
+        self._tokens_per_batch = observed_tokens

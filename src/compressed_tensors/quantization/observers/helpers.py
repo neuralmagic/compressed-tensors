@@ -12,14 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import Counter
 from typing import Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_config import ObserverTypes
 from torch import FloatTensor, IntTensor, Tensor
 
 
-__all__ = ["calculate_qparams"]
+__all__ = ["calculate_qparams", "get_observer_token_count"]
+
+
+def get_observer_token_count(module: torch.nn.Module) -> Counter:
+    """
+    Parse the module and return the number of tokens observed by
+    each module's observer.
+
+    :param module: module to parse
+    :return: counter with the number of tokens observed by each observer
+    """
+    token_counts = Counter()
+    for name, module in module.named_modules():
+        if ObserverTypes.INPUT.value in name:
+            token_counts[
+                name.replace(f".{ObserverTypes.INPUT.value}", "")
+            ] = module._tokens_per_batch
+    return token_counts
 
 
 def calculate_qparams(
