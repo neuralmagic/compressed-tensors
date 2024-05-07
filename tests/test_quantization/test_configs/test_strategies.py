@@ -62,8 +62,8 @@ def test_channelwise(input_symmetry, weight_symmetry):
     model(inputs)
 
     if input_symmetry is not None:
-        assert list(model.input_scale.shape) == [32]
-        assert list(model.input_zero_point.shape) == [32]
+        assert list(model.input_scale.shape) == [64]
+        assert list(model.input_zero_point.shape) == [64]
 
     assert list(model.weight_scale.shape) == [64]
     assert list(model.weight_zero_point.shape) == [64]
