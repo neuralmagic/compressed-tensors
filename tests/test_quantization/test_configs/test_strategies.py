@@ -67,3 +67,44 @@ def test_channelwise(input_symmetry, weight_symmetry):
 
     assert list(model.weight_scale.shape) == [64]
     assert list(model.weight_zero_point.shape) == [64]
+
+@torch.no_grad
+@pytest.mark.parametrize("input_symmetry", [True, False, None])
+@pytest.mark.parametrize("weight_symmetry", [True, False])
+def test_group(input_symmetry, weight_symmetry):
+    model = Linear(256, 512)
+    quant_config = create_config(
+        input_symmetry, weight_symmetry, strategy=QuantizationStrategy.GROUP, group_size=32
+    )
+    apply_quantization_config(model, quant_config)
+
+    inputs = torch.randn(128, 256)
+    model(inputs)
+
+    if input_symmetry is not None:
+        assert list(model.input_scale.shape) == [128, 8]
+        assert list(model.input_zero_point.shape) == [128, 8]
+
+    assert list(model.weight_scale.shape) == [512, 8]
+    assert list(model.weight_zero_point.shape) == [512, 8]
+
+
+@torch.no_grad
+@pytest.mark.parametrize("input_symmetry", [True, False, None])
+@pytest.mark.parametrize("weight_symmetry", [True, False])
+def test_token(input_symmetry, weight_symmetry):
+    model = Linear(256, 512)
+    quant_config = create_config(
+        input_symmetry, weight_symmetry, strategy=QuantizationStrategy.TOKEN
+    )
+    apply_quantization_config(model, quant_config)
+
+    inputs = torch.randn(128, 256)
+    model(inputs)
+
+    if input_symmetry is not None:
+        assert list(model.input_scale.shape) == [256]
+        assert list(model.input_zero_point.shape) == [256]
+
+    assert list(model.weight_scale.shape) == [512]
+    assert list(model.weight_zero_point.shape) == [512]
