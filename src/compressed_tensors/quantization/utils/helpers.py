@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from typing import Optional, Tuple
 
 import torch
@@ -30,6 +31,8 @@ __all__ = [
     "get_torch_bit_depth",
     "can_quantize",
 ]
+
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]:  # noqa
@@ -133,20 +136,19 @@ def get_torch_bit_depth(value: torch.Tensor) -> int:
     return bit_depth
 
 
-def can_quantize(value: torch.Tensor, quant_args: "QuantizationArgs") -> bool:
+def can_quantize(value: torch.Tensor, quant_args: "QuantizationArgs") -> bool:  # noqa
     """
-    Checks if value can be quantized by quant_args. Raises a ValueError quant_args is
-    incompatible with value based on bit depth.
+    Checks if value can be quantized by quant_args.
 
     :param value: tensor to check for quantization
     :param quant_args: QuantizationArgs to use for quantization
-    :return: False if value is already quantized to quant_args, True if it can be
-    quantized with quant_args. Raises ValueError if they are incompatible
+    :return: False if value is already quantized to quant_args or value is incompatible
+    with quant_args, True if value can be quantized with quant_args
     """
     bit_depth = get_torch_bit_depth(value)
     requested_depth = quant_args.num_bits
     if bit_depth < quant_args.num_bits:
-        raise ValueError(
+        _LOGGER.warn(
             f"Can't quantize tensor with bit depth {bit_depth} to {requested_depth}."
             "The QuantizationArgs provided are not compatible with the input tensor."
         )
