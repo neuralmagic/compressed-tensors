@@ -28,6 +28,7 @@ __all__ = [
     "module_type",
     "calculate_compression_ratio",
     "get_torch_bit_depth",
+    "can_quantize",
 ]
 
 
@@ -130,6 +131,27 @@ def get_torch_bit_depth(value: torch.Tensor) -> int:
         bit_depth = torch.iinfo(value.dtype).bits
 
     return bit_depth
+
+
+def can_quantize(value: torch.Tensor, quant_args: "QuantizationArgs") -> bool:
+    """
+    Checks if value can be quantized by quant_args. Raises a ValueError quant_args is
+    incompatible with value based on bit depth.
+
+    :param value: tensor to check for quantization
+    :param quant_args: QuantizationArgs to use for quantization
+    :return: False if value is already quantized to quant_args, True if it can be
+    quantized with quant_args. Raises ValueError if they are incompatible
+    """
+    bit_depth = get_torch_bit_depth(value)
+    requested_depth = quant_args.num_bits
+    if bit_depth < quant_args.num_bits:
+        raise ValueError(
+            f"Can't quantize tensor with bit depth {bit_depth} to {requested_depth}."
+            "The QuantizationArgs provided are not compatible with the input tensor."
+        )
+
+    return bit_depth > quant_args.num_bits
 
 
 def calculate_compression_ratio(model: Module) -> float:

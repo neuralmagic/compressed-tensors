@@ -192,7 +192,7 @@ class QuantizationConfig(BaseModel):
             config_groups[group_name] = scheme
 
         # TODO: this is incorrect in compressed mode, since we are overwriting the
-        # original weight we lose the uncompressed bit_depth indo
+        # original weight we lose the uncompressed bit_depth into
         compression_ratio = calculate_compression_ratio(model)
 
         if format is None:

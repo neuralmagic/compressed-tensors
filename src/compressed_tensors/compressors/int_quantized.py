@@ -20,7 +20,7 @@ from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import QuantizationArgs
 from compressed_tensors.quantization.lifecycle.forward import dequantize, quantize
-from compressed_tensors.quantization.utils import get_torch_bit_depth
+from compressed_tensors.quantization.utils import can_quantize
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
 from safetensors import safe_open
 from torch import Tensor
@@ -69,8 +69,7 @@ class IntQuantizationCompressor(Compressor):
                 if scale is not None and zp is not None:
                     # weight is quantized, compress it
                     quant_args = model_quant_args[prefix]
-                    bit_depth = get_torch_bit_depth(value)
-                    if bit_depth > quant_args.num_bits:
+                    if can_quantize(value, quant_args):
                         # only quantize if not already quantized
                         value = quantize(
                             x=value,
