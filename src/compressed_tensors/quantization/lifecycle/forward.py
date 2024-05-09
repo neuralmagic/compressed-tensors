@@ -88,8 +88,13 @@ def dequantize(
     if args is None:
         if scale.ndim == 0:
             args = QuantizationArgs(strategy=QuantizationStrategy.TENSOR)
+        elif scale.ndim == 2:
+            args = QuantizationArgs(strategy=QuantizationStrategy.CHANNEL)
         elif scale.ndim == 3:
-            args = QuantizationArgs(strategy=QuantizationStrategy.GROUP)
+            group_size = int(x_q.shape[1] / scale.shape[1])
+            args = QuantizationArgs(
+                strategy=QuantizationStrategy.GROUP, group_size=group_size
+            )
     return _process_quantization(
         x=x_q,
         scale=scale,
@@ -148,8 +153,11 @@ def _process_quantization(
     # group
     if args.strategy == QuantizationStrategy.GROUP:
 
-        output_dtype = dtype if dtype is not None else x.dtype
-        output = torch.zeros_like(x, dtype=output_dtype)
+        if do_dequantize:  # if dequantizing the output should be a fp type
+            output = torch.zeros_like(x, dtype=scale.dtype)
+        else:
+            output_dtype = dtype if dtype is not None else x.dtype
+            output = torch.zeros_like(x, dtype=output_dtype)
 
         # TODO: vectorize the for loop
         # TODO: fix genetric assumption about the tensor size for computing group
@@ -189,11 +197,6 @@ def _process_quantization(
 
     # channel-wise
     elif args.strategy == QuantizationStrategy.CHANNEL:  # group_size == -1
-        # before: scale shape = [channel_size]
-        # after: scale shape = [1, channel_size]
-        scale = scale.unsqueeze(0)
-        zero_point = zero_point.unsqueeze(0)
-
         if do_quantize:
             output = _quantize(x, scale, zero_point, q_min, q_max, dtype=dtype)
         if do_dequantize:
