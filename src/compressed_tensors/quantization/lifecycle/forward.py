@@ -88,6 +88,8 @@ def dequantize(
     if args is None:
         if scale.ndim == 0:
             args = QuantizationArgs(strategy=QuantizationStrategy.TENSOR)
+        elif scale.ndim == 2:
+            args = QuantizationArgs(strategy=QuantizationStrategy.CHANNEL)
         elif scale.ndim == 3:
             group_size = int(x_q.shape[1] / scale.shape[1])
             args = QuantizationArgs(
@@ -195,11 +197,6 @@ def _process_quantization(
 
     # channel-wise
     elif args.strategy == QuantizationStrategy.CHANNEL:  # group_size == -1
-        # before: scale shape = [channel_size]
-        # after: scale shape = [1, channel_size]
-        scale = scale.unsqueeze(0)
-        zero_point = zero_point.unsqueeze(0)
-
         if do_quantize:
             output = _quantize(x, scale, zero_point, q_min, q_max, dtype=dtype)
         if do_dequantize:
