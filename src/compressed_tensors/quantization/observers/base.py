@@ -40,6 +40,7 @@ class Observer(Module, RegistryMixin):
         self._scale = None
         self._zero_point = None
 
+    @torch.no_grad()
     def forward(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
         """
         maps directly to get_qparams
@@ -91,13 +92,12 @@ class Observer(Module, RegistryMixin):
                     )
                     scales.append(scale)
                     zero_points.append(zero_point)
-
-                self._scale = torch.stack(scales, dim=1)
-                self._zero_point = torch.stack(zero_points, dim=1)
+                self._scale = torch.stack(scales, dim=1, out=self._scale)
+                self._zero_point = torch.stack(zero_points, dim=1, out=self._zero_point)
 
             elif self.quantization_args.strategy == QuantizationStrategy.CHANNEL:
-                # assume observed is not transposed (output) hence use dim 1
-                self._scale, self._zero_point = self.get_qparams_along_dim(observed, 1)
+                # assume observed is transposed, because its the output, hence use dim 0
+                self._scale, self._zero_point = self.get_qparams_along_dim(observed, 0)
 
             elif self.quantization_args.strategy == QuantizationStrategy.TOKEN:
 
