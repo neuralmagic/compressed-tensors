@@ -43,9 +43,10 @@ class Observer(Module, RegistryMixin):
         super().__init__()
         self._scale = None
         self._zero_point = None
-        # how many tokens were observed during the forward pass
+        # how many tokens were observed
+        # throughout the forward passes
         # (cannot set a property due to inheritance from torch.nn.Module)
-        self._tokens_per_batch = None
+        self._observed_tokens = None
 
     def forward(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
         """
@@ -54,7 +55,7 @@ class Observer(Module, RegistryMixin):
             from
         :return: tuple of scale and zero point based on last observed value
         """
-        self.record_tokens_per_batch(observed)
+        self.record_observed_tokens(observed)
         return self.get_qparams(observed=observed)
 
     def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
@@ -140,16 +141,17 @@ class Observer(Module, RegistryMixin):
         # breakpoint()
         return torch.stack(scales), torch.stack(zero_points)
 
-    def record_tokens_per_batch(self, batch_tensor: Tensor):
+    def record_observed_tokens(self, batch_tensor: Tensor):
         """
-        Records the number of tokens observed during the forward pass, by
-        setting the _tokens_per_batch attribute of the class.
+        Counts the number of tokens observed during the
+        forward passes. The count is aggregated in the
+        _observed_tokens attribute of the class.
 
         Note: The batch_tensor is expected to have two dimensions
             (batch_size * sequence_length, num_features). This is the
             general shape expected by the forward pass of the expert
             layers in a MOE model. If the input tensor does not have
-            two dimensions, the _tokens_per_batch attribute will be set
+            two dimensions, the _observed_tokens attribute will be set
             to None.
         """
         if not isinstance(batch_tensor, Tensor):
@@ -161,10 +163,13 @@ class Observer(Module, RegistryMixin):
                 "(batch_size * sequence_length, num_features). "
                 f"The input tensor has {batch_tensor.ndim} dimensions."
             )
-            observed_tokens = None
-        else:
-            # batch_tensor (batch_size * sequence_length, num_features)
-            # observed_tokens (batch_size * sequence_length)
-            observed_tokens, _ = batch_tensor.shape
+            return
 
-        self._tokens_per_batch = observed_tokens
+        if self._observed_tokens is None:
+            # initialize the count
+            self._observed_tokens = 0
+
+        # batch_tensor (batch_size * sequence_length, num_features)
+        # observed_tokens (batch_size * sequence_length)
+        observed_tokens, _ = batch_tensor.shape
+        self._observed_tokens += observed_tokens

@@ -42,9 +42,19 @@ def test_get_observer_token_count():
     apply_quantization_config(model, config)
 
     # start calibration
-    calib_str = "I am a string that is used for calibration so that your model is quantized properly."  # noqa
-    calibration_tokens = tokenizer(calib_str, return_tensors="pt")
-    model(**calibration_tokens)
+    calib_list = [
+        "I am a string that",
+        "is used for calibration so",
+        "that your model is",
+        "quantized properly.",
+    ]
+
+    total_num_tokens_observed = 0
+    for calib_sample in calib_list:
+        calib_tensor = tokenizer(calib_sample, return_tensors="pt")
+        _ = model(**calib_tensor)
+        total_num_tokens_observed += len(calib_tensor.input_ids.flatten())
+
     counter = get_observer_token_count(model)
 
     # filter out the None values
@@ -58,7 +68,7 @@ def test_get_observer_token_count():
         tokens_observed_by_router = counter.pop(
             f"model.layers.{i}.block_sparse_moe.gate"
         )
-        assert tokens_observed_by_router == len(calibration_tokens.input_ids.flatten())
+        assert tokens_observed_by_router == total_num_tokens_observed
 
         # fetch the sum of tokens observed by all the experts
         sum_tokens_observed_by_experts = 0
@@ -74,9 +84,7 @@ def test_get_observer_token_count():
         # so we need to multiply by 3
         assert (
             sum_tokens_observed_by_experts
-            == len(calibration_tokens.input_ids.flatten())
-            * model.config.num_experts_per_tok
-            * 3
+            == total_num_tokens_observed * model.config.num_experts_per_tok * 3
         )
 
     # there are no more information in the counter
