@@ -22,6 +22,7 @@ from compressed_tensors.quantization import (
     QuantizationStrategy,
     apply_quantization_config,
 )
+from compressed_tensors.quantization.lifecycle.forward import fake_quantize
 from torch.nn import Linear
 
 
