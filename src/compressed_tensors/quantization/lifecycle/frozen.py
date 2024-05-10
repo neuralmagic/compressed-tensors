@@ -14,9 +14,9 @@
 
 
 from compressed_tensors.quantization.quant_config import (
-    ObserverTypes,
     QuantizationStatus,
 )
+from compressed_tensors.quantization.observers.base import ObserverTypes
 from torch.nn import Module
 
 

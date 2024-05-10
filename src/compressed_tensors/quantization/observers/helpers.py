@@ -17,7 +17,7 @@ from typing import Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import QuantizationArgs
-from compressed_tensors.quantization.quant_config import ObserverTypes
+from compressed_tensors.quantization.observers.base import ObserverTypes
 from torch import FloatTensor, IntTensor, Tensor
 
 

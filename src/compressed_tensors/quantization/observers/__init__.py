@@ -16,6 +16,6 @@
 # isort: skip_file
 
 from .helpers import *
-from .base import *
+from .base import Observer
 from .memoryless import *
 from .min_max import *

@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
 from typing import Dict, List, Optional
-
+from enum import Enum
 from compressed_tensors.base import QUANTIZATION_CONFIG_NAME
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -33,23 +32,7 @@ __all__ = [
     "QuantizationStatus",
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
-    "ObserverTypes",
 ]
-
-
-class ObserverTypes(str, Enum):
-    """
-    Enum storing the different types of observers that can be attached to a module
-
-    INPUT: observer that tracks the input activations of a module
-    WEIGHT: observer that tracks the weights of a module
-    OUTPUT: observer that tracks the output activations of a module
-    """
-
-    INPUT = "input_observer"
-    WEIGHT = "weight_observer"
-    OUTPUT = "output_observer"
-
 
 class QuantizationStatus(str, Enum):
     """
