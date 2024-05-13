@@ -1,1 +1,21 @@
-# TODO
+name: Build nightly wheel
+
+on:
+  push:
+    branches:
+      - '*'
+
+jobs:
+  build-wheel-nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python }}
+      - name: Build PyPi Wheel
+        id: build-wheel
+        uses: neuralmagic/nm-actions/actions/pypi_build@main
+        with:
+          dev: false
+          release: false
+
