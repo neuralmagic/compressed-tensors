@@ -9,28 +9,8 @@ on:
       - main
 
 jobs:
-  test-setup:
-    runs-on: ubuntu-20.04
-    outputs:
-      python-diff: ${{ steps.python-check.outputs.output }}
-      full-check: ${{ steps.full-check.outputs.output }}
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: "Checking if compressed-tensors python code was changed"
-        id: python-check
-        run: >
-          ((git diff --name-only origin/main HEAD | grep -E "[src|tests]/compressed_tensors|setup.py")
-          || (echo $GITHUB_REF | grep -E "refs/heads/[release/|main]"))
-          && echo "::set-output name=output::1" || echo "::set-output name=output::0"
-      - name: "Checking if full tests need to run"
-        id: full-check
-        run: >
-          (echo $GITHUB_REF | grep -E "refs/heads/[release/|main]")
-          && echo "::set-output name=output::1" || echo "::set-output name=output::0"
   python-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: test-setup
     if: ${{needs.test-setup.outputs.python-diff == 1}}
     steps:
