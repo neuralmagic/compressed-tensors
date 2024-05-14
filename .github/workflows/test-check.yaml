@@ -10,7 +10,7 @@ on:
 
 jobs:
   test-setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     outputs:
       python-diff: ${{ steps.python-check.outputs.output }}
       full-check: ${{ steps.full-check.outputs.output }}
