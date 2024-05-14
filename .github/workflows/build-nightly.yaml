@@ -19,12 +19,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
       
-      - name: Set Env
-        run: |
-          pip3 install virtualenv
-          virtualenv venv
-          source venv/bin/activate
-        
       - name: Build PyPi Wheel
         id: build-wheel
         uses: neuralmagic/nm-actions/actions/pypi_build@main
