@@ -30,5 +30,3 @@ jobs:
         with:
           dev: false
           release: false
-    secrets: inherit
-
