@@ -8,6 +8,11 @@ on:
     branches:
       - main
 
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
 jobs:
   build-wheel-nightly:
     runs-on: ubuntu-latest
@@ -25,4 +30,5 @@ jobs:
         with:
           dev: false
           release: false
+        secrets: inherit
 
