@@ -1,12 +1,8 @@
 name: Build, test, and publish nightly wheel
 
 on:
-  push:
-    branches:
-      - '*'
-  pull_request:
-    branches:
-      - main
+  schedule:
+    - cron: '0 0 * * *'
 
 jobs:
   build-test-publish-nightly-wheel:
@@ -28,7 +24,7 @@ jobs:
 
       - name: Set Env
         run: |
-          pip3 instal --upgrade pip && pip3 install --upgrade setuptools
+          pip3 install --upgrade pip && pip3 install --upgrade setuptools
           pip3 install virtualenv
           virtualenv venv
           source venv/bin/activate
