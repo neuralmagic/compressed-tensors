@@ -11,8 +11,6 @@ on:
 jobs:
   python-tests:
     runs-on: ubuntu-20.04
-    needs: test-setup
-    if: ${{needs.test-setup.outputs.python-diff == 1}}
     steps:
         - uses: actions/checkout@v2
         - name: "⚙️ Install dependencies"
