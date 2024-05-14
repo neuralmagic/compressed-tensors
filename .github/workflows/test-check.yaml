@@ -12,7 +12,13 @@ jobs:
   python-tests:
     runs-on: ubuntu-20.04
     steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
+        - name: Set Env
+          run: |
+            pip3 install --upgrade pip && pip3 install --upgrade setuptools
+            pip3 install virtualenv
+            virtualenv venv
+            source venv/bin/activate
         - name: "⚙️ Install dependencies"
           run: pip3 install .[dev]
         - name: "🔬 Running tests"
