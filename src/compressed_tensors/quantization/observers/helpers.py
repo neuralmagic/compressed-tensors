@@ -37,7 +37,7 @@ def get_observer_token_count(module: torch.nn.Module) -> Counter:
         if ObserverTypes.INPUT.value in name:
             token_counts[
                 name.replace(f".{ObserverTypes.INPUT.value}", "")
-            ] = module._tokens_per_batch
+            ] = module._observed_tokens
     return token_counts
 
 
