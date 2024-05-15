@@ -23,7 +23,6 @@ version_major_minor = version
 
 # load and overwrite version and release info from compressed-tensors package
 exec(open(os.path.join("src", "compressed_tensors", "version.py")).read())
-print(f"loaded version {version} from src/compressed_tensors/version.py")
 version_nm_deps = f"{version_major_minor}.0"
 
 if is_release:
