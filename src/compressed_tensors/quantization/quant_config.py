@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Optional
 from enum import Enum
+from typing import Dict, List, Optional
+
 from compressed_tensors.base import QUANTIZATION_CONFIG_NAME
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -33,6 +34,7 @@ __all__ = [
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
 ]
+
 
 class QuantizationStatus(str, Enum):
     """

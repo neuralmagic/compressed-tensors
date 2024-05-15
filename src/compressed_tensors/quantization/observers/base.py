@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from enum import Enum
 from typing import Optional, Tuple
 
 import torch
@@ -23,7 +24,6 @@ from compressed_tensors.quantization.quant_args import (
 from compressed_tensors.registry.registry import RegistryMixin
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
-from enum import Enum
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,15 +31,13 @@ _LOGGER = logging.getLogger(__name__)
 
 __all__ = ["Observer", "ObserverTypes"]
 
+
 class ObserverTypes(str, Enum):
     """
     Enum storing the different types of observers that can be attached to a module
-
-    INPUT: observer that tracks the input activations of a module
-    WEIGHT: observer that tracks the weights of a module
-    OUTPUT: observer that tracks the output activations of a module
     """
 
+    BASE = "observer"
     INPUT = "input_observer"
     WEIGHT = "weight_observer"
     OUTPUT = "output_observer"

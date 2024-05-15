@@ -13,10 +13,8 @@
 # limitations under the License.
 
 
-from compressed_tensors.quantization.quant_config import (
-    QuantizationStatus,
-)
 from compressed_tensors.quantization.observers.base import ObserverTypes
+from compressed_tensors.quantization.quant_config import QuantizationStatus
 from torch.nn import Module
 
 
