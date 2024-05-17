@@ -12,13 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# flake8: noqa
 
-from .base import Compressor
-from .dense import DenseCompressor
-from .helpers import load_compressed, save_compressed, save_compressed_model
-from .int_quantized import IntQuantizationCompressor
-from .model_compressor import ModelCompressor
-from .pack_quantized import PackedQuantizationCompressor
-from .sparse_bitmask import BitmaskCompressor, BitmaskTensor
-from .fp8_quantized import FloatQuantizationCompressor
+import torch
+from compressed_tensors.compressors import Compressor, IntQuantizationCompressor
+from compressed_tensors.config import CompressionFormat
+
+
+__all__ = ["FloatQuantizationCompressor"]
+
+
+
+@Compressor.register(name=CompressionFormat.float_quantized.value)
+class FloatQuantizationCompressor(IntQuantizationCompressor):
+    """
+    Compression for quantized FP8 models. Weight of each quantized layer is
+    converted from its original float type to the format specified by the layer's
+    quantization scheme.
+    """
+    COMPRESSED_DTYPE = torch.float8_e4m3fn

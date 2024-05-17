@@ -15,11 +15,11 @@
 from typing import Tuple
 
 import torch
-from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_args import QuantizationArgs, QuantizationType
 from torch import FloatTensor, IntTensor, Tensor
 
 
-__all__ = ["calculate_qparams"]
+__all__ = ["calculate_qparams", "calculate_range"]
 
 
 def calculate_qparams(
@@ -37,10 +37,15 @@ def calculate_qparams(
     max_vals = torch.max(max_vals, torch.zeros_like(max_vals))
     device = min_vals.device
 
-    bit_range = 2**quantization_args.num_bits - 1
-    bit_min = -(bit_range + 1) / 2
-    bit_max = bit_min + bit_range
-    if quantization_args.symmetric:
+    bit_min, bit_max = calculate_range(quantization_args, device)
+    bit_range = bit_max - bit_min
+
+    if quantization_args.type == QuantizationType.FLOAT:
+        #TODO: don't assume symmetric
+        max_val_pos = torch.max(-min_vals, max_vals)
+        scales = (bit_max / max_val_pos.clamp(min=1e-12)).float().reciprocal()
+        zero_points = torch.zeros(scales.shape, device=device, dtype=torch.float8_e4m3fn)
+    elif quantization_args.symmetric:
         max_val_pos = torch.max(-min_vals, max_vals)
         scales = max_val_pos / (float(bit_range) / 2)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
@@ -52,3 +57,22 @@ def calculate_qparams(
         zero_points = torch.clamp(zero_points, bit_min, bit_max).to(torch.int8)
 
     return scales, zero_points
+
+def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
+    """
+    """
+    if quantization_args.type == QuantizationType.INT:
+        bit_range = 2**quantization_args.num_bits
+        q_max = torch.tensor(bit_range / 2 - 1, device=device)
+        q_min = torch.tensor(-bit_range / 2, device=device)
+    else: # QuantizationType.FLOAT
+        if quantization_args.num_bits != 8:
+            raise ValueError(
+                "Floating point quantization is only supported for 8 bits,"
+                f"got {quantization_args.num_bits}"
+            )
+        fp_range_info = torch.finfo(torch.float8_e4m3fn)
+        q_max = torch.tensor(fp_range_info.max, device=device)
+        q_min = torch.tensor(fp_range_info.min, device=device)
+
+    return q_min, q_max

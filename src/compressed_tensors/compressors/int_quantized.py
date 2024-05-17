@@ -41,6 +41,7 @@ class IntQuantizationCompressor(Compressor):
     """
 
     COMPRESSION_PARAM_NAMES = ["weight", "weight_scale", "weight_zero_point"]
+    COMPRESSED_DTYPE = torch.int8
 
     def compress(
         self,
@@ -76,7 +77,7 @@ class IntQuantizationCompressor(Compressor):
                             scale=scale,
                             zero_point=zp,
                             args=quant_args,
-                            dtype=torch.int8,
+                            dtype=self.COMPRESSED_DTYPE,
                         )
 
             compressed_dict[name] = value.to("cpu")

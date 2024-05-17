@@ -17,7 +17,9 @@ import logging
 import operator
 import os
 from typing import Dict, Optional, Union
-
+import transformers
+import torch
+import re
 from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
     QUANTIZATION_CONFIG_NAME,
@@ -185,6 +187,9 @@ class ModelCompressor:
                 compressed_state_dict
             )
 
+
+        transformers.modeling_utils.dtype_byte_size = new_dtype_byte_size
+
         return compressed_state_dict
 
     def decompress(self, model_path: str, model: Module):
@@ -262,3 +267,14 @@ def _get_weight_arg_mappings(model: Module) -> Dict:
                 quantized_modules_to_args[name] = submodule.quantization_scheme.weights
 
     return quantized_modules_to_args
+
+# HACK: Override the dtype_byte_size function in transformers to support float8 types
+# Fix is posted upstream https://github.com/huggingface/transformers/pull/30488
+def new_dtype_byte_size(dtype):
+    if dtype == torch.bool:
+        return 1 / 8
+    bit_search = re.search(r"[^\d](\d+)_?", str(dtype))
+    if bit_search is None:
+        raise ValueError(f"`dtype` is not a valid dtype: {dtype}.")
+    bit_size = int(bit_search.groups()[0])
+    return bit_size // 8

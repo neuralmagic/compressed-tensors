@@ -23,6 +23,7 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.quantization.observers.helpers import calculate_range
 from torch.nn import Module
 
 
@@ -145,9 +146,8 @@ def _process_quantization(
     do_quantize: bool = True,
     do_dequantize: bool = True,
 ) -> torch.Tensor:
-    bit_range = 2**args.num_bits
-    q_max = torch.tensor(bit_range / 2 - 1, device=x.device)
-    q_min = torch.tensor(-bit_range / 2, device=x.device)
+    
+    q_min, q_max = calculate_range(args, x.device)    
     group_size = args.group_size
 
     # group
