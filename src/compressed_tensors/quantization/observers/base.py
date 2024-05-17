@@ -111,20 +111,5 @@ class Observer(Module, RegistryMixin):
         return self._scale, self._zero_point
 
     def get_qparams_along_dim(self, observed, dim: int):
-        # TODO: add documentation that specifies the shape must
-        #   be padded with 1-dims so the scales are along the right channel
-        # TODO: generalize the logic for reduce_dims
-        scales, zero_points = [], []
-
-        # TODO: make a more generic way to get the channel
-        num_dims = observed.shape[dim]
-
-        for dim_idx in range(num_dims):
-            scale, zero_point = self.calculate_qparams(
-                observed.select(dim=dim, index=dim_idx)
-            )
-
-            scales.append(scale)
-            zero_points.append(zero_point)
-        # breakpoint()
-        return torch.stack(scales), torch.stack(zero_points)
+        reduce_dims = tuple(idx for idx in range(observed.ndim) if idx != dim)
+        return self.calculate_qparams(observed, reduce_dims=reduce_dims)
