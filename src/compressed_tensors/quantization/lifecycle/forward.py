@@ -17,6 +17,7 @@ from math import ceil
 from typing import Optional
 
 import torch
+from compressed_tensors.quantization.observers.base import ObserverTypes
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
@@ -48,7 +49,7 @@ def quantize(
     Quantization can be done per tensor, channel, token or group. For group
     quantization, the group_size must be divisible by the column size. The input scale
     and zero_points are reshaped to support vectorization (Assumes 1 is the
-    channel dimension)
+    channel dimension).
 
     :param x: Input tensor
     :param scale: scale tensor
@@ -57,6 +58,14 @@ def quantize(
     :param dtype: optional dtype to cast the quantized output to
     :return: fake quantized tensor
     """
+    # ensure all tensors are on the same device
+    # assumes that the target device is the input
+    # tensor's device
+    if x.device != scale.device:
+        scale = scale.to(x.device)
+    if x.device != zero_point.device:
+        zero_point = zero_point.to(x.device)
+        
     return _process_quantization(
         x=x,
         scale=scale,
@@ -284,9 +293,14 @@ def maybe_calibrate_or_quantize(
     }:
         return value
 
+    if value.numel() == 0:
+        # if the tensor is empty,
+        # skip quantization
+        return value
+
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
-        observer = getattr(module, f"{base_name}_observer")
+        observer = getattr(module, f"{base_name}_{ObserverTypes.BASE.value}")
         scale, zero_point = observer(value)
     else:
         # static quantization - get previous scale and zero point from layer
@@ -295,7 +309,7 @@ def maybe_calibrate_or_quantize(
 
         if module.quantization_status == QuantizationStatus.CALIBRATION:
             # calibration mode - get new quant params from observer
-            observer = getattr(module, f"{base_name}_observer")
+            observer = getattr(module, f"{base_name}_{ObserverTypes.BASE.value}")
 
             updated_scale, updated_zero_point = observer(value)
 
