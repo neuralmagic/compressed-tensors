@@ -45,6 +45,8 @@ from transformers.file_utils import CONFIG_NAME
 
 __all__ = ["ModelCompressor"]
 
+FSDP_WRAPPER_NAME = "_fsdp_wrapped_module."
+
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
@@ -259,6 +261,8 @@ def _get_weight_arg_mappings(model: Module) -> Dict:
     for name, submodule in iter_named_leaf_modules(model):
         if is_module_quantized(submodule):
             if submodule.quantization_scheme.weights is not None:
+                # if the submodule has been wrapped by FSDP, remove the wrapper name
+                name = name.replace(FSDP_WRAPPER_NAME, "")
                 quantized_modules_to_args[name] = submodule.quantization_scheme.weights
 
     return quantized_modules_to_args
