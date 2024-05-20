@@ -17,8 +17,9 @@ from typing import Optional, Tuple
 import torch
 from compressed_tensors.quantization.observers.base import Observer
 from compressed_tensors.quantization.observers.helpers import calculate_qparams
-from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_args import QuantizationArgs, QuantizationStrategy
 from torch import FloatTensor, IntTensor, Tensor
+from collections import defaultdict
 
 
 __all__ = ["MovingAverageMinMaxObserver"]
@@ -55,6 +56,33 @@ class MovingAverageMinMaxObserver(Observer):
             reduced dimensions
         :return: tuple of scale and zero point derived from the observed tensor
         """
+        if self.quantization_args.strategy == QuantizationStrategy.GROUP:
+            if self.min_val is None and self.max_val is None:
+                self.min_val = defaultdict(Tensor)
+                self.max_val = defaultdict(Tensor)
+            
+            columns = observed.shape[1]
+            group_size = self.quantization_args.group_size
+            
+            for i in range(0, columns, group_size):
+                min_val[i] = torch.amin(observed[:, i: i + group_size], dim=reduce_dims, keepdims=True)
+                max_val[i] = torch.amax(observed[:, i: i + group_size], dim=reduce_dims, keepdims=True)
+            
+                if len(self.min_val[i]) == 0:
+                    self.min_val[i] = min_val
+                    self.max_val[i] = max_val
+                else:
+                    self.min_val[i] = self.min_val[i] + self.averaging_constant * (
+                        min_val - self.min_val[i]
+                    )
+                    self.max_val[i] = self.max_val[i] + self.averaging_constant * (
+                        max_val - self.max_val[i]
+                    )
+
+            min_vals = torch.tensor(list(self.max_val.values()))
+            max_vals = torch.tensor(list(self.min_val.values()))
+            
+            return calculate_qparams(min_vals, max_vals, self.quantization_args)
 
         if not reduce_dims:
             min_val, max_val = torch.aminmax(observed)

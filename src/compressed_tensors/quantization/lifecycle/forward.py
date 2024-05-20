@@ -169,12 +169,15 @@ def _process_quantization(
             zero_point = zero_point.unsqueeze(1)
 
         columns = x.shape[1]
+        # print(columns, group_size)
+        group_size = columns
         if columns >= group_size:
             if columns % group_size != 0:
                 raise ValueError(
                     "tesnor column shape must be divisble "
                     f"by the given group_size {group_size}"
                 )
+
         for i in range(ceil(columns / group_size)):
             # scale.shape should be [nchan, ndim]
             # sc.shape should be [nchan, 1] after unsqueeze
@@ -183,9 +186,7 @@ def _process_quantization(
 
             idx = i * group_size
             if do_quantize:
-                output[:, idx : (idx + group_size)] = _quantize(
-                    x[:, idx : (idx + group_size)], sc, zp, q_min, q_max, dtype=dtype
-                )
+                output[:, idx : (idx + group_size)] = _quantize(x[:, idx : (idx + group_size)], sc, zp, q_min, q_max, dtype=dtype)
             if do_dequantize:
                 input = (
                     output[:, idx : (idx + group_size)]
