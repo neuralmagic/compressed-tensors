@@ -13,9 +13,9 @@
 # limitations under the License.
 
 
-import torch
 from compressed_tensors.compressors import Compressor, IntQuantizationCompressor
 from compressed_tensors.config import CompressionFormat
+from compressed_tensors.quantization import FP8_DTYPE
 
 
 __all__ = ["FloatQuantizationCompressor"]
@@ -29,4 +29,4 @@ class FloatQuantizationCompressor(IntQuantizationCompressor):
     quantization scheme.
     """
 
-    COMPRESSED_DTYPE = torch.float8_e4m3fn
+    COMPRESSED_DTYPE = FP8_DTYPE

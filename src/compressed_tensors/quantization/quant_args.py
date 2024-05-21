@@ -15,10 +15,13 @@
 from enum import Enum
 from typing import Any, Dict, Optional
 
+import torch
 from pydantic import BaseModel, Field, validator
 
 
-__all__ = ["QuantizationType", "QuantizationStrategy", "QuantizationArgs"]
+__all__ = ["FP8_DTYPE", "QuantizationType", "QuantizationStrategy", "QuantizationArgs"]
+
+FP8_DTYPE = torch.float8_e4m3fn
 
 
 class QuantizationType(str, Enum):

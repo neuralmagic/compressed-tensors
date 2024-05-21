@@ -16,6 +16,7 @@ from typing import Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import (
+    FP8_DTYPE,
     QuantizationArgs,
     QuantizationType,
 )
@@ -47,9 +48,7 @@ def calculate_qparams(
         # TODO: don't assume symmetric
         max_val_pos = torch.max(-min_vals, max_vals)
         scales = (bit_max / max_val_pos.clamp(min=1e-12)).float().reciprocal()
-        zero_points = torch.zeros(
-            scales.shape, device=device, dtype=torch.float8_e4m3fn
-        )
+        zero_points = torch.zeros(scales.shape, device=device, dtype=FP8_DTYPE)
         zero_points = zero_points.to(min_vals.dtype)
     elif quantization_args.symmetric:
         max_val_pos = torch.max(-min_vals, max_vals)
@@ -77,7 +76,7 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
                 "Floating point quantization is only supported for 8 bits,"
                 f"got {quantization_args.num_bits}"
             )
-        fp_range_info = torch.finfo(torch.float8_e4m3fn)
+        fp_range_info = torch.finfo(FP8_DTYPE)
         q_max = torch.tensor(fp_range_info.max, device=device)
         q_min = torch.tensor(fp_range_info.min, device=device)
 

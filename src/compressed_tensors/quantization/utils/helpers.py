@@ -30,6 +30,7 @@ __all__ = [
     "calculate_compression_ratio",
     "get_torch_bit_depth",
     "can_quantize",
+    "is_float_quantization",
 ]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -182,3 +183,17 @@ def calculate_compression_ratio(model: Module) -> float:
             total_uncompressed += uncompressed_bits * num_weights
 
     return total_uncompressed / total_compressed
+
+
+def is_float_quantization(tensor: torch.Tensor) -> bool:
+    """
+    :param tensor: tensor to check for quantization type
+    :return: True if a float quantization dtype, false otherwise
+    """
+    if tensor.dtype is torch.float8_e5m2:
+        return True
+
+    if tensor.dtype is torch.float8_e4m3fn:
+        return True
+
+    return False
