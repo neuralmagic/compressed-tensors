@@ -69,7 +69,7 @@ class MovingAverageMinMaxObserver(Observer):
         running_min_val = self.min_val.get(tensor_id, None)
         running_max_val = self.max_val.get(tensor_id, None)
 
-        if not running_min_val or not running_max_val:
+        if running_min_val is None or running_max_val is None:
             updated_min_val = min_val
             updated_max_val = max_val
         else:
