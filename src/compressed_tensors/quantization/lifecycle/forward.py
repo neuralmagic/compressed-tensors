@@ -154,11 +154,16 @@ def _process_quantization(
 
     if args.strategy == QuantizationStrategy.GROUP:
 
-        if do_dequantize:  # if dequantizing the output should be a fp type
+        if do_dequantize:
+            # if dequantizing the output should match the original weight dtype,
+            # which is the same as the scale's
             output = torch.zeros_like(x, dtype=scale.dtype)
         else:
+            # outputting a quantized output, use the dtype passed in as a kwarg if its
+            # specified, otherwise default to the input type
             output_dtype = dtype if dtype is not None else x.dtype
             if output_dtype is FP8_DTYPE:
+                # zeros_like doesn't support fp8 types directly, workaround
                 output = torch.zeros_like(x)
                 output = output.to(FP8_DTYPE)
             else:

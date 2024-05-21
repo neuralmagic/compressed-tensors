@@ -65,7 +65,13 @@ def calculate_qparams(
 
 
 def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
-    """ """
+    """
+    Calculated the effective quantization range for the given Quantization Args
+
+    :param quantization_args: quantization args to get range of
+    :param device: device to store the range to
+    :return: tuple endpoints for the given quantization range
+    """
     if quantization_args.type == QuantizationType.INT:
         bit_range = 2**quantization_args.num_bits
         q_max = torch.tensor(bit_range / 2 - 1, device=device)

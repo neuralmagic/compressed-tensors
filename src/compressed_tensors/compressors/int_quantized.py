@@ -36,8 +36,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 class IntQuantizationCompressor(Compressor):
     """
     Integer compression for quantized models. Weight of each quantized layer is
-    converted from its original float type to the format specified by the layer's
-    quantization scheme.
+    converted from its original float type to an int8
     """
 
     COMPRESSION_PARAM_NAMES = ["weight", "weight_scale", "weight_zero_point"]

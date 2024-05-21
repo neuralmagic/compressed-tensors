@@ -25,8 +25,7 @@ __all__ = ["FloatQuantizationCompressor"]
 class FloatQuantizationCompressor(IntQuantizationCompressor):
     """
     Compression for quantized FP8 models. Weight of each quantized layer is
-    converted from its original float type to the format specified by the layer's
-    quantization scheme.
+    converted from its original float type to float8_e4m3fn
     """
 
     COMPRESSED_DTYPE = FP8_DTYPE
