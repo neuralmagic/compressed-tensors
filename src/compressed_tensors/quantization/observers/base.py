@@ -132,7 +132,8 @@ class Observer(Module, RegistryMixin):
 
         for dim_idx in range(num_dims):
             scale, zero_point = self.calculate_qparams(
-                observed.select(dim=dim, index=dim_idx)
+                observed.select(dim=dim, index=dim_idx),
+                tensor_id=tensor_id,
             )
 
             scales.append(scale)
