@@ -21,7 +21,6 @@ from compressed_tensors.config import CompressionFormat
 __all__ = ["FloatQuantizationCompressor"]
 
 
-
 @Compressor.register(name=CompressionFormat.float_quantized.value)
 class FloatQuantizationCompressor(IntQuantizationCompressor):
     """
@@ -29,4 +28,5 @@ class FloatQuantizationCompressor(IntQuantizationCompressor):
     converted from its original float type to the format specified by the layer's
     quantization scheme.
     """
+
     COMPRESSED_DTYPE = torch.float8_e4m3fn

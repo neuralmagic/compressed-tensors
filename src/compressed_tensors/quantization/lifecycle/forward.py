@@ -17,13 +17,13 @@ from math import ceil
 from typing import Optional
 
 import torch
+from compressed_tensors.quantization.observers.helpers import calculate_range
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.observers.helpers import calculate_range
 from torch.nn import Module
 
 
@@ -146,8 +146,8 @@ def _process_quantization(
     do_quantize: bool = True,
     do_dequantize: bool = True,
 ) -> torch.Tensor:
-    
-    q_min, q_max = calculate_range(args, x.device)    
+
+    q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
 
     if args.strategy == QuantizationStrategy.GROUP:
@@ -156,7 +156,11 @@ def _process_quantization(
             output = torch.zeros_like(x, dtype=scale.dtype)
         else:
             output_dtype = dtype if dtype is not None else x.dtype
-            output = torch.zeros_like(x, dtype=output_dtype)
+            if output_dtype is torch.float8_e4m3fn:
+                output = torch.zeros_like(x, dtype=torch.float32)
+                output = output.to(torch.float8_e4m3fn)
+            else:
+                output = torch.zeros_like(x, dtype=output_dtype)
 
         # TODO: vectorize the for loop
         # TODO: fix genetric assumption about the tensor size for computing group
@@ -292,8 +296,13 @@ def _quantize(
     q_max: torch.Tensor,
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
+
+    if zero_point.dtype.is_floating_point:
+        rounded = (x / scale + zero_point).to(torch.float8_e4m3fn).to(x.dtype)
+    else:
+        rounded = torch.round(x / scale + zero_point)
     quantized_value = torch.clamp(
-        torch.round(x / scale + zero_point),
+        rounded,
         q_min,
         q_max,
     )
@@ -310,4 +319,8 @@ def _dequantize(
     scale: torch.Tensor,
     zero_point: torch.Tensor,
 ) -> torch.Tensor:
+    if x_q.dtype is torch.float8_e4m3fn:
+        return (x_q.to(scale.dtype) - zero_point.to(scale.dtype)) * scale.to(
+            scale.dtype
+        )
     return (x_q - zero_point) * scale
