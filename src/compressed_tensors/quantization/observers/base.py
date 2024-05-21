@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import (
@@ -50,9 +50,15 @@ class Observer(Module, RegistryMixin):
         """
         return self.get_qparams(observed=observed)
 
-    def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
+    def calculate_qparams(
+        self,
+        observed: Tensor,
+        tensor_id: Optional[Any] = None,
+    ) -> Tuple[FloatTensor, IntTensor]:
         """
         :param observed: observed tensor to calculate quantization parameters for
+        :param tensor_id: Optional id if different ranges of observed tensors are
+            passed, useful for sharding tensors by group_size
         :return: tuple of scale and zero point derived from the observed tensor
         """
         raise NotImplementedError(f"{self.__class__} must implement calculate_qparams")
@@ -85,15 +91,18 @@ class Observer(Module, RegistryMixin):
             elif self.quantization_args.strategy == QuantizationStrategy.GROUP:
                 columns = observed.shape[1]
                 scales, zero_points = [], []
-                for i in range(0, columns, self.quantization_args.group_size):
+                group_idxs = range(0, columns, self.quantization_args.group_size)
+                for group_id, group_idx in enumerate(group_idxs):
                     scale, zero_point = self.get_qparams_along_dim(
-                        observed[:, i : (i + group_size)],
+                        observed[:, group_idx : (group_idx + group_size)],
                         0,
+                        tensor_id=group_id,
                     )
                     scales.append(scale)
                     zero_points.append(zero_point)
-                self._scale = torch.stack(scales, dim=1, out=self._scale)
-                self._zero_point = torch.stack(zero_points, dim=1, out=self._zero_point)
+
+                self._scale = torch.cat(scales, dim=1, out=self._scale)
+                self._zero_point = torch.cat(zero_points, dim=1, out=self._zero_point)
 
             elif self.quantization_args.strategy == QuantizationStrategy.CHANNEL:
                 # assume observed is transposed, because its the output, hence use dim 0
@@ -110,7 +119,9 @@ class Observer(Module, RegistryMixin):
 
         return self._scale, self._zero_point
 
-    def get_qparams_along_dim(self, observed, dim: int):
+    def get_qparams_along_dim(
+        self, observed, dim: int, tensor_id: Optional[Any] = None
+    ):
         # TODO: add documentation that specifies the shape must
         #   be padded with 1-dims so the scales are along the right channel
         # TODO: generalize the logic for reduce_dims

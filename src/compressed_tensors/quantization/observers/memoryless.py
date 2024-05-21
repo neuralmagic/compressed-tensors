@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple
+from typing import Any, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.observers.base import Observer
@@ -30,11 +30,16 @@ class MemorylessObserver(Observer):
     zero point based on the latest observed value without tracking state
     """
 
-    def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
+    def calculate_qparams(
+        self,
+        observed: Tensor,
+        tensor_id: Optional[Any] = None,
+    ) -> Tuple[FloatTensor, IntTensor]:
         """
         Returns the min and max values of observed
 
         :param observed: observed tensor to calculate quantization parameters for
+        :param tensor_id: optional id for tensor; not used for memoryless
         :return: tuple of scale and zero point derived from the observed tensor
         """
         # TODO: Add support for full range of quantization Args, only supports 8bit
