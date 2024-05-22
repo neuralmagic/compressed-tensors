@@ -19,6 +19,7 @@ from compressed_tensors.quantization.quant_args import (
     FP8_DTYPE,
     QuantizationArgs,
     QuantizationType,
+    round_fp8,
 )
 from torch import FloatTensor, IntTensor, Tensor
 
@@ -44,23 +45,29 @@ def calculate_qparams(
     bit_min, bit_max = calculate_range(quantization_args, device)
     bit_range = bit_max - bit_min
 
-    if quantization_args.type == QuantizationType.FLOAT:
-        # TODO: don't assume symmetric
-        max_val_pos = torch.max(-min_vals, max_vals)
+    if quantization_args.symmetric:
+        max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
         scales = max_val_pos / (float(bit_range) / 2)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
-        zero_points = torch.zeros(scales.shape, device=device, dtype=FP8_DTYPE)
-        zero_points = zero_points.to(min_vals.dtype)
-    elif quantization_args.symmetric:
-        max_val_pos = torch.max(-min_vals, max_vals)
-        scales = max_val_pos / (float(bit_range) / 2)
-        scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
-        zero_points = torch.zeros(scales.shape, device=device, dtype=torch.int8)
+        zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
+
+        # set zero_points to correct types
+        if quantization_args.type == QuantizationType.FLOAT:
+            zero_points = round_fp8(zero_points, FP8_DTYPE)
+        else:  # QuantizationType.INT
+            zero_points = zero_points.to(torch.int8)
     else:
         scales = (max_vals - min_vals) / float(bit_range)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
-        zero_points = bit_min - torch.round(min_vals / scales)
-        zero_points = torch.clamp(zero_points, bit_min, bit_max).to(torch.int8)
+
+        if quantization_args.type == QuantizationType.FLOAT:
+            zero_points = bit_min - (min_vals / scales)
+            zero_points = round_fp8(
+                torch.clamp(zero_points, bit_min, bit_max), FP8_DTYPE
+            )
+        else:  # QuantizationType.INT
+            zero_points = bit_min - torch.round(min_vals / scales)
+            zero_points = torch.clamp(zero_points, bit_min, bit_max).to(torch.int8)
 
     return scales, zero_points
 

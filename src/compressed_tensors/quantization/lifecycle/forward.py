@@ -23,6 +23,7 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
     QuantizationType,
+    round_fp8,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -328,7 +329,7 @@ def _quantize(
             q_min,
             q_max,
         )
-        quantized_value = scaled.to(FP8_DTYPE).to(x.dtype)
+        quantized_value = round_fp8(quantized_value, FP8_DTYPE)
     else:
         quantized_value = torch.clamp(
             torch.round(scaled),
@@ -350,7 +351,5 @@ def _dequantize(
 ) -> torch.Tensor:
     if is_float_quantization(x_q):
         # can't perform arithmetic in fp8 types, need to convert first
-        return (x_q.to(scale.dtype) - zero_point.to(scale.dtype)) * scale.to(
-            scale.dtype
-        )
+        return (x_q.to(scale.dtype) - zero_point.to(scale.dtype)) * scale
     return (x_q - zero_point) * scale

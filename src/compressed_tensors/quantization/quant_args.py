@@ -19,7 +19,13 @@ import torch
 from pydantic import BaseModel, Field, validator
 
 
-__all__ = ["FP8_DTYPE", "QuantizationType", "QuantizationStrategy", "QuantizationArgs"]
+__all__ = [
+    "FP8_DTYPE",
+    "QuantizationType",
+    "QuantizationStrategy",
+    "QuantizationArgs",
+    "round_fp8",
+]
 
 FP8_DTYPE = torch.float8_e4m3fn
 
@@ -126,3 +132,16 @@ class QuantizationArgs(BaseModel):
             return QuantizationStrategy.TENSOR
 
         return value
+
+
+def round_fp8(tensor: torch.Tensor, fp8_type: torch.dtype) -> torch.Tensor:
+    """
+    Rounds each element of the input tensor to the nearest fp8 representation,
+    keeping to original dtype
+
+    :param tensor: tensor to round
+    :param fp8_type: fp8 dtype to round to
+    :return: tensor rounded to fp8
+    """
+    original_dtype = tensor.dtype
+    return tensor.to(fp8_type).to(original_dtype)
