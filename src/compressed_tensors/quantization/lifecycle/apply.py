@@ -170,7 +170,6 @@ def _find_first_match(
                 return target
         #elif fix_fsdp_module_name(value) == target:
             # check for FSDP wrapper prefix
-            return target
     return None
 
 
