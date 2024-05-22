@@ -53,7 +53,7 @@ class QuantizationScheme(BaseModel):
         weights = QuantizationArgs(num_bits=8, symmetric=True)
         
         # default to 8 bit integer asymmetric quantization
-        input_activations = QuantizationArgs(num_bits=8, symmetric=False)
+        input_activations = QuantizationArgs(num_bits=8, symmetric=True)
         
         # Do not quantize the output activations
         # by default
