@@ -47,7 +47,8 @@ def calculate_qparams(
     if quantization_args.type == QuantizationType.FLOAT:
         # TODO: don't assume symmetric
         max_val_pos = torch.max(-min_vals, max_vals)
-        scales = (bit_max / max_val_pos.clamp(min=1e-12)).float().reciprocal()
+        scales = max_val_pos / (float(bit_range) / 2)
+        scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = torch.zeros(scales.shape, device=device, dtype=FP8_DTYPE)
         zero_points = zero_points.to(min_vals.dtype)
     elif quantization_args.symmetric:

@@ -18,7 +18,11 @@ from typing import Dict, Generator, Tuple
 import torch
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization import QuantizationArgs
+from compressed_tensors.quantization import (
+    FP8_DTYPE,
+    QuantizationArgs,
+    QuantizationType,
+)
 from compressed_tensors.quantization.lifecycle.forward import dequantize, quantize
 from compressed_tensors.quantization.utils import can_quantize
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
@@ -27,20 +31,24 @@ from torch import Tensor
 from tqdm import tqdm
 
 
-__all__ = ["IntQuantizationCompressor"]
+__all__ = [
+    "QuantizationCompressor",
+    "IntQuantizationCompressor",
+    "FloatQuantizationCompressor",
+]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
-@Compressor.register(name=CompressionFormat.int_quantized.value)
-class IntQuantizationCompressor(Compressor):
+@Compressor.register(name=CompressionFormat.naive_quantized.value)
+class QuantizationCompressor(Compressor):
     """
-    Integer compression for quantized models. Weight of each quantized layer is
-    converted from its original float type to an int8
+    Implements naive compression for quantized models. Weight of each
+    quantized layer is converted from its original float type to the closest Pytorch
+    type to the type specified by the layer's QuantizationArgs.
     """
 
     COMPRESSION_PARAM_NAMES = ["weight", "weight_scale", "weight_zero_point"]
-    COMPRESSED_DTYPE = torch.int8
 
     def compress(
         self,
@@ -76,7 +84,7 @@ class IntQuantizationCompressor(Compressor):
                             scale=scale,
                             zero_point=zp,
                             args=quant_args,
-                            dtype=self.COMPRESSED_DTYPE,
+                            dtype=self._parse_compression_dtype(quant_args),
                         )
 
             compressed_dict[name] = value.to("cpu")
@@ -113,3 +121,32 @@ class IntQuantizationCompressor(Compressor):
                     zero_point=weight_data["weight_zero_point"],
                 )
                 yield merge_names(weight_name, "weight"), decompressed
+
+    def _parse_compression_dtype(self, args: QuantizationArgs) -> torch.dtype:
+        if args.type is QuantizationType.FLOAT:
+            return FP8_DTYPE
+        else:  # QuantizationType.INT
+            if args.num_bits <= 8:
+                return torch.int8
+            elif args.num_bits <= 16:
+                return torch.int16
+            else:
+                return torch.int32
+
+
+@Compressor.register(name=CompressionFormat.int_quantized.value)
+class IntQuantizationCompressor(QuantizationCompressor):
+    """
+    Alias for integer quantized models
+    """
+
+    pass
+
+
+@Compressor.register(name=CompressionFormat.float_quantized.value)
+class FloatQuantizationCompressor(QuantizationCompressor):
+    """
+    Alias for fp quantized models
+    """
+
+    pass

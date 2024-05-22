@@ -22,6 +22,7 @@ from compressed_tensors.quantization.quant_args import (
     FP8_DTYPE,
     QuantizationArgs,
     QuantizationStrategy,
+    QuantizationType,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -195,7 +196,13 @@ def _process_quantization(
             idx = i * group_size
             if do_quantize:
                 output[:, idx : (idx + group_size)] = _quantize(
-                    x[:, idx : (idx + group_size)], sc, zp, q_min, q_max, dtype=dtype
+                    x[:, idx : (idx + group_size)],
+                    sc,
+                    zp,
+                    q_min,
+                    q_max,
+                    quantization_type=args.type,
+                    dtype=dtype,
                 )
             if do_dequantize:
                 input = (
@@ -207,7 +214,15 @@ def _process_quantization(
 
     else:  # covers channel, token and tensor strategies
         if do_quantize:
-            output = _quantize(x, scale, zero_point, q_min, q_max, dtype=dtype)
+            output = _quantize(
+                x,
+                scale,
+                zero_point,
+                q_min,
+                q_max,
+                quantization_type=args.type,
+                dtype=dtype,
+            )
         if do_dequantize:
             output = _dequantize(output if do_quantize else x, scale, zero_point)
 
@@ -301,19 +316,25 @@ def _quantize(
     zero_point: torch.Tensor,
     q_min: torch.Tensor,
     q_max: torch.Tensor,
+    quantization_type: Optional[QuantizationType] = QuantizationType.INT,
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
 
     scaled = x / scale + zero_point
-    if zero_point.dtype.is_floating_point:
-        rounded = scaled.to(FP8_DTYPE).to(x.dtype)
+    if quantization_type is QuantizationType.FLOAT:
+        # clamp first because cast isn't saturated
+        quantized_value = torch.clamp(
+            scaled,
+            q_min,
+            q_max,
+        )
+        quantized_value = scaled.to(FP8_DTYPE).to(x.dtype)
     else:
-        rounded = torch.round(scaled)
-    quantized_value = torch.clamp(
-        rounded,
-        q_min,
-        q_max,
-    )
+        quantized_value = torch.clamp(
+            torch.round(scaled),
+            q_min,
+            q_max,
+        )
 
     if dtype is not None:
         quantized_value = quantized_value.to(dtype)

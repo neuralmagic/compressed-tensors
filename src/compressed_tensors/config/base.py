@@ -27,6 +27,7 @@ class CompressionFormat(Enum):
     sparse_bitmask = "sparse-bitmask"
     int_quantized = "int-quantized"
     float_quantized = "float-quantized"
+    naive_quantized = "naive-quantized"
     pack_quantized = "pack-quantized"
 
 

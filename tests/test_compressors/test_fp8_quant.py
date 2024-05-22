@@ -95,7 +95,6 @@ def test_quant_format(strategy, group_size, sc, zp):
     "strategy,group_size",
     [
         [QuantizationStrategy.TENSOR, None],
-        # [QuantizationStrategy.GROUP, 128],
         [QuantizationStrategy.CHANNEL, None],
     ],
 )
@@ -111,7 +110,7 @@ def test_reload_match(strategy, group_size, tmp_path):
     apply_quantization_config(model, quant_config)
     apply_quantization_status(model, QuantizationStatus.CALIBRATION)
 
-    for _ in range(1):
+    for _ in range(16):
         inputs = torch.rand((512, 512))
         _ = model(inputs)
 
