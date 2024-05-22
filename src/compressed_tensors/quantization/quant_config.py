@@ -128,7 +128,7 @@ class QuantizationConfig(BaseModel):
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
 
-    def __post_model_init__(self, __context):
+    def model_post_init(self, __context):
         """
         updates any quantization schemes defined as presets to be fully loaded
         schemes

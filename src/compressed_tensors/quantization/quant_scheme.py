@@ -41,7 +41,7 @@ class QuantizationScheme(BaseModel):
     weights: Optional[QuantizationArgs] = None
     input_activations: Optional[QuantizationArgs] = None
     output_activations: Optional[QuantizationArgs] = None
-      
+
     @classmethod
     def default_scheme(
         cls,
@@ -96,8 +96,8 @@ def preset_name_to_scheme(name: str, targets: List[str]) -> QuantizationScheme:
         targets=targets,
         **scheme_args,
     )
-      
- 
+
+
 W8A8 = dict(
     weights=QuantizationArgs(), input_activations=QuantizationArgs(symmetric=False)
 )
