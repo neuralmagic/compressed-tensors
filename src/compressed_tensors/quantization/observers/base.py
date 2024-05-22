@@ -50,15 +50,9 @@ class Observer(Module, RegistryMixin):
         """
         return self.get_qparams(observed=observed)
 
-    def calculate_qparams(
-        self,
-        observed: Tensor,
-        tensor_id: Optional[Any] = None,
-    ) -> Tuple[FloatTensor, IntTensor]:
+    def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
         """
         :param observed: observed tensor to calculate quantization parameters for
-        :param tensor_id: Optional id if different ranges of observed tensors are
-            passed, useful for sharding tensors by group_size
         :return: tuple of scale and zero point derived from the observed tensor
         """
         raise NotImplementedError(f"{self.__class__} must implement calculate_qparams")
@@ -76,6 +70,7 @@ class Observer(Module, RegistryMixin):
         Convenience function to wrap overwritten calculate_qparams
         adds support to make observed tensor optional and support for tracking latest
         calculated scale and zero point
+
         :param observed: optional observed tensor to calculate quantization parameters
             from
         :return: tuple of scale and zero point based on last observed value
@@ -109,19 +104,15 @@ class Observer(Module, RegistryMixin):
                 self._scale, self._zero_point = self.get_qparams_along_dim(observed, 0)
 
             elif self.quantization_args.strategy == QuantizationStrategy.TOKEN:
-
                 # use dim 1, assume the obsersed.shape = [batch, token, hidden]
                 # should be batch, token
-
                 self._scale, self._zero_point = self.get_qparams_along_dim(
                     observed, dim=1
                 )
 
         return self._scale, self._zero_point
 
-    def get_qparams_along_dim(
-        self, observed, dim: int, tensor_id: Optional[Any] = None
-    ):
+    def get_qparams_along_dim(self, observed, dim: int):
         # TODO: add documentation that specifies the shape must
         #   be padded with 1-dims so the scales are along the right channel
         # TODO: generalize the logic for reduce_dims
@@ -132,8 +123,7 @@ class Observer(Module, RegistryMixin):
 
         for dim_idx in range(num_dims):
             scale, zero_point = self.calculate_qparams(
-                observed.select(dim=dim, index=dim_idx),
-                tensor_id=tensor_id,
+                observed.select(dim=dim, index=dim_idx)
             )
 
             scales.append(scale)

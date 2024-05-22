@@ -14,6 +14,7 @@
 
 from typing import Any, Optional, Tuple
 
+
 import torch
 from compressed_tensors.quantization.observers.base import Observer
 from compressed_tensors.quantization.observers.helpers import calculate_qparams
@@ -34,20 +35,23 @@ class MemorylessObserver(Observer):
         self,
         observed: Tensor,
         tensor_id: Optional[Any] = None,
+        reduce_dims: Optional[Tuple[int]] = None,
     ) -> Tuple[FloatTensor, IntTensor]:
         """
-        Returns the min and max values of observed
+        Returns the min and max values of observed tensor
 
         :param observed: observed tensor to calculate quantization parameters for
         :param tensor_id: optional id for tensor; not used for memoryless
+        :param reduce_dims: optional tuple of dimensions to reduce along,
+            returned scale and zero point will be shaped (1,) along the
+            reduced dimensions
         :return: tuple of scale and zero point derived from the observed tensor
         """
-        # TODO: Add support for full range of quantization Args, only supports 8bit
-        #       per tensor
-        min_val, max_val = torch.aminmax(observed)
 
-        # ensure zero is in the range
-        min_val = torch.min(min_val, torch.zeros_like(min_val))
-        max_val = torch.max(max_val, torch.zeros_like(max_val))
+        if not reduce_dims:
+            min_val, max_val = torch.aminmax(observed)
+        else:
+            min_val = torch.amin(observed, dim=reduce_dims, keepdims=True)
+            max_val = torch.amax(observed, dim=reduce_dims, keepdims=True)
 
         return calculate_qparams(min_val, max_val, self.quantization_args)
