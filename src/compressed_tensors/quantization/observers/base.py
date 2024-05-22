@@ -50,9 +50,16 @@ class Observer(Module, RegistryMixin):
         """
         return self.get_qparams(observed=observed)
 
-    def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
+    def calculate_qparams(
+        self,
+        observed: Tensor,
+        reduce_dims: Optional[Tuple[int]] = None,
+    ) -> Tuple[FloatTensor, IntTensor]:
         """
         :param observed: observed tensor to calculate quantization parameters for
+        :param reduce_dims: optional tuple of dimensions to reduce along,
+            returned scale and zero point will be shaped (1,) along the
+            reduced dimensions
         :return: tuple of scale and zero point derived from the observed tensor
         """
         raise NotImplementedError(f"{self.__class__} must implement calculate_qparams")
