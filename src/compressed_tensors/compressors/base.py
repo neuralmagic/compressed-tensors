@@ -12,32 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import operator
-from typing import Dict, Generator, Optional, Tuple
+from typing import Dict, Generator, Tuple, Union
 
-from compressed_tensors.base import SPARSITY_CONFIG_NAME
-from compressed_tensors.config import CompressionConfig
+from compressed_tensors.config import SparsityCompressionConfig
+from compressed_tensors.quantization import QuantizationConfig
 from compressed_tensors.registry import RegistryMixin
-from compressed_tensors.utils import get_safetensors_folder
 from torch import Tensor
-from torch.nn import Module, Parameter
-from tqdm import tqdm
 
 
-__all__ = ["ModelCompressor"]
+__all__ = ["Compressor"]
 
 
-class ModelCompressor(RegistryMixin):
+class Compressor(RegistryMixin):
     """
-    Base class representing a model compression algorithm.
+    Base class representing a model compression algorithm
 
     :param config: config specifying compression parameters
     """
 
-    def __init__(self, config: Optional[CompressionConfig] = None):
+    def __init__(
+        self, config: Union[SparsityCompressionConfig, QuantizationConfig, None] = None
+    ):
         self.config = config
 
-    def compress(self, model_state: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    def compress(self, model_state: Dict[str, Tensor], **kwargs) -> Dict[str, Tensor]:
         """
         Compresses a dense state dict
 
@@ -47,7 +45,7 @@ class ModelCompressor(RegistryMixin):
         raise NotImplementedError()
 
     def decompress(
-        self, path_to_model_or_tensors: str
+        self, path_to_model_or_tensors: str, device: str = "cpu"
     ) -> Generator[Tuple[str, Tensor], None, None]:
         """
         Reads a compressed state dict located at path_to_model_or_tensors
@@ -56,24 +54,7 @@ class ModelCompressor(RegistryMixin):
 
         :param model_path: path to compressed safetensors model (directory with
             one or more safetensors files) or compressed tensors file
+        :param device: optional device to load intermediate weights into
         :return: compressed state dict
         """
         raise NotImplementedError()
-
-    def overwrite_weights(self, model_path: str, model: Module):
-        """
-        Overwrites the weights in model with weights decompressed from model_path
-
-        :param model_path: path to compressed weights
-        :param model: pytorch model to load decompressed weights into
-        """
-        model_path = get_safetensors_folder(model_path)
-        dense_gen = self.decompress(model_path)
-        for name, data in tqdm(dense_gen, desc="Decompressing model"):
-            # loading the decompressed weights into the model
-            model_device = operator.attrgetter(name)(model).device
-            data_new = Parameter(data.to(model_device))
-            data_old = operator.attrgetter(name)(model)
-            data_old.data = data_new.data
-
-        setattr(model, SPARSITY_CONFIG_NAME, self.config)

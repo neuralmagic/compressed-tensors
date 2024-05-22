@@ -41,6 +41,34 @@ class QuantizationScheme(BaseModel):
     weights: Optional[QuantizationArgs] = None
     input_activations: Optional[QuantizationArgs] = None
     output_activations: Optional[QuantizationArgs] = None
+      
+    @classmethod
+    def default_scheme(
+        cls,
+        targets: Optional[List[str]] = None,
+    ):
+
+        if targets is None:
+            # default to quantizing all Linear layers
+            targets = ["Linear"]
+
+        # default to 8 bit integer symmetric quantization
+        # for weights
+        weights = QuantizationArgs(num_bits=8, symmetric=True)
+
+        # default to 8 bit integer asymmetric quantization
+        input_activations = QuantizationArgs(num_bits=8, symmetric=True)
+
+        # Do not quantize the output activations
+        # by default
+        output_activations = None
+
+        return cls(
+            targets=targets,
+            weights=weights,
+            input_activations=input_activations,
+            output_activations=output_activations,
+        )
 
 
 """
@@ -68,8 +96,8 @@ def preset_name_to_scheme(name: str, targets: List[str]) -> QuantizationScheme:
         targets=targets,
         **scheme_args,
     )
-
-
+      
+ 
 W8A8 = dict(
     weights=QuantizationArgs(), input_activations=QuantizationArgs(symmetric=False)
 )

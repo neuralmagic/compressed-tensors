@@ -19,6 +19,9 @@ from typing import Dict, Iterable, Optional
 from compressed_tensors.quantization.lifecycle.calibration import (
     set_module_for_calibration,
 )
+from compressed_tensors.quantization.lifecycle.compressed import (
+    compress_quantized_weights,
+)
 from compressed_tensors.quantization.lifecycle.frozen import freeze_module_quantization
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
@@ -27,7 +30,10 @@ from compressed_tensors.quantization.quant_config import (
     QuantizationConfig,
     QuantizationStatus,
 )
-from compressed_tensors.quantization.utils import iter_named_leaf_modules
+from compressed_tensors.quantization.utils import (
+    infer_quantization_status,
+    iter_named_leaf_modules,
+)
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
 
@@ -36,6 +42,7 @@ __all__ = [
     "load_pretrained_quantization",
     "apply_quantization_config",
     "apply_quantization_status",
+    "find_first_name_or_class_match",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -99,9 +106,9 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
 
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in iter_named_leaf_modules(model):
-        if _find_first_name_or_class_match(name, submodule, config.ignore):
+        if find_first_name_or_class_match(name, submodule, config.ignore):
             continue  # layer matches ignore list, continue
-        target = _find_first_name_or_class_match(name, submodule, target_to_scheme)
+        target = find_first_name_or_class_match(name, submodule, target_to_scheme)
         if target is not None:
             # target matched - add layer and scheme to target list
             submodule.quantization_scheme = target_to_scheme[target]
@@ -117,37 +124,56 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     :param model: model to apply quantization to
     :param status: status to update the module to
     """
-    if status >= QuantizationStatus.INITIALIZED:
+    current_status = infer_quantization_status(model)
+
+    if status >= QuantizationStatus.INITIALIZED > current_status:
         model.apply(initialize_module_for_quantization)
-    if status >= QuantizationStatus.CALIBRATION:
+
+    if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
         model.apply(set_module_for_calibration)
-    if status >= QuantizationStatus.FROZEN:
+
+    if current_status < status >= QuantizationStatus.FROZEN > current_status:
         model.apply(freeze_module_quantization)
 
+    if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
+        model.apply(compress_quantized_weights)
 
-def _find_first_name_or_class_match(
-    name: str,
-    module: Module,
-    targets: Iterable[str],
+
+def find_first_name_or_class_match(
+    name: str, module: Module, targets: Iterable[str], check_contains: bool = False
 ) -> Optional[str]:
     # first element of targets that matches the given name
     # if no name matches returns first target that matches the class name
     # returns None otherwise
     return _find_first_match(name, targets) or _find_first_match(
-        module.__class__.__name__, targets
+        module.__class__.__name__, targets, check_contains
     )
 
 
-def _find_first_match(value: str, targets: Iterable[str]) -> Optional[str]:
+def _find_first_match(
+    value: str, targets: Iterable[str], check_contains: bool = False
+) -> Optional[str]:
     # returns first element of target that matches value either
-    # exactly or as a regex after 're:'
+    # exactly or as a regex after 're:'. if check_contains is set to True,
+    # additionally checks if the target string is contained with value.
     for target in targets:
         if target.startswith("re:"):
             pattern = target[3:]
             if re.match(pattern, value):
                 return target
+        elif check_contains:
+            if target.lower() in value.lower():
+                return target
         elif target == value:
             return target
+    return None
+
+
+def _infer_status(model: Module) -> Optional[QuantizationStatus]:
+    for module in model.modules():
+        status = getattr(module, "quantization_status", None)
+        if status is not None:
+            return status
     return None
 
 

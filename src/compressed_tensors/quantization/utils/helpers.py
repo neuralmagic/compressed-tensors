@@ -12,20 +12,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple
+import logging
+from typing import Optional, Tuple
 
 import torch
+from compressed_tensors.quantization.observers.base import Observer
 from torch.nn import Module
 from tqdm import tqdm
 
 
 __all__ = [
+    "infer_quantization_status",
     "is_module_quantized",
     "is_model_quantized",
     "iter_named_leaf_modules",
     "module_type",
     "calculate_compression_ratio",
+    "get_torch_bit_depth",
+    "can_quantize",
 ]
+
+_LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]:  # noqa
+    """
+    Checks the quantization status of a model. Assumes all modules in the model have
+    the same status, so only the first quantized model is checked.
+
+    :param model: model to check quantization status for
+    :return: quantization status if the model is quantized, otherwise None
+    """
+    for module in model.modules():
+        status = getattr(module, "quantization_status", None)
+        if status is not None:
+            return status
+    return None
 
 
 def is_module_quantized(module: Module) -> bool:
@@ -78,11 +100,60 @@ def module_type(module: Module) -> str:
 
 
 def iter_named_leaf_modules(model: Module) -> Tuple[str, Module]:
-    # yields modules that do not have any submodules
-    # TODO: potentially expand to add list of allowed submodules such as observers
+    """
+    Yields modules that do not have any submodules except observers. The observers
+    themselves are not yielded
+
+    :param model: model to get leaf modules of
+    :returns: generator tuple of (name, leaf_submodule)
+    """
     for name, submodule in model.named_modules():
-        if len(list(submodule.children())) == 0:
+        children = list(submodule.children())
+        if len(children) == 0 and not isinstance(submodule, Observer):
             yield name, submodule
+        else:
+            has_non_observer_children = False
+            for child in children:
+                if not isinstance(child, Observer):
+                    has_non_observer_children = True
+
+            if not has_non_observer_children:
+                yield name, submodule
+
+
+def get_torch_bit_depth(value: torch.Tensor) -> int:
+    """
+    Determine the number of bits used to represent the dtype of a tensor
+
+    :param value: tensor to check bit depth of
+    :return: bit depth of each element in the value tensor
+    """
+    try:
+        bit_depth = torch.finfo(value.dtype).bits
+    except TypeError:
+        bit_depth = torch.iinfo(value.dtype).bits
+
+    return bit_depth
+
+
+def can_quantize(value: torch.Tensor, quant_args: "QuantizationArgs") -> bool:  # noqa
+    """
+    Checks if value can be quantized by quant_args.
+
+    :param value: tensor to check for quantization
+    :param quant_args: QuantizationArgs to use for quantization
+    :return: False if value is already quantized to quant_args or value is incompatible
+    with quant_args, True if value can be quantized with quant_args
+    """
+    bit_depth = get_torch_bit_depth(value)
+    requested_depth = quant_args.num_bits
+    if bit_depth < quant_args.num_bits:
+        _LOGGER.warn(
+            f"Can't quantize tensor with bit depth {bit_depth} to {requested_depth}."
+            "The QuantizationArgs provided are not compatible with the input tensor."
+        )
+
+    return bit_depth > quant_args.num_bits
 
 
 def calculate_compression_ratio(model: Module) -> float:
@@ -101,13 +172,11 @@ def calculate_compression_ratio(model: Module) -> float:
         desc="Calculating quantization compression ratio",
     ):
         for parameter in model.parameters():
-            try:
-                uncompressed_bits = torch.finfo(parameter.dtype).bits
-            except TypeError:
-                uncompressed_bits = torch.iinfo(parameter.dtype).bits
+            uncompressed_bits = get_torch_bit_depth(parameter)
             compressed_bits = uncompressed_bits
             if is_module_quantized(submodule):
                 compressed_bits = submodule.quantization_scheme.weights.num_bits
+
             num_weights = parameter.numel()
             total_compressed += compressed_bits * num_weights
             total_uncompressed += uncompressed_bits * num_weights
