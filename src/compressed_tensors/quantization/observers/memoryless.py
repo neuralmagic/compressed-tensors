@@ -14,7 +14,6 @@
 
 from typing import Any, Optional, Tuple
 
-
 import torch
 from compressed_tensors.quantization.observers.base import Observer
 from compressed_tensors.quantization.observers.helpers import calculate_qparams
