@@ -37,7 +37,6 @@ from compressed_tensors.quantization.utils import (
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
 
-
 __all__ = [
     "load_pretrained_quantization",
     "apply_quantization_config",
@@ -165,6 +164,12 @@ def _find_first_match(
             if target.lower() in value.lower():
                 return target
         elif target == value:
+            return target
+        if "_fsdp_wrapped_module." in value:
+            if value.replace("_fsdp_wrapped_module.", "") == target:
+                return target
+        #elif fix_fsdp_module_name(value) == target:
+            # check for FSDP wrapper prefix
             return target
     return None
 
