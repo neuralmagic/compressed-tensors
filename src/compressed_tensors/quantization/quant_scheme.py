@@ -12,13 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from copy import deepcopy
 from typing import List, Optional
 
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from pydantic import BaseModel
 
 
-__all__ = ["QuantizationScheme"]
+__all__ = [
+    "QuantizationScheme",
+    "preset_name_to_scheme",
+]
 
 
 class QuantizationScheme(BaseModel):
@@ -37,3 +41,70 @@ class QuantizationScheme(BaseModel):
     weights: Optional[QuantizationArgs] = None
     input_activations: Optional[QuantizationArgs] = None
     output_activations: Optional[QuantizationArgs] = None
+
+    @classmethod
+    def default_scheme(
+        cls,
+        targets: Optional[List[str]] = None,
+    ):
+
+        if targets is None:
+            # default to quantizing all Linear layers
+            targets = ["Linear"]
+
+        # default to 8 bit integer symmetric quantization
+        # for weights
+        weights = QuantizationArgs(num_bits=8, symmetric=True)
+
+        # default to 8 bit integer asymmetric quantization
+        input_activations = QuantizationArgs(num_bits=8, symmetric=True)
+
+        # Do not quantize the output activations
+        # by default
+        output_activations = None
+
+        return cls(
+            targets=targets,
+            weights=weights,
+            input_activations=input_activations,
+            output_activations=output_activations,
+        )
+
+
+"""
+Pre-Set Quantization Scheme Args
+"""
+
+
+def preset_name_to_scheme(name: str, targets: List[str]) -> QuantizationScheme:
+    """
+    :param name: preset quantization settings name. must exist in upper case in
+        PRESET_SCHEMES
+    :param targets: list of quantization targets to be passed to the Scheme
+    :return: new QuantizationScheme for a given name with the given targets
+    """
+    name = name.upper()
+
+    if name not in PRESET_SCHEMES:
+        raise KeyError(
+            f"Unknown preset scheme name {name}, "
+            f"available names: {list(PRESET_SCHEMES.keys())}"
+        )
+
+    scheme_args = deepcopy(PRESET_SCHEMES[name])  # deepcopy to avoid args references
+    return QuantizationScheme(
+        targets=targets,
+        **scheme_args,
+    )
+
+
+W8A8 = dict(
+    weights=QuantizationArgs(), input_activations=QuantizationArgs(symmetric=False)
+)
+
+W4A16 = dict(weights=QuantizationArgs(num_bits=4, symmetric=False))
+
+PRESET_SCHEMES = {
+    "W8A8": W8A8,
+    "W4A16": W4A16,
+}
