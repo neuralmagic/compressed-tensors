@@ -34,8 +34,10 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     iter_named_leaf_modules,
 )
+from compressed_tensors.utils.helpers import strip_fsdp_module_name
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
+
 
 __all__ = [
     "load_pretrained_quantization",
@@ -155,6 +157,9 @@ def _find_first_match(
     # returns first element of target that matches value either
     # exactly or as a regex after 're:'. if check_contains is set to True,
     # additionally checks if the target string is contained with value.
+
+    # potentially fix module name to remove FSDP wrapper prefix
+    value = strip_fsdp_module_name(value)
     for target in targets:
         if target.startswith("re:"):
             pattern = target[3:]
@@ -165,11 +170,6 @@ def _find_first_match(
                 return target
         elif target == value:
             return target
-        if "_fsdp_wrapped_module." in value:
-            if value.replace("_fsdp_wrapped_module.", "") == target:
-                return target
-        #elif fix_fsdp_module_name(value) == target:
-            # check for FSDP wrapper prefix
     return None
 
 

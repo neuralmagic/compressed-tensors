@@ -21,7 +21,7 @@ from compressed_tensors.config import CompressionConfig
 from transformers import AutoConfig
 
 
-__all__ = ["infer_compressor_from_model_config", "fix_fsdp_module_name", "FSDP_WRAPPER_NAME"]
+__all__ = ["infer_compressor_from_model_config", "strip_fsdp_module_name"]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module."
 
@@ -46,9 +46,10 @@ def infer_compressor_from_model_config(
     compressor = ModelCompressor.load_from_registry(format, config=sparsity_config)
     return compressor
 
+
 # TODO: There is already the same function in
-# SparseML, to be resolved 
-def fix_fsdp_module_name(name: str) -> str:
+# SparseML, to be resolved
+def strip_fsdp_module_name(name: str) -> str:
     """
     Remove FSDP wrapper prefixes from a module name
 
