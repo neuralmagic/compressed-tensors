@@ -41,7 +41,7 @@ class PackedQuantizationCompressor(Compressor):
     """
 
     COMPRESSION_PARAM_NAMES = [
-        "weight_packed",
+        "weight",
         "weight_scale",
         "weight_zero_point",
         "weight_shape",
@@ -74,6 +74,7 @@ class PackedQuantizationCompressor(Compressor):
                 shape = torch.tensor(value.shape)
                 if scale is not None and zp is not None:
                     # weight is quantized, compress it
+                    # weight is quantized, compress it
                     quant_args = model_quant_args[prefix]
                     if can_quantize(value, quant_args):
                         # convert weight to an int if not already compressed
@@ -84,17 +85,13 @@ class PackedQuantizationCompressor(Compressor):
                             args=quant_args,
                             dtype=torch.int8,
                         )
-                    value = pack_4bit_ints(value.cpu())
+                        value = pack_4bit_ints(value.cpu())
                     compressed_dict[merge_names(prefix, "weight_shape")] = shape
-                    compressed_dict[merge_names(prefix, "weight_packed")] = value
-                    continue
-
             elif name.endswith("zero_point"):
                 if torch.all(value == 0):
                     # all zero_points are 0, no need to include in
                     # compressed state_dict
                     continue
-
             compressed_dict[name] = value.to("cpu")
 
         return compressed_dict
@@ -129,7 +126,7 @@ class PackedQuantizationCompressor(Compressor):
                     # zero_point assumed to be 0 if not included in state_dict
                     zero_point = torch.zeros_like(scale)
 
-                weight = weight_data["weight_packed"]
+                weight = weight_data["weight"]
                 original_shape = torch.Size(weight_data["weight_shape"])
                 unpacked = unpack_4bit_ints(weight, original_shape)
                 decompressed = dequantize(
