@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import re
 from collections import OrderedDict
 from typing import Dict, Iterable, Optional
@@ -48,6 +49,9 @@ __all__ = [
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
 from compressed_tensors.utils.safetensors_load import get_quantization_state_dict
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def load_pretrained_quantization(model: Module, model_name_or_path: str):
@@ -105,15 +109,22 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
+    # list of submodules to ignore
+    ignored_submodules = []
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in iter_named_leaf_modules(model):
         if find_first_name_or_class_match(name, submodule, config.ignore):
+            ignored_submodules.append(name)
             continue  # layer matches ignore list, continue
         target = find_first_name_or_class_match(name, submodule, target_to_scheme)
         if target is not None:
             # target matched - add layer and scheme to target list
             submodule.quantization_scheme = target_to_scheme[target]
-
+    if set(config.ignore) - set(ignored_submodules):
+        _LOGGER.warning(
+            "Some layers that were to be ignored were "
+            f"not found in the model: {set(config.ignore) - set(ignored_submodules)}"
+        )
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
 
