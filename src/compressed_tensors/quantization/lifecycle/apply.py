@@ -17,6 +17,7 @@ import re
 from collections import OrderedDict
 from typing import Dict, Iterable, Optional
 
+import torch
 from compressed_tensors.quantization.lifecycle.calibration import (
     set_module_for_calibration,
 )
@@ -208,7 +209,13 @@ def _load_quant_args_from_state_dict(
     zp_name = f"{base_name}_zero_point"
     device = next(module.parameters()).device
 
-    scale = getattr(module, scale_name)
-    zp = getattr(module, zp_name)
-    scale.data = state_dict[f"{module_name}.{scale_name}"].to(device)
-    zp.data = state_dict[f"{module_name}.{zp_name}"].to(device)
+    scale = getattr(module, scale_name, None)
+    zp = getattr(module, zp_name, None)
+    if scale is not None:
+        scale.data = state_dict[f"{module_name}.{scale_name}"].to(device)
+    if zp is not None:
+        zp_from_state = state_dict.get(f"{module_name}.{zp_name}", None)
+        if zp_from_state is not None:  # load the non-zero zero points
+            zp.data = state_dict[f"{module_name}.{zp_name}"].to(device)
+        else:  # fill with zeros matching scale shape
+            zp.data = torch.zeros_like(scale, dtype=torch.int8).to(device)
