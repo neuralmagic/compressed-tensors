@@ -21,7 +21,7 @@ from transformers import AutoConfig
 
 __all__ = ["infer_compressor_from_model_config", "fix_fsdp_module_name"]
 
-FSDP_WRAPPER_NAME = "_fsdp_wrapped_module."
+FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
 
 
 def infer_compressor_from_model_config(
