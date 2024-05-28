@@ -188,6 +188,9 @@ class ModelCompressor:
                 compressed_state_dict
             )
 
+        # HACK: Override the dtype_byte_size function in transformers to
+        # support float8 types. Fix is posted upstream
+        # https://github.com/huggingface/transformers/pull/30488
         transformers.modeling_utils.dtype_byte_size = new_dtype_byte_size
 
         return compressed_state_dict
