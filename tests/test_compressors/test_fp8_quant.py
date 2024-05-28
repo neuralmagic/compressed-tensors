@@ -82,13 +82,12 @@ def test_quant_format(strategy, group_size, sc, zp):
         dense_state_dict, model_quant_args=quantized_modules_to_args
     )
 
-    # state_dict params should be the same
-    assert len(dense_state_dict) == len(compressed_state_dict)
+    # state_dict params should be the same, minus the zero_point if symmetric
+    assert len(dense_state_dict) == len(compressed_state_dict) + 1
 
     # check compressed to int8
     assert compressed_state_dict["dummy.weight"].dtype == torch.float8_e4m3fn
     assert compressed_state_dict["dummy.weight_scale"].dtype == torch.float32
-    assert compressed_state_dict["dummy.weight_zero_point"].dtype == torch.float32
 
 
 @pytest.mark.parametrize(

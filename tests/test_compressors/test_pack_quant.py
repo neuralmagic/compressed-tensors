@@ -71,20 +71,20 @@ def test_quant_format(shape):
     )
 
     # compressed state_dict adds one entry for shape
-    assert len(dense_state_dict) + 1 == len(compressed_state_dict)
+    # but removes the zero points since we are symmetric
+    assert len(dense_state_dict) == len(compressed_state_dict)
 
     # check compressed and packed
-    assert compressed_state_dict["dummy.weight"].dtype == torch.int32
+    assert compressed_state_dict["dummy.weight_packed"].dtype == torch.int32
     expected_rows = shape[0]
     expected_columns = math.ceil(shape[1] / 8)  # round each row up to nearest int32
-    assert compressed_state_dict["dummy.weight"].shape == (
+    assert compressed_state_dict["dummy.weight_packed"].shape == (
         expected_rows,
         expected_columns,
     )
 
     assert torch.equal(compressed_state_dict["dummy.weight_shape"], torch.tensor(shape))
     assert compressed_state_dict["dummy.weight_scale"].dtype == torch.float32
-    assert compressed_state_dict["dummy.weight_zero_point"].dtype == torch.int32
 
 
 @pytest.mark.parametrize(
