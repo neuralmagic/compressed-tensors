@@ -36,7 +36,7 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     iter_named_leaf_modules,
 )
-from compressed_tensors.utils.helpers import strip_fsdp_module_name
+from compressed_tensors.utils.helpers import fix_fsdp_module_name
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
 
@@ -114,6 +114,8 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
     ignored_submodules = []
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in iter_named_leaf_modules(model):
+        # potentially fix module name to remove FSDP wrapper prefix
+        name = fix_fsdp_module_name(name)
         if find_first_name_or_class_match(name, submodule, config.ignore):
             ignored_submodules.append(name)
             continue  # layer matches ignore list, continue
@@ -170,8 +172,6 @@ def _find_first_match(
     # exactly or as a regex after 're:'. if check_contains is set to True,
     # additionally checks if the target string is contained with value.
 
-    # potentially fix module name to remove FSDP wrapper prefix
-    value = strip_fsdp_module_name(value)
     for target in targets:
         if target.startswith("re:"):
             pattern = target[3:]
