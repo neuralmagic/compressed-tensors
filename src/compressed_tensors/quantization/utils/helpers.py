@@ -188,11 +188,8 @@ def calculate_compression_ratio(model: Module) -> float:
 def is_float_quantization(tensor: torch.Tensor) -> bool:
     """
     :param tensor: tensor to check for quantization type
-    :return: True if a float quantization dtype, false otherwise
+    :return: True if a supported float quantization dtype, false otherwise
     """
-    if tensor.dtype is torch.float8_e5m2:
-        return True
-
     if tensor.dtype is torch.float8_e4m3fn:
         return True
 
