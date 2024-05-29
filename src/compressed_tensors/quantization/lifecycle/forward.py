@@ -86,6 +86,7 @@ def dequantize(
     :param scale: scale tensor
     :param zero_point: zero point tensor
     :param args: quantization args used to quantize x_q
+    :param dtype: optional dtype to cast the dequantized output to
     :return: dequantized float tensor
     """
     if args is None:
@@ -198,7 +199,7 @@ def _process_quantization(
                     zp,
                     q_min,
                     q_max,
-                    args=args,
+                    args,
                     dtype=dtype,
                 )
             if do_dequantize:
