@@ -94,11 +94,17 @@ def dequantize(
         if scale.ndim == 0:
             args = QuantizationArgs(strategy=QuantizationStrategy.TENSOR)
         elif scale.ndim == 2:
-            args = QuantizationArgs(strategy=QuantizationStrategy.CHANNEL)
-        elif scale.ndim == 3:
-            group_size = int(x_q.shape[1] / scale.shape[1])
-            args = QuantizationArgs(
-                strategy=QuantizationStrategy.GROUP, group_size=group_size
+            if scale.shape[1] == 1:
+                args = QuantizationArgs(strategy=QuantizationStrategy.CHANNEL)
+            else:
+                group_size = int(x_q.shape[1] / scale.shape[1])
+                args = QuantizationArgs(
+                    strategy=QuantizationStrategy.GROUP, group_size=group_size
+                )
+        else:
+            raise ValueError(
+                f"Could not infer a quantization strategy from scale with {scale.ndim} "
+                "dimmensions. Expected 0 or 2 dimmensions."
             )
     return _process_quantization(
         x=x_q,
@@ -155,14 +161,12 @@ def _process_quantization(
     group_size = args.group_size
 
     if args.strategy == QuantizationStrategy.GROUP:
-
-        if do_dequantize:
-            # if dequantizing the output should match the original weight dtype,
-            # which is the same as the scale's
+        if do_dequantize and not do_quantize:
+            # if dequantizing a quantized type infer the output type from the scale
             output = torch.zeros_like(x, dtype=scale.dtype)
         else:
-            # outputting a quantized output, use the dtype passed in as a kwarg if its
-            # specified, otherwise default to the input type
+            # use the dtype passed in as a kwarg if its specified, otherwise default
+            # to the input type
             output_dtype = dtype if dtype is not None else x.dtype
             if output_dtype is FP8_DTYPE:
                 # zeros_like doesn't support fp8 types directly, workaround
