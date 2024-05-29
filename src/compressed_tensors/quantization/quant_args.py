@@ -133,6 +133,17 @@ class QuantizationArgs(BaseModel):
 
         return value
 
+    def pytorch_dtype(self) -> torch.dtype:
+        if self.type is QuantizationType.FLOAT:
+            return FP8_DTYPE
+        else:  # QuantizationType.INT
+            if self.num_bits <= 8:
+                return torch.int8
+            elif self.num_bits <= 16:
+                return torch.int16
+            else:
+                return torch.int32
+
 
 def round_fp8(tensor: torch.Tensor, fp8_type: torch.dtype) -> torch.Tensor:
     """

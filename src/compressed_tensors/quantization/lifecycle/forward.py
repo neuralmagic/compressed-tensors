@@ -27,7 +27,6 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.utils import is_float_quantization
 from torch.nn import Module
 
 
@@ -77,8 +76,9 @@ def quantize(
 def dequantize(
     x_q: torch.Tensor,
     scale: torch.Tensor,
-    zero_point: torch.Tensor,
+    zero_point: torch.Tensor = None,
     args: QuantizationArgs = None,
+    dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
     """
     Dequantize a quantized input tensor x_q based on the strategy specified in args. If
@@ -106,6 +106,10 @@ def dequantize(
                 f"Could not infer a quantization strategy from scale with {scale.ndim} "
                 "dimmensions. Expected 0 or 2 dimmensions."
             )
+
+    if dtype is None:
+        dtype = scale.dtype
+
     return _process_quantization(
         x=x_q,
         scale=scale,
@@ -113,6 +117,7 @@ def dequantize(
         args=args,
         do_quantize=False,
         do_dequantize=True,
+        dtype=dtype,
     )
 
 
@@ -161,19 +166,8 @@ def _process_quantization(
     group_size = args.group_size
 
     if args.strategy == QuantizationStrategy.GROUP:
-        if do_dequantize and not do_quantize:
-            # if dequantizing a quantized type infer the output type from the scale
-            output = torch.zeros_like(x, dtype=scale.dtype)
-        else:
-            # use the dtype passed in as a kwarg if its specified, otherwise default
-            # to the input type
-            output_dtype = dtype if dtype is not None else x.dtype
-            if output_dtype is FP8_DTYPE:
-                # zeros_like doesn't support fp8 types directly, workaround
-                output = torch.zeros_like(x)
-                output = output.to(FP8_DTYPE)
-            else:
-                output = torch.zeros_like(x, dtype=output_dtype)
+        output_dtype = dtype if dtype is not None else x.dtype
+        output = torch.zeros_like(x).to(output_dtype)
 
         # TODO: vectorize the for loop
         # TODO: fix genetric assumption about the tensor size for computing group
@@ -183,7 +177,7 @@ def _process_quantization(
         while scale.ndim < 2:
             # pad scale and zero point dims for slicing
             scale = scale.unsqueeze(1)
-            zero_point = zero_point.unsqueeze(1)
+            zero_point = zero_point.unsqueeze(1) if zero_point is not None else None
 
         columns = x.shape[1]
         if columns >= group_size:
@@ -196,7 +190,7 @@ def _process_quantization(
             # scale.shape should be [nchan, ndim]
             # sc.shape should be [nchan, 1] after unsqueeze
             sc = scale[:, i].view(-1, 1)
-            zp = zero_point[:, i].view(-1, 1)
+            zp = zero_point[:, i].view(-1, 1) if zero_point is not None else None
 
             idx = i * group_size
             if do_quantize:
@@ -351,9 +345,16 @@ def _quantize(
 def _dequantize(
     x_q: torch.Tensor,
     scale: torch.Tensor,
-    zero_point: torch.Tensor,
+    zero_point: torch.Tensor = None,
+    dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
-    if is_float_quantization(x_q):
-        # can't perform arithmetic in fp8 types, need to convert first
-        return (x_q.to(scale.dtype) - zero_point.to(scale.dtype)) * scale
-    return (x_q - zero_point) * scale
+
+    dequant_value = x_q
+    if zero_point is not None:
+        dequant_value -= zero_point
+    dequant_value = dequant_value.to(scale.dtype) * scale
+
+    if dtype is not None:
+        dequant_value = dequant_value.to(dtype)
+
+    return dequant_value

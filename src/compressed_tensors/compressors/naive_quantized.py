@@ -18,11 +18,7 @@ from typing import Dict, Generator, Tuple
 import torch
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization import (
-    FP8_DTYPE,
-    QuantizationArgs,
-    QuantizationType,
-)
+from compressed_tensors.quantization import QuantizationArgs
 from compressed_tensors.quantization.lifecycle.forward import dequantize, quantize
 from compressed_tensors.quantization.utils import can_quantize
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
@@ -84,7 +80,7 @@ class QuantizationCompressor(Compressor):
                             scale=scale,
                             zero_point=zp,
                             args=quant_args,
-                            dtype=self._parse_compression_dtype(quant_args),
+                            dtype=quant_args.pytorch_dtype(),
                         )
             elif name.endswith("zero_point"):
                 if torch.all(value == 0):
@@ -121,27 +117,12 @@ class QuantizationCompressor(Compressor):
             if "weight_scale" in weight_data:
                 zero_point = weight_data.get("weight_zero_point", None)
                 scale = weight_data["weight_scale"]
-                if zero_point is None:
-                    # zero_point assumed to be 0 if not included in state_dict
-                    zero_point = torch.zeros_like(scale)
-
                 decompressed = dequantize(
                     x_q=weight_data["weight"],
                     scale=scale,
                     zero_point=zero_point,
                 )
                 yield merge_names(weight_name, "weight"), decompressed
-
-    def _parse_compression_dtype(self, args: QuantizationArgs) -> torch.dtype:
-        if args.type is QuantizationType.FLOAT:
-            return FP8_DTYPE
-        else:  # QuantizationType.INT
-            if args.num_bits <= 8:
-                return torch.int8
-            elif args.num_bits <= 16:
-                return torch.int16
-            else:
-                return torch.int32
 
 
 @Compressor.register(name=CompressionFormat.int_quantized.value)

@@ -20,10 +20,7 @@ import torch
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
-from compressed_tensors.quantization.quant_args import (
-    QuantizationArgs,
-    QuantizationType,
-)
+from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module, Parameter
@@ -94,15 +91,11 @@ def _initialize_scale_zero_point_observer(
 
     # initializes empty scale and zero point parameters for the module
     init_scale = Parameter(
-        torch.empty(0, dtype=torch.float16, device=device), requires_grad=False
+        torch.empty(0, dtype=module.weight.dtype, device=device), requires_grad=False
     )
     module.register_parameter(f"{base_name}_scale", init_scale)
 
-    zp_dtype = (
-        torch.int8
-        if quantization_args.type is QuantizationType.INT
-        else module.weight.dtype
-    )
+    zp_dtype = quantization_args.pytorch_dtype()
     init_zero_point = Parameter(
         torch.empty(0, device=device, dtype=zp_dtype), requires_grad=False
     )
