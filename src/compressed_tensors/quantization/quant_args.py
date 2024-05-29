@@ -24,7 +24,7 @@ __all__ = [
     "QuantizationType",
     "QuantizationStrategy",
     "QuantizationArgs",
-    "round_fp8",
+    "round_to_quantized_type",
 ]
 
 FP8_DTYPE = torch.float8_e4m3fn
@@ -145,14 +145,21 @@ class QuantizationArgs(BaseModel):
                 return torch.int32
 
 
-def round_fp8(tensor: torch.Tensor, fp8_type: torch.dtype) -> torch.Tensor:
+def round_to_quantized_type(
+    tensor: torch.Tensor, args: QuantizationArgs
+) -> torch.Tensor:
     """
-    Rounds each element of the input tensor to the nearest fp8 representation,
+    Rounds each element of the input tensor to the nearest quantized representation,
     keeping to original dtype
 
     :param tensor: tensor to round
-    :param fp8_type: fp8 dtype to round to
-    :return: tensor rounded to fp8
+    :param args: QuantizationArgs to pull appropriate dtype from
+    :return: rounded tensor
     """
     original_dtype = tensor.dtype
-    return tensor.to(fp8_type).to(original_dtype)
+    if args.type is QuantizationType.FLOAT:
+        rounded = tensor.to(FP8_DTYPE)
+    else:  # QuantizationType.INT
+        rounded = torch.round(tensor)
+
+    return rounded.to(original_dtype)

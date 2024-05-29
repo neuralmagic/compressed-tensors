@@ -19,11 +19,9 @@ from typing import Optional
 import torch
 from compressed_tensors.quantization.observers.helpers import calculate_range
 from compressed_tensors.quantization.quant_args import (
-    FP8_DTYPE,
     QuantizationArgs,
     QuantizationStrategy,
-    QuantizationType,
-    round_fp8,
+    round_to_quantized_type,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -200,7 +198,7 @@ def _process_quantization(
                     zp,
                     q_min,
                     q_max,
-                    quantization_type=args.type,
+                    args=args,
                     dtype=dtype,
                 )
             if do_dequantize:
@@ -219,7 +217,7 @@ def _process_quantization(
                 zero_point,
                 q_min,
                 q_max,
-                quantization_type=args.type,
+                args,
                 dtype=dtype,
             )
         if do_dequantize:
@@ -315,26 +313,18 @@ def _quantize(
     zero_point: torch.Tensor,
     q_min: torch.Tensor,
     q_max: torch.Tensor,
-    quantization_type: Optional[QuantizationType] = QuantizationType.INT,
+    args: QuantizationArgs,
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
 
-    scaled = x / scale + zero_point
-    if quantization_type is QuantizationType.FLOAT:
-        # clamp first because cast isn't saturated
-        quantized_value = torch.clamp(
-            scaled,
-            q_min,
-            q_max,
-        )
-        quantized_value = round_fp8(quantized_value, FP8_DTYPE)
-    else:
-        quantized_value = torch.clamp(
-            torch.round(scaled),
-            q_min,
-            q_max,
-        )
-
+    scaled = x / scale + zero_point.to(x.dtype)
+    # clamp first because cast isn't guaranteed to be saturated (ie for fp8)
+    clamped_value = torch.clamp(
+        scaled,
+        q_min,
+        q_max,
+    )
+    quantized_value = round_to_quantized_type(clamped_value, args)
     if dtype is not None:
         quantized_value = quantized_value.to(dtype)
 
@@ -351,7 +341,7 @@ def _dequantize(
 
     dequant_value = x_q
     if zero_point is not None:
-        dequant_value -= zero_point
+        dequant_value = dequant_value - zero_point.to(scale.dtype)
     dequant_value = dequant_value.to(scale.dtype) * scale
 
     if dtype is not None:

@@ -116,9 +116,11 @@ def test_fp8(bit_depth, quant_type, input_symmetry, weight_symmetry):
 
     inputs = torch.randn(32, 64)
     model(inputs)
-    assert model.weight_zero_point.dtype == model.weight.dtype == torch.float32
+    assert model.weight_zero_point.dtype == torch.float8_e4m3fn
+    model.weight_zero_point.data = model.weight_zero_point.to(model.weight.dtype)
     if input_symmetry is not None:
-        assert model.input_zero_point.dtype == inputs.dtype == torch.float32
+        assert model.input_zero_point.dtype == torch.float8_e4m3fn
+        model.input_zero_point.data = model.input_zero_point.to(model.weight.dtype)
         assert model.input_zero_point >= min
         assert model.input_zero_point <= max
 

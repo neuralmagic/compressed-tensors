@@ -19,7 +19,6 @@ from compressed_tensors.quantization.quant_args import (
     FP8_DTYPE,
     QuantizationArgs,
     QuantizationType,
-    round_fp8,
 )
 from torch import FloatTensor, IntTensor, Tensor
 
@@ -53,7 +52,7 @@ def calculate_qparams(
 
         # set zero_points to correct types
         if quantization_args.type == QuantizationType.FLOAT:
-            zero_points = round_fp8(zero_points, FP8_DTYPE)
+            zero_points = zero_points.to(FP8_DTYPE)
         else:  # QuantizationType.INT
             zero_points = zero_points.to(torch.int8)
     else:
@@ -62,9 +61,7 @@ def calculate_qparams(
 
         if quantization_args.type == QuantizationType.FLOAT:
             zero_points = bit_min - (min_vals / scales)
-            zero_points = round_fp8(
-                torch.clamp(zero_points, bit_min, bit_max), FP8_DTYPE
-            )
+            zero_points = torch.clamp(zero_points, bit_min, bit_max).to(FP8_DTYPE)
         else:  # QuantizationType.INT
             zero_points = bit_min - torch.round(min_vals / scales)
             zero_points = torch.clamp(zero_points, bit_min, bit_max).to(torch.int8)
