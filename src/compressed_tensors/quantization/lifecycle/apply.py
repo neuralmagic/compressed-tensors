@@ -202,6 +202,6 @@ def _load_quant_args_from_state_dict(
     if zp is not None:
         zp_from_state = state_dict.get(f"{module_name}.{zp_name}", None)
         if zp_from_state is not None:  # load the non-zero zero points
-            zp.data = zp_from_state.to(device).to(scale.dtype)
+            zp.data = zp_from_state.to(device).to(zp.dtype)
         else:  # fill with zeros matching scale shape
             zp.data = torch.zeros_like(scale, dtype=zp.dtype).to(device)
