@@ -27,7 +27,7 @@ def test_basic_config():
     config = QuantizationConfig(config_groups=config_groups)
 
     assert config.config_groups == config_groups
-    assert config.quant_method == "sparseml"
+    assert config.quant_method == "compressed-tensors"
     assert config.format == "fakequant"
     assert config.quantization_status == QuantizationStatus.INITIALIZED
     assert config.global_compression_ratio is None
