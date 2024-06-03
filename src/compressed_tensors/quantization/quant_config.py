@@ -34,6 +34,8 @@ __all__ = [
     "QuantizationStatus",
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
+    "DEFAULT_QUANTIZATION_METHOD",
+    "DEFAULT_QUANTIZATION_FORMAT",
 ]
 
 
@@ -99,6 +101,9 @@ LIFECYCLE_ORDER = [
     QuantizationStatus.COMPRESSED,
 ]
 
+DEFAULT_QUANTIZATION_METHOD = "compressed-tensors"
+DEFAULT_QUANTIZATION_FORMAT = "fakequant"
+
 
 class QuantizationConfig(BaseModel):
     """
@@ -120,8 +125,8 @@ class QuantizationConfig(BaseModel):
     """
 
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
-    quant_method: str = "compressed-tensors"
-    format: str = "fakequant"
+    quant_method: str = DEFAULT_QUANTIZATION_METHOD
+    format: str = DEFAULT_QUANTIZATION_FORMAT
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
