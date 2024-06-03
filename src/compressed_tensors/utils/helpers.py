@@ -15,7 +15,6 @@
 
 from typing import Optional
 
-from compressed_tensors.compressors import ModelCompressor
 from transformers import AutoConfig
 
 
