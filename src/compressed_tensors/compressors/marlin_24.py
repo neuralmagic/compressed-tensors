@@ -69,7 +69,7 @@ class Marlin24Compressor(Compressor):
 
     @staticmethod
     def validate_sparsity_structure(
-        name: str, weight: Tensor, num_rows_to_sample: int = 5
+        name: str, weight: Tensor, num_rows_to_sample: int = 20
     ) -> bool:
         BLOCK_SIZE = 4
         MAX_NON_ZEROS = 2
@@ -87,10 +87,10 @@ class Marlin24Compressor(Compressor):
                 if num_nonzero > MAX_NON_ZEROS:
                     non_24_segments += 1
 
-        if non_24_segments > 1:
-            print(
+        if non_24_segments > 0:
+            raise ValueError(
                 "Marlin24 Compressor is only compatible with weights that have "
-                f"a 2:4 sparsity structure. Found {non_24_segments} rows in {name} "
+                f"a 2:4 sparsity structure. Found {non_24_segments} segments in {name} "
                 "that do not match the expected structure."
             )
 
@@ -141,6 +141,7 @@ class Marlin24Compressor(Compressor):
                     meta = meta.resize_(meta.shape[1] // 2, meta.shape[0] * 2)
                     compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale
                     compressed_dict[merge_names(prefix, "weight_packed")] = value
+                    compressed_dict[merge_names(prefix, "meta")] = meta
         return compressed_dict
 
     def decompress(
