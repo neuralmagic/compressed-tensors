@@ -128,11 +128,7 @@ class Marlin24Compressor(Compressor):
                     quant_args = model_quant_args[prefix]
                     original_shape = value.shape
                     value = quantize(
-                        x=value,
-                        scale=scale,
-                        zero_point=zp,
-                        args=quant_args,
-                        dtype=torch.int8,
+                        x=value, scale=scale, zero_point=zp, args=quant_args
                     )
                     self.validate_sparsity_structure(prefix, value)
                     value, meta = compress_weight_24(value)
