@@ -110,7 +110,6 @@ def _initialize_scale_zero_point_observer(
             expected_shape = (
                 weight_shape[0],
                 weight_shape[1] // quantization_args.group_size,
-                1,
             )
 
     # initializes empty scale and zero point parameters for the module
