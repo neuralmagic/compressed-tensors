@@ -88,6 +88,15 @@ class ModelCompressor:
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
         compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
+        return cls.from_compression_config(compression_config)
+
+    @classmethod
+    def from_compression_config(cls, compression_config: Dict[str, Any]):
+        """
+        :param compression_config: compression/quantization config dictionary
+            found under key "quantization_config" in HF model config
+        :return: compressor for the extracted configs
+        """
         if compression_config is None:
             return None
 
