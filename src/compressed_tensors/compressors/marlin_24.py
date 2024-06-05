@@ -134,7 +134,7 @@ class Marlin24Compressor(Compressor):
                     value, meta = compress_weight_24(value)
                     value = pack_weight_24(value, quant_args, original_shape)
                     packed_scale = pack_scales_24(scale, quant_args, original_shape)
-                    meta = meta.resize_(meta.shape[1] // 2, meta.shape[0] * 2)
+                    meta = meta.resize_(meta.shape[0] * 2, meta.shape[1] // 2)
                     compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale
                     compressed_dict[merge_names(prefix, "weight_packed")] = value
                     compressed_dict[merge_names(prefix, "meta")] = meta
@@ -161,45 +161,43 @@ def pack_weight_24(
     w_shape: torch.Size,
     marlin_tile: int = 16,
 ):
-    size_k = w_shape[0]
-    size_n = w_shape[1]
+    size_k = w_shape[1]
+    size_n = w_shape[0]
     num_bits = quantization_args.num_bits
     size_k_comp = size_k // 2
     pack_factor = 32 // num_bits
 
     # Reshuffle to marlin_24 format
     weight = weight.reshape(
-        (size_k_comp // marlin_tile, marlin_tile, size_n // marlin_tile, marlin_tile)
+        (size_n // marlin_tile, marlin_tile, size_k_comp // marlin_tile, marlin_tile)
     )
     weight = weight.permute((0, 2, 1, 3))
-    weight = weight.reshape((size_k_comp // marlin_tile, size_n * marlin_tile))
+    weight = weight.reshape((size_n * marlin_tile, size_k_comp // marlin_tile))
 
     res = weight
     perm_2_4, _, _ = get_permutations_2_4(num_bits)
-    res = res.reshape((-1, perm_2_4.numel()))[:, perm_2_4].reshape(res.shape)
+    res = res.reshape((perm_2_4.numel(), -1))[perm_2_4, :].reshape(res.shape)
 
     # Pack
-    q = np.zeros((res.shape[0], res.shape[1] // pack_factor), dtype=np.uint32)
+    q = np.zeros((res.shape[0] // pack_factor, res.shape[1]), dtype=np.uint32)
     res = res.cpu().numpy().astype(np.uint32)
     for i in range(pack_factor):
-        q |= res[:, i::pack_factor] << num_bits * i
+        q |= res[i::pack_factor, :] << num_bits * i
 
     q = torch.from_numpy(q.astype(np.int32))
     return q
 
 
 def pack_scales_24(scales, quantization_args, w_shape):
-    size_n = w_shape[1]
+    size_n = w_shape[0]
     num_bits = quantization_args.num_bits
 
     _, scale_perm_2_4, scale_perm_single_2_4 = get_permutations_2_4(num_bits)
 
     if quantization_args.strategy is QuantizationStrategy.GROUP:
-        scales = scales.reshape((-1, len(scale_perm_2_4)))[:, scale_perm_2_4]
+        scales = scales.reshape((len(scale_perm_2_4), -1))[scale_perm_2_4, :]
     else:  # channelwise
-        scales = scales.reshape((-1, len(scale_perm_single_2_4)))[
-            :, scale_perm_single_2_4
-        ]
-    scales = scales.reshape((-1, size_n)).contiguous()
+        scales = scales.reshape((len(scale_perm_single_2_4), -1))[scale_perm_2_4, :]
+    scales = scales.reshape((size_n, -1)).contiguous()
 
     return scales
