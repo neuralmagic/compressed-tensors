@@ -17,7 +17,7 @@ import logging
 import operator
 import os
 from copy import deepcopy
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
@@ -105,12 +105,16 @@ class ModelCompressor:
         if sparsity_config is None and quantization_config is None:
             return None
 
-        if sparsity_config is not None:
+        if sparsity_config is not None and not isinstance(
+            sparsity_config, SparsityCompressionConfig
+        ):
             format = sparsity_config.get("format")
             sparsity_config = SparsityCompressionConfig.load_from_registry(
                 format, **sparsity_config
             )
-        if quantization_config is not None:
+        if quantization_config is not None and not isinstance(
+            quantization_config, QuantizationConfig
+        ):
             quantization_config = QuantizationConfig.parse_obj(quantization_config)
 
         return cls(
@@ -155,10 +159,16 @@ class ModelCompressor:
     def parse_sparsity_config(compression_config: Dict) -> Union[Dict, None]:
         if compression_config is None:
             return None
+        if hasattr(compression_config, SPARSITY_CONFIG_NAME):
+            # for loaded HFQuantizer config
+            return getattr(compression_config, SPARSITY_CONFIG_NAME)
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
 
     @staticmethod
     def parse_quantization_config(compression_config: Dict) -> Union[Dict, None]:
+        if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
+            # for loaded HFQuantizer config
+            return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
         if len(quantization_config) == 0:
