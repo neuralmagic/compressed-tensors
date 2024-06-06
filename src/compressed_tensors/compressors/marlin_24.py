@@ -208,7 +208,6 @@ def pack_scales_24(scales, quantization_args, w_shape):
     num_bits = quantization_args.num_bits
 
     _, scale_perm_2_4, scale_perm_single_2_4 = get_permutations_24(num_bits)
-    scale_perm_single_2_4 = scale_perm_single_2_4[num_bits]
 
     if (
         quantization_args.strategy is QuantizationStrategy.GROUP
