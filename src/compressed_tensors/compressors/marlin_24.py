@@ -135,14 +135,14 @@ class Marlin24Compressor(Compressor):
                     value = value.t().contiguous()
                     scale = scale.t().contiguous()
 
-                    value, meta = compress_weight_24(value + 8)
-                    value -= 8
+                    value, meta = compress_weight_24(value)
+                    value += 8 # kernel expects unsigned
                     value = pack_weight_24(value, quant_args, original_shape)
                     packed_scale = pack_scales_24(scale, quant_args, original_shape)
                     meta = meta.resize_(meta.shape[1] // 2, meta.shape[0] * 2)
                     compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale.t().contiguous()
                     compressed_dict[merge_names(prefix, "weight_packed")] = value.t().contiguous()
-                    compressed_dict[merge_names(prefix, "meta")] = meta
+                    compressed_dict[merge_names(prefix, "meta")] = meta.t().contiguous()
         return compressed_dict
 
     def decompress(
