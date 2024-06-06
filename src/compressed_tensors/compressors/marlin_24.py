@@ -20,7 +20,7 @@ import numpy as np
 import torch
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.compressors.utils import (
-    get_permutations_2_4,
+    get_permutations_24,
     sparse_semi_structured_from_dense_cutlass,
 )
 from compressed_tensors.config import CompressionFormat
@@ -127,21 +127,21 @@ class Marlin24Compressor(Compressor):
                     # weight is quantized, compress it
                     quant_args = model_quant_args[prefix]
                     value = quantize(
-                        x=value, scale=scale, zero_point=zp, args=quant_args, dtype=torch.int32
+                        x=value, scale=scale, zero_point=zp, args=quant_args
                     )
                     self.validate_sparsity_structure(prefix, value)
 
-                    value = value.t().contiguous()
-                    scale = scale.t().contiguous()
-                    original_shape = value.shape
-                    print(f"name {prefix} dense value: {value.shape} scale: {scale.shape}")
+                    value = value.t().contiguous().cpu()
+                    scale = scale.t().contiguous().cpu()
+                    og_weight_shape = value.shape
 
                     value, meta = compress_weight_24(value)
-                    value += 8 # kernel expects unsigned
-                    value = pack_weight_24(value, quant_args, original_shape)
-                    packed_scale = pack_scales_24(scale, quant_args, original_shape)
+                    meta = meta.cpu()
+                    value += 8  # kernel expects unsigned, TODO don't hardcode
+                    value = pack_weight_24(value, quant_args)
+                    packed_scale = pack_scales_24(scale, quant_args, og_weight_shape)
                     meta = meta.resize_(meta.shape[1] // 2, meta.shape[0] * 2)
-                    print(f"packed value: {value.shape} meta {meta.shape} scale {packed_scale.shape}")
+
                     compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale
                     compressed_dict[merge_names(prefix, "weight_packed")] = value
                     compressed_dict[merge_names(prefix, "meta")] = meta
@@ -159,8 +159,6 @@ def compress_weight_24(weight: Tensor):
     weight = weight.t().contiguous()
     w_comp, meta = sparse_semi_structured_from_dense_cutlass(weight)
     w_comp = w_comp.t().contiguous()
-    w_comp = w_comp.to("cpu")
-    meta = meta.to("cpu")
     return w_comp, meta
 
 
@@ -178,10 +176,10 @@ def marlin_permute_weights(q_w, size_k, size_n, perm, tile):
 
     return q_w
 
+
 def pack_weight_24(
     weight: Tensor,
     quantization_args: QuantizationArgs,
-    w_shape: torch.Size,
     tile: int = 16,
 ):
     size_k = weight.shape[0]
@@ -190,20 +188,16 @@ def pack_weight_24(
     pack_factor = 32 // num_bits
 
     # Reshuffle to marlin_24 format
-    perm, _, _ = get_permutations_2_4()
-    perm = perm[num_bits]
+    perm, _, _ = get_permutations_24(num_bits)
     q_w = marlin_permute_weights(weight, size_k, size_n, perm, tile)
-
-    orig_device = q_w.device
 
     q_w = q_w.cpu().numpy().astype(np.uint32)
 
-    q_packed = np.zeros((q_w.shape[0], q_w.shape[1] // pack_factor),
-                           dtype=np.uint32)
+    q_packed = np.zeros((q_w.shape[0], q_w.shape[1] // pack_factor), dtype=np.uint32)
     for i in range(pack_factor):
         q_packed |= q_w[:, i::pack_factor] << num_bits * i
 
-    q_packed = torch.from_numpy(q_packed.astype(np.int32)).to(orig_device)
+    q_packed = torch.from_numpy(q_packed.astype(np.int32))
 
     return q_packed
 
@@ -213,14 +207,18 @@ def pack_scales_24(scales, quantization_args, w_shape):
     size_n = w_shape[1]
     num_bits = quantization_args.num_bits
 
-    _, scale_perm_2_4, scale_perm_single_2_4 = get_permutations_2_4()
-    scale_perm_2_4 = scale_perm_2_4[num_bits]
+    _, scale_perm_2_4, scale_perm_single_2_4 = get_permutations_24(num_bits)
     scale_perm_single_2_4 = scale_perm_single_2_4[num_bits]
 
-    if quantization_args.strategy is QuantizationStrategy.GROUP and quantization_args.group_size < size_k:
+    if (
+        quantization_args.strategy is QuantizationStrategy.GROUP
+        and quantization_args.group_size < size_k
+    ):
         scales = scales.reshape((-1, len(scale_perm_2_4)))[:, scale_perm_2_4]
     else:  # channelwise
-        scales = scales.reshape((-1, len(scale_perm_single_2_4)))[:, scale_perm_single_2_4]
+        scales = scales.reshape((-1, len(scale_perm_single_2_4)))[
+            :, scale_perm_single_2_4
+        ]
     scales = scales.reshape((-1, size_n)).contiguous()
 
     return scales
