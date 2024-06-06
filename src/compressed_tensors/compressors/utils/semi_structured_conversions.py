@@ -2,8 +2,8 @@
 # Modified by Roberto Lopez Castro (roberto.lopez.castro@udc.es).
 # Pulled from nm-vllm/vllm/model_executor/layers/quantization/utils/format_24.py
 #
-# noqa
-#
+# flake8: noqa
+# isort: skip_file
 
 # Copyright (c) 2021 - present / Neuralmagic, Inc. All Rights Reserved.
 #

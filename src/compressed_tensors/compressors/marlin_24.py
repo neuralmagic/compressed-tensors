@@ -40,6 +40,16 @@ class Marlin24Compressor(Compressor):
 
     @staticmethod
     def validate_quant_compatability(model_quant_args: Dict[str, QuantizationArgs]):
+        """
+        Checks if every quantized module in the model is compatible with Marlin24
+        compression. Quantization must be channel or group strategy with group_size
+        of 128. Only symmetric quantization is supported
+
+        :param model_quant_args: dictionary of mapping module names to their
+            quantization configuration
+        :return: True if all modules are compatible with Marlin24 compression, raises
+            a ValueError otherwise
+        """
         for name, quant_args in model_quant_args.items():
             strategy = quant_args.strategy
             group_size = quant_args.group_size
@@ -71,6 +81,16 @@ class Marlin24Compressor(Compressor):
     def validate_sparsity_structure(
         name: str, weight: Tensor, num_rows_to_sample: int = 20
     ) -> bool:
+        """
+        Checks if a tensor fits the 2:4 sparsity structure by sampling a specified
+        number of rows.
+
+        :param name: name of the tensor to check
+        :param weight: tensor to check for sparsity structure
+        :param num_rows_to_sample: number of rows to check the sparsity structure of
+        :return: True if all sampled rows match the 2:4 sparsity structure, raises
+            ValueError otherwise
+        """
         BLOCK_SIZE = 4
         MAX_NON_ZEROS = 2
 
@@ -103,7 +123,8 @@ class Marlin24Compressor(Compressor):
         **kwargs,
     ) -> Dict[str, Tensor]:
         """
-        Compresses a dense state dict
+        Compresses a quantized state_dict with 2:4 sparsity structure for inference
+        with the Marlin24 kernel
 
         :param model_state: state dict of uncompressed model
         :param model_quant_args: quantization args for each quantized weight, needed for
@@ -123,28 +144,35 @@ class Marlin24Compressor(Compressor):
                 prefix = name[: -(len(weight_suffix))]
                 scale = model_state.get(merge_names(prefix, "weight_scale"), None)
                 zp = model_state.get(merge_names(prefix, "weight_zero_point"), None)
-                if scale is not None:
-                    # weight is quantized, compress it
+                if scale is not None:  # weight is quantized, compress it
                     quant_args = model_quant_args[prefix]
                     value = quantize(
                         x=value, scale=scale, zero_point=zp, args=quant_args
                     )
-                    self.validate_sparsity_structure(prefix, value)
 
+                    # compress based on sparsity structure
+                    self.validate_sparsity_structure(prefix, value)
+                    value, meta = compress_weight_24(value)
+                    meta = meta.cpu()
+
+                    # Marlin24 kernel expects input dim first
                     value = value.t().contiguous().cpu()
                     scale = scale.t().contiguous().cpu()
                     og_weight_shape = value.shape
 
-                    value, meta = compress_weight_24(value)
-                    meta = meta.cpu()
-                    value += 8  # kernel expects unsigned, TODO don't hardcode
+                    # Marlin24 kernel expects unsigned values
+                    value += (1 << quant_args.num_bits) // 2
+
+                    # pack weight and scale
                     value = pack_weight_24(value, quant_args)
                     packed_scale = pack_scales_24(scale, quant_args, og_weight_shape)
                     meta = meta.resize_(meta.shape[1] // 2, meta.shape[0] * 2)
 
+                    # save compressed values
                     compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale
                     compressed_dict[merge_names(prefix, "weight_packed")] = value
                     compressed_dict[merge_names(prefix, "meta")] = meta
+
         return compressed_dict
 
     def decompress(
@@ -156,9 +184,9 @@ class Marlin24Compressor(Compressor):
 
 
 def compress_weight_24(weight: Tensor):
-    weight = weight.t().contiguous()
+    weight = weight.contiguous()
     w_comp, meta = sparse_semi_structured_from_dense_cutlass(weight)
-    w_comp = w_comp.t().contiguous()
+    w_comp = w_comp.contiguous()
     return w_comp, meta
 
 
