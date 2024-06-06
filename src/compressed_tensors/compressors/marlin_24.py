@@ -131,12 +131,17 @@ class Marlin24Compressor(Compressor):
                         x=value, scale=scale, zero_point=zp, args=quant_args
                     )
                     self.validate_sparsity_structure(prefix, value)
-                    value, meta = compress_weight_24(value)
+
+                    value = value.t().contiguous()
+                    scale = scale.t().contiguous()
+
+                    value, meta = compress_weight_24(value + 8)
+                    value -= 8
                     value = pack_weight_24(value, quant_args, original_shape)
                     packed_scale = pack_scales_24(scale, quant_args, original_shape)
-                    meta = meta.resize_(meta.shape[0] * 2, meta.shape[1] // 2)
-                    compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale
-                    compressed_dict[merge_names(prefix, "weight_packed")] = value
+                    meta = meta.resize_(meta.shape[1] // 2, meta.shape[0] * 2)
+                    compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale.t().contiguous()
+                    compressed_dict[merge_names(prefix, "weight_packed")] = value.t().contiguous()
                     compressed_dict[merge_names(prefix, "meta")] = meta
         return compressed_dict
 
@@ -149,55 +154,69 @@ class Marlin24Compressor(Compressor):
 
 
 def compress_weight_24(weight: Tensor):
-    weight = weight.contiguous()
+    weight = weight.t().contiguous()
     w_comp, meta = sparse_semi_structured_from_dense_cutlass(weight)
-    w_comp = w_comp.contiguous()
+    w_comp = w_comp.t().contiguous()
     return w_comp, meta
 
+
+def marlin_permute_weights(q_w, size_k, size_n, perm, tile):
+    assert q_w.shape == (size_k, size_n)
+    assert size_k % tile == 0, f"size_k = {size_k}, tile = {tile}"
+    assert size_n % tile == 0, f"size_k = {size_n}, tile = {tile}"
+
+    # Permute weights to 16x64 marlin tiles
+    q_w = q_w.reshape((size_k // tile, tile, size_n // tile, tile))
+    q_w = q_w.permute((0, 2, 1, 3))
+    q_w = q_w.reshape((size_k // tile, size_n * tile))
+
+    q_w = q_w.reshape((-1, perm.numel()))[:, perm].reshape(q_w.shape)
+
+    return q_w
 
 def pack_weight_24(
     weight: Tensor,
     quantization_args: QuantizationArgs,
     w_shape: torch.Size,
-    marlin_tile: int = 16,
+    tile: int = 16,
 ):
-    size_k = w_shape[1]
-    size_n = w_shape[0]
+    size_k = weight.shape[0]
+    size_n = weight.shape[1]
     num_bits = quantization_args.num_bits
-    size_k_comp = size_k // 2
     pack_factor = 32 // num_bits
 
     # Reshuffle to marlin_24 format
-    weight = weight.reshape(
-        (size_n // marlin_tile, marlin_tile, size_k_comp // marlin_tile, marlin_tile)
-    )
-    weight = weight.permute((0, 2, 1, 3))
-    weight = weight.reshape((size_n * marlin_tile, size_k_comp // marlin_tile))
+    perm, _, _ = get_permutations_2_4()
+    perm = perm[num_bits]
+    q_w = marlin_permute_weights(weight, size_k, size_n, perm, tile)
 
-    res = weight
-    perm_2_4, _, _ = get_permutations_2_4(num_bits)
-    res = res.reshape((perm_2_4.numel(), -1))[perm_2_4, :].reshape(res.shape)
+    orig_device = q_w.device
 
-    # Pack
-    q = np.zeros((res.shape[0] // pack_factor, res.shape[1]), dtype=np.uint32)
-    res = res.cpu().numpy().astype(np.uint32)
+    q_w = q_w.cpu().numpy().astype(np.uint32)
+
+    q_packed = np.zeros((q_w.shape[0], q_w.shape[1] // pack_factor),
+                           dtype=np.uint32)
     for i in range(pack_factor):
-        q |= res[i::pack_factor, :] << num_bits * i
+        q_packed |= q_w[:, i::pack_factor] << num_bits * i
 
-    q = torch.from_numpy(q.astype(np.int32))
-    return q
+    q_packed = torch.from_numpy(q_packed.astype(np.int32)).to(orig_device)
+
+    return q_packed
 
 
 def pack_scales_24(scales, quantization_args, w_shape):
-    size_n = w_shape[0]
+    size_k = w_shape[0]
+    size_n = w_shape[1]
     num_bits = quantization_args.num_bits
 
-    _, scale_perm_2_4, scale_perm_single_2_4 = get_permutations_2_4(num_bits)
+    _, scale_perm_2_4, scale_perm_single_2_4 = get_permutations_2_4()
+    scale_perm_2_4 = scale_perm_2_4[num_bits]
+    scale_perm_single_2_4 = scale_perm_single_2_4[num_bits]
 
-    if quantization_args.strategy is QuantizationStrategy.GROUP:
-        scales = scales.reshape((len(scale_perm_2_4), -1))[scale_perm_2_4, :]
+    if quantization_args.strategy is QuantizationStrategy.GROUP and quantization_args.group_size < size_k:
+        scales = scales.reshape((-1, len(scale_perm_2_4)))[:, scale_perm_2_4]
     else:  # channelwise
-        scales = scales.reshape((len(scale_perm_single_2_4), -1))[scale_perm_2_4, :]
-    scales = scales.reshape((size_n, -1)).contiguous()
+        scales = scales.reshape((-1, len(scale_perm_single_2_4)))[:, scale_perm_single_2_4]
+    scales = scales.reshape((-1, size_n)).contiguous()
 
     return scales
