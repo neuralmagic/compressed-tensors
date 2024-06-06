@@ -172,7 +172,9 @@ class Marlin24Compressor(Compressor):
                     compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale
                     compressed_dict[merge_names(prefix, "weight_packed")] = value
                     compressed_dict[merge_names(prefix, "meta")] = meta
-
+                else:
+                    # weight is not compressed
+                    compressed_dict[name] = value.cpu()
         return compressed_dict
 
     def decompress(
