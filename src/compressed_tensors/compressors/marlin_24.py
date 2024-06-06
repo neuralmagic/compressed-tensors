@@ -126,7 +126,6 @@ class Marlin24Compressor(Compressor):
                 if scale is not None:
                     # weight is quantized, compress it
                     quant_args = model_quant_args[prefix]
-                    original_shape = value.shape
                     value = quantize(
                         x=value, scale=scale, zero_point=zp, args=quant_args
                     )
@@ -134,15 +133,18 @@ class Marlin24Compressor(Compressor):
 
                     value = value.t().contiguous()
                     scale = scale.t().contiguous()
+                    original_shape = value.shape
+                    print(f"name {prefix} dense value: {value.shape} scale: {scale.shape}")
 
                     value, meta = compress_weight_24(value)
                     value += 8 # kernel expects unsigned
                     value = pack_weight_24(value, quant_args, original_shape)
                     packed_scale = pack_scales_24(scale, quant_args, original_shape)
                     meta = meta.resize_(meta.shape[1] // 2, meta.shape[0] * 2)
-                    compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale.t().contiguous()
-                    compressed_dict[merge_names(prefix, "weight_packed")] = value.t().contiguous()
-                    compressed_dict[merge_names(prefix, "meta")] = meta.t().contiguous()
+                    print(f"packed value: {value.shape} meta {meta.shape} scale {packed_scale.shape}")
+                    compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale
+                    compressed_dict[merge_names(prefix, "weight_packed")] = value
+                    compressed_dict[merge_names(prefix, "meta")] = meta
         return compressed_dict
 
     def decompress(
@@ -157,6 +159,8 @@ def compress_weight_24(weight: Tensor):
     weight = weight.t().contiguous()
     w_comp, meta = sparse_semi_structured_from_dense_cutlass(weight)
     w_comp = w_comp.t().contiguous()
+    w_comp = w_comp.to("cpu")
+    meta = meta.to("cpu")
     return w_comp, meta
 
 
