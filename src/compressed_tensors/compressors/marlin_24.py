@@ -150,8 +150,12 @@ class Marlin24Compressor(Compressor):
                 scale = model_state.get(merge_names(prefix, "weight_scale"), None)
                 zp = model_state.get(merge_names(prefix, "weight_zero_point"), None)
                 if scale is not None:  # weight is quantized, compress it
+
+                    # Marlin24 kernel requires float16 inputs
                     scale = scale.to(torch.float16)
                     value = value.to(torch.float16)
+
+                    # quantize weight, keeping it as a float16 for now
                     quant_args = model_quant_args[prefix]
                     value = quantize(
                         x=value, scale=scale, zero_point=zp, args=quant_args
@@ -167,10 +171,10 @@ class Marlin24Compressor(Compressor):
                     scale = scale.t().contiguous().cpu()
                     og_weight_shape = value.shape
 
-                    # Marlin24 kernel expects unsigned values
+                    # Marlin24 kernel expects unsigned values, shift zero-point
                     value += (1 << quant_args.num_bits) // 2
 
-                    # pack weight and scale
+                    # pack quantized weight and scale
                     value = pack_weight_24(value, quant_args)
                     packed_scale = pack_scales_24(scale, quant_args, og_weight_shape)
                     meta = meta.resize_(meta.shape[1] // 2, meta.shape[0] * 2)
@@ -182,7 +186,7 @@ class Marlin24Compressor(Compressor):
                     continue
 
             if not is_quantization_param(name):
-                # export unquantized parameters unmodified
+                # export unquantized parameters without modifying
                 compressed_dict[name] = value.to("cpu")
 
         return compressed_dict
