@@ -17,6 +17,7 @@ import logging
 import operator
 import os
 import re
+from copy import deepcopy
 from typing import Dict, Optional, Union
 
 import torch
@@ -39,6 +40,7 @@ from compressed_tensors.quantization.utils import (
     iter_named_leaf_modules,
 )
 from compressed_tensors.utils import get_safetensors_folder
+from compressed_tensors.utils.helpers import fix_fsdp_module_name
 from torch import Tensor
 from torch.nn import Module, Parameter
 from tqdm import tqdm
@@ -92,9 +94,8 @@ class ModelCompressor:
         if compression_config is None:
             return None
 
-        sparsity_config = compression_config.get(SPARSITY_CONFIG_NAME, None)
-        quantization_config = compression_config.get(QUANTIZATION_CONFIG_NAME, None)
-
+        sparsity_config = cls.parse_sparsity_config(compression_config)
+        quantization_config = cls.parse_quantization_config(compression_config)
         if sparsity_config is None and quantization_config is None:
             return None
 
@@ -143,6 +144,21 @@ class ModelCompressor:
         return cls(
             sparsity_config=sparsity_config, quantization_config=quantization_config
         )
+
+    @staticmethod
+    def parse_sparsity_config(compression_config: Dict) -> Union[Dict, None]:
+        if compression_config is None:
+            return None
+        return compression_config.get(SPARSITY_CONFIG_NAME, None)
+
+    @staticmethod
+    def parse_quantization_config(compression_config: Dict) -> Union[Dict, None]:
+        quantization_config = deepcopy(compression_config)
+        quantization_config.pop(SPARSITY_CONFIG_NAME, None)
+        if len(quantization_config) == 0:
+            quantization_config = None
+
+        return quantization_config
 
     def __init__(
         self,
@@ -241,9 +257,7 @@ class ModelCompressor:
         config_data[COMPRESSION_CONFIG_NAME] = {}
         if self.quantization_config is not None:
             quant_config_data = self.quantization_config.model_dump()
-            config_data[COMPRESSION_CONFIG_NAME][
-                QUANTIZATION_CONFIG_NAME
-            ] = quant_config_data
+            config_data[COMPRESSION_CONFIG_NAME] = quant_config_data
         if self.sparsity_config is not None:
             sparsity_config_data = self.sparsity_config.model_dump()
             config_data[COMPRESSION_CONFIG_NAME][
@@ -268,6 +282,7 @@ def _get_weight_arg_mappings(model: Module) -> Dict:
     for name, submodule in iter_named_leaf_modules(model):
         if is_module_quantized(submodule):
             if submodule.quantization_scheme.weights is not None:
+                name = fix_fsdp_module_name(name)
                 quantized_modules_to_args[name] = submodule.quantization_scheme.weights
 
     return quantized_modules_to_args

@@ -15,7 +15,7 @@
 from copy import deepcopy
 from typing import List, Optional
 
-from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_args import QuantizationArgs, QuantizationStrategy, QuantizationType
 from pydantic import BaseModel
 
 
@@ -108,12 +108,15 @@ def is_preset_scheme(name: str) -> bool:
 
 
 W8A8 = dict(
-    weights=QuantizationArgs(), input_activations=QuantizationArgs(symmetric=False)
+    weights=QuantizationArgs(), input_activations=QuantizationArgs()
 )
 
-W4A16 = dict(weights=QuantizationArgs(num_bits=4, symmetric=False))
+W4A16 = dict(weights=QuantizationArgs(num_bits=4, strategy=QuantizationStrategy.CHANNEL))
+
+FP8 = dict(weights=QuantizationArgs(type=QuantizationType.FLOAT), input_activations=QuantizationArgs(type=QuantizationType.FLOAT))
 
 PRESET_SCHEMES = {
     "W8A8": W8A8,
     "W4A16": W4A16,
+    "FP8": FP8
 }
