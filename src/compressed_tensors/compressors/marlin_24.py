@@ -26,7 +26,7 @@ from compressed_tensors.compressors.utils import (
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import QuantizationArgs, QuantizationStrategy
 from compressed_tensors.quantization.lifecycle.forward import quantize
-from compressed_tensors.utils import merge_names
+from compressed_tensors.utils import is_quantization_param, merge_names
 from torch import Tensor
 from tqdm import tqdm
 
@@ -36,7 +36,12 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 @Compressor.register(name=CompressionFormat.marlin_24.value)
 class Marlin24Compressor(Compressor):
-    """ """
+    """
+    Compresses a quantized model with 2:4 sparsity structure for inference with the
+    Marlin24 kernel. Decompression is not implemented for this compressor.
+    """
+
+    COMPRESSION_PARAM_NAMES = ["weight_packed", "scale_packed", "meta"]
 
     @staticmethod
     def validate_quant_compatability(model_quant_args: Dict[str, QuantizationArgs]):
@@ -145,6 +150,8 @@ class Marlin24Compressor(Compressor):
                 scale = model_state.get(merge_names(prefix, "weight_scale"), None)
                 zp = model_state.get(merge_names(prefix, "weight_zero_point"), None)
                 if scale is not None:  # weight is quantized, compress it
+                    scale = scale.to(torch.float16)
+                    value = value.to(torch.float16)
                     quant_args = model_quant_args[prefix]
                     value = quantize(
                         x=value, scale=scale, zero_point=zp, args=quant_args
@@ -172,9 +179,12 @@ class Marlin24Compressor(Compressor):
                     compressed_dict[merge_names(prefix, "scale_packed")] = packed_scale
                     compressed_dict[merge_names(prefix, "weight_packed")] = value
                     compressed_dict[merge_names(prefix, "meta")] = meta
-                else:
-                    # weight is not compressed
-                    compressed_dict[name] = value.cpu()
+                    continue
+
+            if not is_quantization_param(name):
+                # export unquantized parameters unmodified
+                compressed_dict[name] = value.to("cpu")
+
         return compressed_dict
 
     def decompress(
