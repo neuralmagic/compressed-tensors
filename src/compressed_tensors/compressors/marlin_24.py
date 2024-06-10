@@ -133,7 +133,7 @@ class Marlin24Compressor(Compressor):
 
         :param model_state: state dict of uncompressed model
         :param model_quant_args: quantization args for each quantized weight, needed for
-        quantize function to calculate bit depth
+           quantize function to calculate bit depth
         :return: compressed state dict
         """
         self.validate_quant_compatability(model_quant_args)
