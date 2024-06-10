@@ -103,8 +103,8 @@ def _initialize_scale_zero_point_observer(
     # infer expected scale/zero point shape
     expected_shape = 1  # per tensor
     if (
-        hasattr(module, "quantization_status")
-        and getattr(module, "quantization_status") == QuantizationStatus.FROZEN
+        not hasattr(module, "quantization_status")
+        or getattr(module, "quantization_status") == QuantizationStatus.FROZEN
     ):
         expected_shape = 0
 
