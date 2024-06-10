@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import logging
-import random
 from typing import Dict, Generator, Tuple
 
 import numpy as np
@@ -22,6 +21,7 @@ from compressed_tensors.compressors import Compressor
 from compressed_tensors.compressors.utils import (
     get_permutations_24,
     sparse_semi_structured_from_dense_cutlass,
+    tensor_follows_mask_structure,
 )
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import QuantizationArgs, QuantizationStrategy
@@ -85,39 +85,20 @@ class Marlin24Compressor(Compressor):
         return True
 
     @staticmethod
-    def validate_sparsity_structure(
-        name: str, weight: Tensor, num_rows_to_sample: int = 20
-    ) -> bool:
+    def validate_sparsity_structure(name: str, weight: Tensor) -> bool:
         """
-        Checks if a tensor fits the 2:4 sparsity structure by sampling a specified
-        number of rows.
+        Checks if a tensor fits the required 2:4 sparsity structure
 
         :param name: name of the tensor to check
         :param weight: tensor to check for sparsity structure
-        :param num_rows_to_sample: number of rows to check the sparsity structure of
-        :return: True if all sampled rows match the 2:4 sparsity structure, raises
+        :return: True if all rows match the 2:4 sparsity structure, raises
             ValueError otherwise
         """
-        BLOCK_SIZE = 4
-        MAX_NON_ZEROS = 2
 
-        weight = weight.contiguous()
-
-        num_rows, num_cols = weight.shape
-        sampled_row_idxs = random.choices(range(num_rows), k=num_rows_to_sample)
-
-        non_24_segments = 0
-        for i in sampled_row_idxs:
-            for j in range(0, num_cols - BLOCK_SIZE, BLOCK_SIZE):
-                block = weight[i, j : j + BLOCK_SIZE]
-                num_nonzero = torch.count_nonzero(block)
-                if num_nonzero > MAX_NON_ZEROS:
-                    non_24_segments += 1
-
-        if non_24_segments > 0:
+        if not tensor_follows_mask_structure(weight):
             raise ValueError(
                 "Marlin24 Compressor is only compatible with weights that have "
-                f"a 2:4 sparsity structure. Found {non_24_segments} segments in {name} "
+                f"a 2:4 sparsity structure. Found segments in {name} "
                 "that do not match the expected structure."
             )
 
