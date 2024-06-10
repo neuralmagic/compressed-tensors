@@ -52,7 +52,7 @@ def _get_combined_config(s_config, q_config):
     combined = {}
 
     if q_config is not None:
-        combined = deepcopy(q_config)
+        combined["quantization_config"] = deepcopy(q_config)
 
     if s_config is not None:
         combined["sparsity_config"] = s_config

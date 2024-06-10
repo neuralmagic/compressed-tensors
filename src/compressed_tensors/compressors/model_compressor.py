@@ -159,6 +159,8 @@ class ModelCompressor:
     def parse_sparsity_config(compression_config: Dict) -> Union[Dict, None]:
         if compression_config is None:
             return None
+        if SPARSITY_CONFIG_NAME not in compression_config:
+            return None
         if hasattr(compression_config, SPARSITY_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, SPARSITY_CONFIG_NAME)
@@ -166,6 +168,11 @@ class ModelCompressor:
 
     @staticmethod
     def parse_quantization_config(compression_config: Dict) -> Union[Dict, None]:
+        if compression_config is None:
+            return None
+        if QUANTIZATION_CONFIG_NAME not in compression_config:
+            return None
+
         if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
