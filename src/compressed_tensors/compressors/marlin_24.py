@@ -44,7 +44,7 @@ class Marlin24Compressor(Compressor):
     COMPRESSION_PARAM_NAMES = ["weight_packed", "scale_packed", "meta"]
 
     @staticmethod
-    def validate_quant_compatability(model_quant_args: Dict[str, QuantizationArgs]):
+    def validate_quant_compatability(model_quant_args: Dict[str, QuantizationArgs]) -> bool:
         """
         Checks if every quantized module in the model is compatible with Marlin24
         compression. Quantization must be channel or group strategy with group_size
