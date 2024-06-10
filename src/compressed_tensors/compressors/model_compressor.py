@@ -174,7 +174,7 @@ class ModelCompressor:
         if len(quantization_config) == 0:
             quantization_config = None
 
-        return quantization_config
+        return quantization_config.get(QUANTIZATION_CONFIG_NAME, None)
 
     def __init__(
         self,
