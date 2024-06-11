@@ -101,15 +101,17 @@ def _initialize_scale_zero_point_observer(
     device = next(module.parameters()).device
 
     # infer expected scale/zero point shape
-    expected_shape = 1  # per tensor
+    expected_shape = ()  # per tensor
     if (
         not hasattr(module, "quantization_status")
         or getattr(module, "quantization_status") == QuantizationStatus.FROZEN
     ):
-        expected_shape = 0
+        expected_shape = ()
 
     if base_name == "weight" and weight_shape is not None:
-        if quantization_args.strategy == QuantizationStrategy.CHANNEL:
+        if quantization_args.strategy == QuantizationStrategy.TENSOR:
+            expected_shape = ()
+        elif quantization_args.strategy == QuantizationStrategy.CHANNEL:
             # (output_channels, 1)
             expected_shape = (weight_shape[0], 1)
         elif quantization_args.strategy == QuantizationStrategy.GROUP:
