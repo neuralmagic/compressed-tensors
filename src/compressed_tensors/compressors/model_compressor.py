@@ -100,6 +100,11 @@ class ModelCompressor:
         if compression_config is None:
             return None
 
+        from transformers.utils.quantization_config import CompressedTensorsConfig
+
+        if isinstance(compression_config, CompressedTensorsConfig):
+            compression_config = compression_config.to_dict()
+
         sparsity_config = cls.parse_sparsity_config(compression_config)
         quantization_config = cls.parse_quantization_config(compression_config)
         if sparsity_config is None and quantization_config is None:
