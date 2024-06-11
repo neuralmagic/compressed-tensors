@@ -29,6 +29,7 @@ class CompressionFormat(Enum):
     float_quantized = "float-quantized"
     naive_quantized = "naive-quantized"
     pack_quantized = "pack-quantized"
+    marlin_24 = "marlin-24"
 
 
 class SparsityCompressionConfig(RegistryMixin, BaseModel):
