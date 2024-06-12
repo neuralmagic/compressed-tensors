@@ -102,11 +102,6 @@ def _initialize_scale_zero_point_observer(
 
     # infer expected scale/zero point shape
     expected_shape = 1  # per tensor
-    if (
-        not hasattr(module, "quantization_status")
-        or getattr(module, "quantization_status") == QuantizationStatus.FROZEN
-    ):
-        expected_shape = 0
 
     if base_name == "weight" and weight_shape is not None:
         if quantization_args.strategy == QuantizationStrategy.CHANNEL:
