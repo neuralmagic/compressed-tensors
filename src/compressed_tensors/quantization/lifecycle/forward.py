@@ -94,7 +94,7 @@ def dequantize(
     :return: dequantized float tensor
     """
     if args is None:
-        if scale.ndim == 0:
+        if scale.ndim == 1:
             args = QuantizationArgs(strategy=QuantizationStrategy.TENSOR)
         elif scale.ndim == 2:
             if scale.shape[1] == 1:
@@ -107,7 +107,7 @@ def dequantize(
         else:
             raise ValueError(
                 f"Could not infer a quantization strategy from scale with {scale.ndim} "
-                "dimmensions. Expected 0-2 dimmensions."
+                "dimmensions. Expected 1 or 2 dimmensions."
             )
     return _process_quantization(
         x=x_q,
