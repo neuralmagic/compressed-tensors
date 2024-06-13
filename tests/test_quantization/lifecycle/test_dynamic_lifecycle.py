@@ -83,13 +83,14 @@ def _test_layer_dynamic_quantization_status(
 
 def get_tinyllama_model():
     return AutoModelForCausalLM.from_pretrained(
-        "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
+        "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T",
+        torch_dtype="auto",
     )
 
 
 def get_sample_dynamic_tinyllama_quant_config():
     config_dict = {
-        "quant_method": "sparseml",
+        "quant_method": "compressed-tensors",
         "format": "fakequant",
         "quantization_status": "calibration",
         "global_compression_ratio": None,

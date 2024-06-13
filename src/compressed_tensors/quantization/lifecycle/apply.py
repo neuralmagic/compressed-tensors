@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import re
 from collections import OrderedDict
 from typing import Dict, Iterable, Optional
 
+import torch
 from compressed_tensors.quantization.lifecycle.calibration import (
     set_module_for_calibration,
 )
@@ -34,6 +36,7 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     iter_named_leaf_modules,
 )
+from compressed_tensors.utils.helpers import fix_fsdp_module_name
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
 
@@ -47,6 +50,9 @@ __all__ = [
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
 from compressed_tensors.utils.safetensors_load import get_quantization_state_dict
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def load_pretrained_quantization(model: Module, model_name_or_path: str):
@@ -104,15 +110,24 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
+    # list of submodules to ignore
+    ignored_submodules = []
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in iter_named_leaf_modules(model):
+        # potentially fix module name to remove FSDP wrapper prefix
+        name = fix_fsdp_module_name(name)
         if find_first_name_or_class_match(name, submodule, config.ignore):
+            ignored_submodules.append(name)
             continue  # layer matches ignore list, continue
         target = find_first_name_or_class_match(name, submodule, target_to_scheme)
         if target is not None:
             # target matched - add layer and scheme to target list
             submodule.quantization_scheme = target_to_scheme[target]
-
+    if set(config.ignore) - set(ignored_submodules):
+        _LOGGER.warning(
+            "Some layers that were to be ignored were "
+            f"not found in the model: {set(config.ignore) - set(ignored_submodules)}"
+        )
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
 
@@ -156,6 +171,7 @@ def _find_first_match(
     # returns first element of target that matches value either
     # exactly or as a regex after 're:'. if check_contains is set to True,
     # additionally checks if the target string is contained with value.
+
     for target in targets:
         if target.startswith("re:"):
             pattern = target[3:]
@@ -193,7 +209,13 @@ def _load_quant_args_from_state_dict(
     zp_name = f"{base_name}_zero_point"
     device = next(module.parameters()).device
 
-    scale = getattr(module, scale_name)
-    zp = getattr(module, zp_name)
-    scale.data = state_dict[f"{module_name}.{scale_name}"].to(device)
-    zp.data = state_dict[f"{module_name}.{zp_name}"].to(device)
+    scale = getattr(module, scale_name, None)
+    zp = getattr(module, zp_name, None)
+    if scale is not None:
+        scale.data = state_dict[f"{module_name}.{scale_name}"].to(device)
+    if zp is not None:
+        zp_from_state = state_dict.get(f"{module_name}.{zp_name}", None)
+        if zp_from_state is not None:  # load the non-zero zero points
+            zp.data = state_dict[f"{module_name}.{zp_name}"].to(device)
+        else:  # fill with zeros matching scale shape
+            zp.data = torch.zeros_like(scale, dtype=torch.int8).to(device)

@@ -58,6 +58,14 @@ def quantize(
     :param dtype: optional dtype to cast the quantized output to
     :return: fake quantized tensor
     """
+    # ensure all tensors are on the same device
+    # assumes that the target device is the input
+    # tensor's device
+    if x.device != scale.device:
+        scale = scale.to(x.device)
+    if x.device != zero_point.device:
+        zero_point = zero_point.to(x.device)
+
     return _process_quantization(
         x=x,
         scale=scale,
@@ -90,11 +98,17 @@ def dequantize(
         if scale.ndim == 0:
             args = QuantizationArgs(strategy=QuantizationStrategy.TENSOR)
         elif scale.ndim == 2:
-            args = QuantizationArgs(strategy=QuantizationStrategy.CHANNEL)
-        elif scale.ndim == 3:
-            group_size = int(x_q.shape[1] / scale.shape[1])
-            args = QuantizationArgs(
-                strategy=QuantizationStrategy.GROUP, group_size=group_size
+            if scale.shape[1] == 1:
+                args = QuantizationArgs(strategy=QuantizationStrategy.CHANNEL)
+            else:
+                group_size = int(x_q.shape[1] / scale.shape[1])
+                args = QuantizationArgs(
+                    strategy=QuantizationStrategy.GROUP, group_size=group_size
+                )
+        else:
+            raise ValueError(
+                f"Could not infer a quantization strategy from scale with {scale.ndim} "
+                "dimmensions. Expected 0-2 dimmensions."
             )
     return _process_quantization(
         x=x_q,
@@ -151,10 +165,10 @@ def _process_quantization(
     q_min = torch.tensor(-bit_range / 2, device=x.device)
     group_size = args.group_size
 
-    # group
     if args.strategy == QuantizationStrategy.GROUP:
 
-        if do_dequantize:  # if dequantizing the output should be a fp type
+        if do_dequantize and not do_quantize:
+            # if dequantizing a quantized type infer the output type from the scale
             output = torch.zeros_like(x, dtype=scale.dtype)
         else:
             output_dtype = dtype if dtype is not None else x.dtype
@@ -196,29 +210,7 @@ def _process_quantization(
                 )
                 output[:, idx : (idx + group_size)] = _dequantize(input, sc, zp)
 
-    # channel-wise
-    elif args.strategy == QuantizationStrategy.CHANNEL:  # group_size == -1
-        if do_quantize:
-            output = _quantize(x, scale, zero_point, q_min, q_max, dtype=dtype)
-        if do_dequantize:
-            output = _dequantize(output if do_quantize else x, scale, zero_point)
-
-    # per-token
-    elif args.strategy == QuantizationStrategy.TOKEN:
-        # before: scale shape = [num_tokens]
-        # after: scale shape = [num_tokens, 1]
-        # x.shape = 1, num_tokens, 1]
-        # scale gets broadcasted as expected withput having [1, num_tokens, 1] shape
-
-        scale = scale.unsqueeze(1)
-        zero_point = zero_point.unsqueeze(1)
-
-        if do_quantize:
-            output = _quantize(x, scale, zero_point, q_min, q_max, dtype=dtype)
-        if do_dequantize:
-            output = _dequantize(output if do_quantize else x, scale, zero_point)
-
-    else:
+    else:  # covers channel, token and tensor strategies
         if do_quantize:
             output = _quantize(x, scale, zero_point, q_min, q_max, dtype=dtype)
         if do_dequantize:

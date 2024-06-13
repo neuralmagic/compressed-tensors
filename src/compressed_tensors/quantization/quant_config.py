@@ -13,11 +13,13 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
-from compressed_tensors.base import QUANTIZATION_CONFIG_NAME
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.quantization.quant_scheme import (
+    QuantizationScheme,
+    preset_name_to_scheme,
+)
 from compressed_tensors.quantization.utils import (
     calculate_compression_ratio,
     is_module_quantized,
@@ -26,13 +28,14 @@ from compressed_tensors.quantization.utils import (
 )
 from pydantic import BaseModel, Field
 from torch.nn import Module
-from transformers import AutoConfig
 
 
 __all__ = [
     "QuantizationStatus",
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
+    "DEFAULT_QUANTIZATION_METHOD",
+    "DEFAULT_QUANTIZATION_FORMAT",
 ]
 
 
@@ -98,6 +101,9 @@ LIFECYCLE_ORDER = [
     QuantizationStatus.COMPRESSED,
 ]
 
+DEFAULT_QUANTIZATION_METHOD = "compressed-tensors"
+DEFAULT_QUANTIZATION_FORMAT = "fakequant"
+
 
 class QuantizationConfig(BaseModel):
     """
@@ -105,7 +111,8 @@ class QuantizationConfig(BaseModel):
     mapped to a QuantizationScheme in config_groups.
 
     :param config_groups: dict of QuantizationSchemes specifying the quantization
-    settings for each quantized layer
+    settings for each quantized layer. A group could also be a reference to
+    a predefined scheme name, mapped to a list of its target layers/classes
     :param quant_method: a constant used to differentiate sparseML quantization from
     other quantization configs
     :param format: specifies how the quantized model is stored on disk
@@ -117,27 +124,25 @@ class QuantizationConfig(BaseModel):
     are not quantized even if they match up with a target in config_groups
     """
 
-    config_groups: Dict[str, QuantizationScheme]
-    quant_method: str = "sparseml"
-    format: str = "fakequant"
+    config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
+    quant_method: str = DEFAULT_QUANTIZATION_METHOD
+    format: str = DEFAULT_QUANTIZATION_FORMAT
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
 
-    @staticmethod
-    def from_model_config(model_name_or_path) -> "QuantizationConfig":
+    def model_post_init(self, __context):
         """
-        Given a path to a model config, extract a quantization config if it exists
-
-        :param pretrained_model_name_or_path: path to model config on disk or HF hub
-        :return: instantiated QuantizationConfig if config contains a quant config
+        updates any quantization schemes defined as presets to be fully loaded
+        schemes
         """
-        config = AutoConfig.from_pretrained(model_name_or_path)
-        quantization_config = getattr(config, QUANTIZATION_CONFIG_NAME, None)
-        if quantization_config is None:
-            return None
-
-        return QuantizationConfig.parse_obj(quantization_config)
+        for group_name, targets_or_scheme in self.config_groups.items():
+            if isinstance(targets_or_scheme, QuantizationScheme):
+                continue  # scheme already defined
+            self.config_groups[group_name] = preset_name_to_scheme(
+                name=group_name,
+                targets=targets_or_scheme,
+            )
 
     @staticmethod
     def from_pretrained(

@@ -16,6 +16,7 @@ import json
 import logging
 import operator
 import os
+from copy import deepcopy
 from typing import Dict, Optional, Union
 
 from compressed_tensors.base import (
@@ -36,6 +37,7 @@ from compressed_tensors.quantization.utils import (
     iter_named_leaf_modules,
 )
 from compressed_tensors.utils import get_safetensors_folder
+from compressed_tensors.utils.helpers import fix_fsdp_module_name
 from torch import Tensor
 from torch.nn import Module, Parameter
 from tqdm import tqdm
@@ -43,7 +45,7 @@ from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
 
 
-__all__ = ["ModelCompressor"]
+__all__ = ["ModelCompressor", "map_modules_to_quant_args"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -89,9 +91,8 @@ class ModelCompressor:
         if compression_config is None:
             return None
 
-        sparsity_config = compression_config.get(SPARSITY_CONFIG_NAME, None)
-        quantization_config = compression_config.get(QUANTIZATION_CONFIG_NAME, None)
-
+        sparsity_config = cls.parse_sparsity_config(compression_config)
+        quantization_config = cls.parse_quantization_config(compression_config)
         if sparsity_config is None and quantization_config is None:
             return None
 
@@ -141,6 +142,21 @@ class ModelCompressor:
             sparsity_config=sparsity_config, quantization_config=quantization_config
         )
 
+    @staticmethod
+    def parse_sparsity_config(compression_config: Dict) -> Union[Dict, None]:
+        if compression_config is None:
+            return None
+        return compression_config.get(SPARSITY_CONFIG_NAME, None)
+
+    @staticmethod
+    def parse_quantization_config(compression_config: Dict) -> Union[Dict, None]:
+        quantization_config = deepcopy(compression_config)
+        quantization_config.pop(SPARSITY_CONFIG_NAME, None)
+        if len(quantization_config) == 0:
+            quantization_config = None
+
+        return quantization_config
+
     def __init__(
         self,
         sparsity_config: Optional[SparsityCompressionConfig] = None,
@@ -174,7 +190,7 @@ class ModelCompressor:
             state_dict = model.state_dict()
 
         compressed_state_dict = state_dict
-        quantized_modules_to_args = _get_weight_arg_mappings(model)
+        quantized_modules_to_args = map_modules_to_quant_args(model)
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(
                 state_dict, model_quant_args=quantized_modules_to_args
@@ -233,9 +249,7 @@ class ModelCompressor:
         config_data[COMPRESSION_CONFIG_NAME] = {}
         if self.quantization_config is not None:
             quant_config_data = self.quantization_config.model_dump()
-            config_data[COMPRESSION_CONFIG_NAME][
-                QUANTIZATION_CONFIG_NAME
-            ] = quant_config_data
+            config_data[COMPRESSION_CONFIG_NAME] = quant_config_data
         if self.sparsity_config is not None:
             sparsity_config_data = self.sparsity_config.model_dump()
             config_data[COMPRESSION_CONFIG_NAME][
@@ -249,16 +263,18 @@ class ModelCompressor:
         for name, data in tqdm(dense_weight_generator, desc="Decompressing model"):
             # loading the decompressed weights into the model
             model_device = operator.attrgetter(name)(model).device
-            data_new = Parameter(data.to(model_device))
             data_old = operator.attrgetter(name)(model)
+            data_dtype = data_old.dtype
+            data_new = Parameter(data.to(model_device).to(data_dtype))
             data_old.data = data_new.data
 
 
-def _get_weight_arg_mappings(model: Module) -> Dict:
+def map_modules_to_quant_args(model: Module) -> Dict:
     quantized_modules_to_args = {}
     for name, submodule in iter_named_leaf_modules(model):
         if is_module_quantized(submodule):
             if submodule.quantization_scheme.weights is not None:
+                name = fix_fsdp_module_name(name)
                 quantized_modules_to_args[name] = submodule.quantization_scheme.weights
 
     return quantized_modules_to_args

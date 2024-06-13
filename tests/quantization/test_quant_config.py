@@ -12,13 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# flake8: noqa
+import pytest
+from compressed_tensors.quantization import QuantizationConfig, QuantizationScheme
 
-from .base import Compressor
-from .dense import DenseCompressor
-from .helpers import load_compressed, save_compressed, save_compressed_model
-from .int_quantized import IntQuantizationCompressor
-from .marlin_24 import Marlin24Compressor
-from .model_compressor import ModelCompressor, map_modules_to_quant_args
-from .pack_quantized import PackedQuantizationCompressor
-from .sparse_bitmask import BitmaskCompressor, BitmaskTensor
+
+@pytest.mark.parametrize(
+    "scheme_name",
+    [
+        "W8A8",
+        "W4A16",
+    ],
+)
+def test_load_scheme_from_preset(scheme_name: str):
+    targets = ["Linear"]
+    config = QuantizationConfig(config_groups={scheme_name: targets})
+
+    assert scheme_name in config.config_groups
+    assert isinstance(config.config_groups[scheme_name], QuantizationScheme)
+    assert config.config_groups[scheme_name].targets == targets

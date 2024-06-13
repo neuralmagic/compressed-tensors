@@ -14,7 +14,7 @@
 
 import logging
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Any, Iterable, Optional, Tuple, Union
 
 import torch
 from compressed_tensors.quantization.quant_args import (
@@ -71,9 +71,16 @@ class Observer(Module, RegistryMixin):
         self.record_observed_tokens(observed)
         return self.get_qparams(observed=observed)
 
-    def calculate_qparams(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
+    def calculate_qparams(
+        self,
+        observed: Tensor,
+        reduce_dims: Optional[Tuple[int]] = None,
+    ) -> Tuple[FloatTensor, IntTensor]:
         """
         :param observed: observed tensor to calculate quantization parameters for
+        :param reduce_dims: optional tuple of dimensions to reduce along,
+            returned scale and zero point will be shaped (1,) along the
+            reduced dimensions
         :return: tuple of scale and zero point derived from the observed tensor
         """
         raise NotImplementedError(f"{self.__class__} must implement calculate_qparams")
@@ -91,6 +98,7 @@ class Observer(Module, RegistryMixin):
         Convenience function to wrap overwritten calculate_qparams
         adds support to make observed tensor optional and support for tracking latest
         calculated scale and zero point
+
         :param observed: optional observed tensor to calculate quantization parameters
             from
         :return: tuple of scale and zero point based on last observed value
@@ -106,27 +114,29 @@ class Observer(Module, RegistryMixin):
             elif self.quantization_args.strategy == QuantizationStrategy.GROUP:
                 columns = observed.shape[1]
                 scales, zero_points = [], []
-                for i in range(0, columns, self.quantization_args.group_size):
+                group_idxs = range(0, columns, self.quantization_args.group_size)
+                for group_id, group_idx in enumerate(group_idxs):
                     scale, zero_point = self.get_qparams_along_dim(
-                        observed[:, i : (i + group_size)],
+                        observed[:, group_idx : (group_idx + group_size)],
                         0,
+                        tensor_id=group_id,
                     )
                     scales.append(scale)
                     zero_points.append(zero_point)
-                self._scale = torch.stack(scales, dim=1, out=self._scale)
-                self._zero_point = torch.stack(zero_points, dim=1, out=self._zero_point)
+
+                self._scale = torch.cat(scales, dim=1, out=self._scale)
+                self._zero_point = torch.cat(zero_points, dim=1, out=self._zero_point)
 
             elif self.quantization_args.strategy == QuantizationStrategy.CHANNEL:
                 # assume observed is transposed, because its the output, hence use dim 0
                 self._scale, self._zero_point = self.get_qparams_along_dim(observed, 0)
 
             elif self.quantization_args.strategy == QuantizationStrategy.TOKEN:
-
                 # use dim 1, assume the obsersed.shape = [batch, token, hidden]
                 # should be batch, token
-
                 self._scale, self._zero_point = self.get_qparams_along_dim(
-                    observed, dim=1
+                    observed,
+                    dim={0, 1},
                 )
 
         if observed is not None and observed.numel() > 0:
@@ -134,24 +144,18 @@ class Observer(Module, RegistryMixin):
             self._scale, self._zero_point = self.calculate_qparams(observed)
         return self._scale, self._zero_point
 
-    def get_qparams_along_dim(self, observed, dim: int):
-        # TODO: add documentation that specifies the shape must
-        #   be padded with 1-dims so the scales are along the right channel
-        # TODO: generalize the logic for reduce_dims
-        scales, zero_points = [], []
+    def get_qparams_along_dim(
+        self,
+        observed,
+        dim: Union[int, Iterable[int]],
+        tensor_id: Optional[Any] = None,
+    ):
+        dim = set(dim)
 
-        # TODO: make a more generic way to get the channel
-        num_dims = observed.shape[dim]
-
-        for dim_idx in range(num_dims):
-            scale, zero_point = self.calculate_qparams(
-                observed.select(dim=dim, index=dim_idx)
-            )
-
-            scales.append(scale)
-            zero_points.append(zero_point)
-        # breakpoint()
-        return torch.stack(scales), torch.stack(zero_points)
+        reduce_dims = tuple(idx for idx in range(observed.ndim) if idx not in dim)
+        return self.calculate_qparams(
+            observed, reduce_dims=reduce_dims, tensor_id=tensor_id
+        )
 
     def record_observed_tokens(self, batch_tensor: Tensor):
         """

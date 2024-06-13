@@ -22,7 +22,6 @@ from compressed_tensors.quantization import (
     QuantizationStrategy,
     apply_quantization_config,
 )
-from compressed_tensors.quantization.lifecycle.forward import fake_quantize
 from torch.nn import Linear
 
 
@@ -89,12 +88,10 @@ def test_group(input_symmetry, weight_symmetry, model_shape, group_size):
     assert list(model.weight_scale.shape) == [
         model_shape[1],
         int(model_shape[0] / group_size),
-        1,
     ]
     assert list(model.weight_zero_point.shape) == [
         model_shape[1],
         int(model_shape[0] / group_size),
-        1,
     ]
 
 
@@ -115,8 +112,8 @@ def test_token(input_symmetry, weight_symmetry, input_shape):
     inputs = torch.randn(input_shape)
     model(inputs)
 
-    assert list(model.input_scale.shape) == [1, input_shape[1]]
-    assert list(model.input_zero_point.shape) == [1, input_shape[1]]
+    assert list(model.input_scale.shape) == [1, 1]
+    assert list(model.input_zero_point.shape) == [1, 1]
 
     assert list(model.weight_scale.shape) == [256, 1]
     assert list(model.weight_zero_point.shape) == [256, 1]
