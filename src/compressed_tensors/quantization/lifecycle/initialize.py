@@ -20,7 +20,6 @@ import torch
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
-from compressed_tensors.quantization.observers.base import ObserverTypes
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -83,7 +82,7 @@ def _initialize_scale_zero_point_observer(
 ):
     # initialize observer module and attach as submodule
     observer = quantization_args.get_observer()
-    module.register_module(f"{base_name}_{ObserverTypes.BASE.value}", observer)
+    module.register_module(f"{base_name}_observer", observer)
 
     if quantization_args.dynamic:
         return  # no need to register a scale and zero point for a dynamic observer

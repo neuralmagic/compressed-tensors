@@ -17,7 +17,6 @@ from math import ceil
 from typing import Optional
 
 import torch
-from compressed_tensors.quantization.observers.base import ObserverTypes
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
@@ -284,7 +283,7 @@ def maybe_calibrate_or_quantize(
 
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
-        observer = getattr(module, f"{base_name}_{ObserverTypes.BASE.value}")
+        observer = getattr(module, f"{base_name}_observer")
         scale, zero_point = observer(value)
     else:
         # static quantization - get previous scale and zero point from layer
@@ -293,7 +292,7 @@ def maybe_calibrate_or_quantize(
 
         if module.quantization_status == QuantizationStatus.CALIBRATION:
             # calibration mode - get new quant params from observer
-            observer = getattr(module, f"{base_name}_{ObserverTypes.BASE.value}")
+            observer = getattr(module, f"{base_name}_observer")
 
             updated_scale, updated_zero_point = observer(value)
 

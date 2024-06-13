@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import logging
-from enum import Enum
 from typing import Any, Iterable, Optional, Tuple, Union
 
 import torch
@@ -29,18 +28,7 @@ from torch.nn import Module
 _LOGGER = logging.getLogger(__name__)
 
 
-__all__ = ["Observer", "ObserverTypes"]
-
-
-class ObserverTypes(str, Enum):
-    """
-    Enum storing the different types of observers that can be attached to a module
-    """
-
-    BASE = "observer"
-    INPUT = "input_observer"
-    WEIGHT = "weight_observer"
-    OUTPUT = "output_observer"
+__all__ = ["Observer"]
 
 
 class Observer(Module, RegistryMixin):
@@ -55,10 +43,7 @@ class Observer(Module, RegistryMixin):
         super().__init__()
         self._scale = None
         self._zero_point = None
-        # how many tokens were observed
-        # throughout the forward passes
-        # (cannot set a property due to inheritance from torch.nn.Module)
-        self._observed_tokens = None
+        self._num_observed_tokens = None
 
     @torch.no_grad()
     def forward(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
@@ -139,9 +124,6 @@ class Observer(Module, RegistryMixin):
                     dim={0, 1},
                 )
 
-        if observed is not None and observed.numel() > 0:
-            # re-calculate scale and zero point, update the stored value
-            self._scale, self._zero_point = self.calculate_qparams(observed)
         return self._scale, self._zero_point
 
     def get_qparams_along_dim(
@@ -161,13 +143,13 @@ class Observer(Module, RegistryMixin):
         """
         Counts the number of tokens observed during the
         forward passes. The count is aggregated in the
-        _observed_tokens attribute of the class.
+        _num_observed_tokens attribute of the class.
 
         Note: The batch_tensor is expected to have two dimensions
             (batch_size * sequence_length, num_features). This is the
             general shape expected by the forward pass of the expert
             layers in a MOE model. If the input tensor does not have
-            two dimensions, the _observed_tokens attribute will be set
+            two dimensions, the _num_observed_tokens attribute will be set
             to None.
         """
         if not isinstance(batch_tensor, Tensor):
@@ -181,11 +163,11 @@ class Observer(Module, RegistryMixin):
             )
             return
 
-        if self._observed_tokens is None:
+        if self._num_observed_tokens is None:
             # initialize the count
-            self._observed_tokens = 0
+            self._num_observed_tokens = 0
 
         # batch_tensor (batch_size * sequence_length, num_features)
         # observed_tokens (batch_size * sequence_length)
         observed_tokens, _ = batch_tensor.shape
-        self._observed_tokens += observed_tokens
+        self._num_observed_tokens += observed_tokens

@@ -73,7 +73,7 @@ def test_maybe_calibrate_or_quantize(create_quantization_scheme, quantization_st
             layer, dummy_tensor, "input", quantization_args
         )
         assert torch.allclose(out, dummy_tensor, atol=0.2)
-        assert layer.input_observer._observed_tokens == dummy_tensor.shape[0]
+        assert layer.input_observer._num_observed_tokens == dummy_tensor.shape[0]
     elif layer.quantization_status == QuantizationStatus.FROZEN:
         # scale and zero points are empty -- cannot quantize
         with pytest.raises(Exception):

@@ -16,7 +16,6 @@ from collections import Counter
 from typing import Tuple
 
 import torch
-from compressed_tensors.quantization.observers.base import ObserverTypes
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from torch import FloatTensor, IntTensor, Tensor
 
@@ -34,10 +33,11 @@ def get_observer_token_count(module: torch.nn.Module) -> Counter:
     """
     token_counts = Counter()
     for name, module in module.named_modules():
-        if ObserverTypes.INPUT.value in name:
+        print(name)
+        if name.endswith(".input_observer"):
             token_counts[
-                name.replace(f".{ObserverTypes.INPUT.value}", "")
-            ] = module._observed_tokens
+                name.replace(".input_observer", "")
+            ] = module._num_observed_tokens
     return token_counts
 
 
@@ -45,9 +45,9 @@ def calculate_qparams(
     min_vals: Tensor, max_vals: Tensor, quantization_args: QuantizationArgs
 ) -> Tuple[FloatTensor, IntTensor]:
     """
-    :param min_vals: tensor of min value(s) to caluclate scale(s) and zero point(s)
+    :param min_vals: tensor of min value(s) to calculate scale(s) and zero point(s)
         from
-    :param max_vals: tensor of max value(s) to caluclate scale(s) and zero point(s)
+    :param max_vals: tensor of max value(s) to calculate scale(s) and zero point(s)
         from
     :param quantization_args: settings to quantization
     :return: tuple of the calculated scale(s) and zero point(s)
