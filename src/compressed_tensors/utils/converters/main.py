@@ -19,19 +19,22 @@ from compressed_tensors.utils.converters.converters import BaseConverter, Conver
 __all__ = ["convert_autogptq_checkpoint"]
 
 
-def convert_autogptq_checkpoint(old_checkpoint_path, new_checkpoint_path) -> str:
+def convert_autogptq_checkpoint(
+    old_checkpoint_path, new_checkpoint_path, **kwargs
+) -> str:
     """
     Convert an autogptq checkpoint to a compressed tensor checkpoint
 
     :param old_checkpoint_path: the path to the autogptq checkpoint
     :param new_checkpoint_path: the path to save the converted compressed
         tensor checkpoint
+    :param kwargs: additional arguments to pass to the transformations
     :return: the path to the new checkpoint
     """
     converter: BaseConverter = BaseConverter.load_from_registry(
         ConverterNames.EXLLAMA_TO_COMPRESSED_TENSOR
     )
     checkpoint_path = converter.convert_from_safetensors(
-        old_checkpoint_path, new_checkpoint_path
+        old_checkpoint_path, new_checkpoint_path, **kwargs
     )
     return checkpoint_path

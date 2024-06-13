@@ -56,7 +56,9 @@ class BaseConverter(ABC, RegistryMixin):
         return new_state_dict
 
     @classmethod
-    def convert_from_safetensors(cls, filepath: str, save_dir: str = None) -> str:
+    def convert_from_safetensors(
+        cls, filepath: str, save_dir: str = None, **kwargs
+    ) -> str:
         """
         Convert a .safetensors file or directory of .safetensors files, applying
         transformations to the state_dict and saving the new state_dict to a new
@@ -86,7 +88,9 @@ class BaseConverter(ABC, RegistryMixin):
                     file, by_layers=True
                 )
                 for layer_state_dict in state_dict:
-                    new_state_dict.update(cls.translate(state_dict=layer_state_dict))
+                    new_state_dict.update(
+                        cls.translate(state_dict=layer_state_dict, **kwargs)
+                    )
 
                 if new_state_dict:
                     save_file(
