@@ -149,7 +149,6 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
     if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
         model.apply(set_module_for_calibration)
-
     if current_status < status >= QuantizationStatus.FROZEN > current_status:
         model.apply(freeze_module_quantization)
 
@@ -216,8 +215,12 @@ def _load_quant_args_from_state_dict(
     scale = getattr(module, scale_name, None)
     zp = getattr(module, zp_name, None)
     if scale is not None:
-        state_dict_scale = state_dict[f"{module_name}.{scale_name}"]
-        scale.data = state_dict_scale.to(device).to(scale.dtype)
+        state_dict_scale = state_dict.get(f"{module_name}.{scale_name}")
+        if state_dict_scale is not None:
+            scale.data = state_dict_scale.to(device)
+        else:
+            scale.data = scale.data.to(device)
+
     if zp is not None:
         zp_from_state = state_dict.get(f"{module_name}.{zp_name}", None)
         if zp_from_state is not None:  # load the non-zero zero points
