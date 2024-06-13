@@ -33,7 +33,6 @@ def get_observer_token_count(module: torch.nn.Module) -> Counter:
     """
     token_counts = Counter()
     for name, module in module.named_modules():
-        print(name)
         if name.endswith(".input_observer"):
             token_counts[
                 name.replace(".input_observer", "")
