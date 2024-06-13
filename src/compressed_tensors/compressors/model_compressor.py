@@ -100,10 +100,12 @@ class ModelCompressor:
         if compression_config is None:
             return None
 
-        from transformers.utils.quantization_config import CompressedTensorsConfig
-
-        if isinstance(compression_config, CompressedTensorsConfig):
-            compression_config = compression_config.to_dict()
+        try:
+            from transformers.utils.quantization_config import CompressedTensorsConfig
+            if isinstance(compression_config, CompressedTensorsConfig):
+                compression_config = compression_config.to_dict()
+        except ImportError:
+            pass
 
         sparsity_config = cls.parse_sparsity_config(compression_config)
         quantization_config = cls.parse_quantization_config(compression_config)
@@ -169,24 +171,25 @@ class ModelCompressor:
         if hasattr(compression_config, SPARSITY_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, SPARSITY_CONFIG_NAME)
+        
+        # SparseAutoModel format
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
 
     @staticmethod
     def parse_quantization_config(compression_config: Dict) -> Union[Dict, None]:
         if compression_config is None:
             return None
-        if QUANTIZATION_CONFIG_NAME not in compression_config:
-            return None
 
         if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
+        
+        # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
         if len(quantization_config) == 0:
             quantization_config = None
-
-        return quantization_config.get(QUANTIZATION_CONFIG_NAME, None)
+        return quantization_config
 
     def __init__(
         self,
