@@ -217,7 +217,7 @@ def _load_quant_args_from_state_dict(
     if scale is not None:
         state_dict_scale = state_dict.get(f"{module_name}.{scale_name}")
         if state_dict_scale is not None:
-            scale.data = state_dict_scale.to(device)
+            scale.data = state_dict_scale.to(device).to(scale.dtype)
         else:
             scale.data = scale.data.to(device)
 

@@ -102,6 +102,7 @@ class ModelCompressor:
 
         try:
             from transformers.utils.quantization_config import CompressedTensorsConfig
+
             if isinstance(compression_config, CompressedTensorsConfig):
                 compression_config = compression_config.to_dict()
         except ImportError:
@@ -171,7 +172,7 @@ class ModelCompressor:
         if hasattr(compression_config, SPARSITY_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, SPARSITY_CONFIG_NAME)
-        
+
         # SparseAutoModel format
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
 
@@ -183,7 +184,7 @@ class ModelCompressor:
         if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
-        
+
         # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
