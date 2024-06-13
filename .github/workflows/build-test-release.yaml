@@ -1,6 +1,9 @@
 name: Build and test release wheel
 
 on:
+  push:
+    branches:
+      - rel
   workflow_dispatch:
     inputs:
       gitref:
