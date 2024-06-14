@@ -15,7 +15,7 @@
 import os
 from setuptools import setup, find_packages
 from typing import List, Dict, Tuple
-from compressed_tensors.artifacts import get_release_and_version
+from utils.artifacts import get_release_and_version
 
 # default variables to be overwritten by the version.py file
 is_release = None
@@ -42,7 +42,6 @@ if is_release:
 else:
     _PACKAGE_NAME = "compressed-tensors-nightly"
     
-
 
 def _setup_long_description() -> Tuple[str, str]:
     return open("README.md", "r", encoding="utf-8").read(), "text/markdown"
