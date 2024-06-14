@@ -134,7 +134,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return value
 
     def pytorch_dtype(self) -> torch.dtype:
-        if self.type is QuantizationType.FLOAT:
+        if self.type is QuantizationType.FLOAT.value:
             return FP8_DTYPE
         else:  # QuantizationType.INT
             if self.num_bits <= 8:
