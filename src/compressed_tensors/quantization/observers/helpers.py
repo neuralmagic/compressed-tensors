@@ -78,7 +78,7 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         bit_range = 2**quantization_args.num_bits
         q_max = torch.tensor(bit_range / 2 - 1, device=device)
         q_min = torch.tensor(-bit_range / 2, device=device)
-    else:  # QuantizationType.FLOAT
+    elif quantization_args.type == QuantizationType.FLOAT:
         if quantization_args.num_bits != 8:
             raise ValueError(
                 "Floating point quantization is only supported for 8 bits,"
@@ -87,5 +87,7 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         fp_range_info = torch.finfo(FP8_DTYPE)
         q_max = torch.tensor(fp_range_info.max, device=device)
         q_min = torch.tensor(fp_range_info.min, device=device)
+    else:
+        raise ValueError(f"Invalid quantization type {quantization_args.type}")
 
     return q_min, q_max

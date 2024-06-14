@@ -134,15 +134,17 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return value
 
     def pytorch_dtype(self) -> torch.dtype:
-        if self.type is QuantizationType.FLOAT.value:
+        if self.type == QuantizationType.FLOAT:
             return FP8_DTYPE
-        else:  # QuantizationType.INT
+        elif self.type == QuantizationType.INT:
             if self.num_bits <= 8:
                 return torch.int8
             elif self.num_bits <= 16:
                 return torch.int16
             else:
                 return torch.int32
+        else:
+            raise ValueError(f"Invalid quantization type {self.type}")
 
 
 def round_to_quantized_type(
@@ -157,9 +159,11 @@ def round_to_quantized_type(
     :return: rounded tensor
     """
     original_dtype = tensor.dtype
-    if args.type is QuantizationType.FLOAT:
+    if args.type == QuantizationType.FLOAT:
         rounded = tensor.to(FP8_DTYPE)
-    else:  # QuantizationType.INT
+    elif args.type == QuantizationType.INT:
         rounded = torch.round(tensor)
+    else:
+        raise ValueError(f"Invalid quantization type {args.type}")
 
     return rounded.to(original_dtype)
