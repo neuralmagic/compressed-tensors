@@ -15,7 +15,7 @@
 import os
 from setuptools import setup, find_packages
 from typing import List, Dict, Tuple
-from utils.artifacts import get_release_and_version
+from compressed_tensors.artifacts import get_release_and_version
 
 # default variables to be overwritten by the version.py file
 is_release = None
@@ -27,7 +27,7 @@ exec(open(os.path.join("src", "compressed_tensors", "version.py")).read())
 version_nm_deps = f"{version_major_minor}.0"
 
 package_path = os.path.join(
-    os.path.dirname(os.path.realpath(__file__)), "src", "compressed-tensors"
+    os.path.dirname(os.path.realpath(__file__)), "src", "compressed_tensors"
 )
 (
     is_release,
