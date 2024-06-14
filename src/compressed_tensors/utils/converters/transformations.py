@@ -29,9 +29,9 @@ _LOGGER = logging.getLogger(__name__)
 def _log_transformation(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        _LOGGER.info("Applying transformation: %s", func.__name__.upper())
+        _LOGGER.debug("Applying transformation: %s", func.__name__.upper())
         return_value = func(*args, **kwargs)
-        _LOGGER.info("Transformation: %s complete", func.__name__.upper())
+        _LOGGER.debug("Transformation: %s complete", func.__name__.upper())
         return return_value
 
     return wrapper
