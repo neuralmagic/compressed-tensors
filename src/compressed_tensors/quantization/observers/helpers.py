@@ -59,6 +59,10 @@ def calculate_qparams(
     # match zero-points to quantized type
     zero_points = zero_points.to(zp_dtype)
 
+    if scales.ndim == 0:
+        scales = scales.reshape(1)
+        zero_points = zero_points.reshape(1)
+
     return scales, zero_points
 
 

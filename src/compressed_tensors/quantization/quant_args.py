@@ -51,7 +51,7 @@ class QuantizationStrategy(str, Enum):
     TOKEN = "token"
 
 
-class QuantizationArgs(BaseModel):
+class QuantizationArgs(BaseModel, use_enum_values=True):
     """
     User facing arguments used to define a quantization config for weights or
     activations
@@ -71,7 +71,7 @@ class QuantizationArgs(BaseModel):
     """
 
     num_bits: int = 8
-    type: QuantizationType = QuantizationType.INT
+    type: QuantizationType = QuantizationType.INT.value
     symmetric: bool = True
     group_size: Optional[int] = None
     strategy: Optional[QuantizationStrategy] = None
