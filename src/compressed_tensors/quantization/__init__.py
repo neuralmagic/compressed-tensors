@@ -14,7 +14,7 @@
 
 # flake8: noqa
 # isort: skip_file
-
+from .transformers import QuantizedCacheConfig
 from .quant_args import *
 from .quant_config import *
 from .quant_scheme import *
