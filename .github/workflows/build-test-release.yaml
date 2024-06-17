@@ -27,7 +27,7 @@ jobs:
       
       - name: Build PyPi Wheel
         id: build
-        uses: neuralmagic/nm-actions/actions/pypi_build@main
+        uses: neuralmagic/nm-actions/actions/pypi_build@dhuangnm-patch-1
         with:
           dev: false
           release: true
