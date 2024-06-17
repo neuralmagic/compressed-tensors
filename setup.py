@@ -29,7 +29,7 @@ package_path = os.path.join(
     version_bug,
 ) = get_release_and_version(package_path)
 
-version_nm_deps = f"{version}.0"
+version_nm_deps = f"{version_major}.{version_minor}.0"
 
 if is_release:
     _PACKAGE_NAME = "compressed-tensors"
