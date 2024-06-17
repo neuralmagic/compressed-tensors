@@ -11,6 +11,7 @@ on:
         description: "git tag, commit or branch name for the release"
         type: string
         required: true
+        default: 'rel'
 
 jobs:
   build-test-release-wheel:
@@ -27,7 +28,7 @@ jobs:
       
       - name: Build PyPi Wheel
         id: build
-        uses: neuralmagic/nm-actions/actions/pypi_build@dhuangnm-patch-2
+        uses: neuralmagic/nm-actions/actions/pypi_build@main
         with:
           dev: false
           release: true
