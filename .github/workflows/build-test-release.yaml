@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - 'release/*'
+
   workflow_dispatch:
     inputs:
       gitref:
         description: "git tag, commit or branch name for the release"
         type: string
         required: true
+        default: 'v0.4.0'
 
 jobs:
   build-test-release-wheel:
