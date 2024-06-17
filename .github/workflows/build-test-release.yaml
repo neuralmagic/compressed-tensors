@@ -41,14 +41,14 @@ jobs:
       
       - name: Fetch name of whl
         run: |
-            echo "FILENAME=$(cd dist; ls *.whl)" >> $GITHUB_ENV
+            echo "FILENAME=$(find dist -name '*.whl')" >> $GITHUB_ENV
 
       - name: upload whl
         uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
           name: "compressed-tensors-${{ inputs.gitref }}"
-          path: ./dist/${FILENAME}
+          path: ${FILENAME}
           retention-days: 7
       
       - name: Install whl
