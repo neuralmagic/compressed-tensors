@@ -27,7 +27,7 @@ jobs:
       
       - name: Build PyPi Wheel
         id: build
-        uses: neuralmagic/nm-actions/actions/pypi_build@main
+        uses: neuralmagic/nm-actions/actions/pypi_build@dhuangnm-patch-2
         with:
           dev: false
           release: true
@@ -38,24 +38,26 @@ jobs:
           pip3 install virtualenv
           virtualenv venv
           source venv/bin/activate
-      
-      #- name: Fetch name of whl
-      #  run: |
-      #      echo "FILENAME=$(find dist -name '*.whl')" >> $GITHUB_ENV
-      #      echo "filename=${{ steps.build.outputs.filename }}"
-      #      echo "FILENAME=$FILENAME"
 
       - name: upload whl
         uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
-          name: "compressed-tensors"
-          path: ${{ steps.build.outputs.filename }}
+          name: "wheel-compressed-tensors"
+          path: ${{ steps.build.outputs.whlname }}
+          retention-days: 7
+
+      - name: upload tar.gz
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: "tar-compressed-tensors"
+          path: ${{ steps.build.outputs.tarname }}
           retention-days: 7
       
       - name: Install whl
         run: |
-            pip3 install ${{ steps.build.outputs.filename }}[dev]
+            pip3 install ${{ steps.build.outputs.whlname }}[dev]
       
       - name: Remove src files and run tests
         run: |
