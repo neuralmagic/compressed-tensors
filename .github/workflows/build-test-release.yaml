@@ -10,6 +10,7 @@ on:
         description: "git tag, commit or branch name for the release"
         type: string
         required: true
+        default: 'rel'
 
 jobs:
   build-test-release-wheel:
@@ -40,7 +41,7 @@ jobs:
       
       - name: Fetch name of whl
         run: |
-            echo "FILENAME=$(echo dist/*.whl)" >> $GITHUB_ENV
+            echo "FILENAME=$(ls dist/*.whl)" >> $GITHUB_ENV
 
       - name: upload whl
         uses: actions/upload-artifact@v4
