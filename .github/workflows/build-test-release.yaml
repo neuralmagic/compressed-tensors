@@ -48,7 +48,7 @@ jobs:
         if: success() || failure()
         with:
           name: "compressed-tensors-${{ inputs.gitref }}"
-          path: ${FILENAME}
+          path: $FILENAME
           retention-days: 7
       
       - name: Install whl
