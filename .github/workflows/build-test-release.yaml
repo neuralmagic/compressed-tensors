@@ -3,14 +3,14 @@ name: Build and test release wheel
 on:
   push:
     branches:
-      - rel
+      #- 'release/*'
+      - 'rel'
   workflow_dispatch:
     inputs:
       gitref:
         description: "git tag, commit or branch name for the release"
         type: string
         required: true
-        default: 'rel'
 
 jobs:
   build-test-release-wheel:
@@ -27,7 +27,7 @@ jobs:
       
       - name: Build PyPi Wheel
         id: build
-        uses: neuralmagic/nm-actions/actions/pypi_build@dhuangnm-patch-1
+        uses: neuralmagic/nm-actions/actions/pypi_build@main
         with:
           dev: false
           release: true
@@ -39,11 +39,11 @@ jobs:
           virtualenv venv
           source venv/bin/activate
       
-      - name: Fetch name of whl
-        run: |
-            echo "FILENAME=$(find dist -name '*.whl')" >> $GITHUB_ENV
-            echo "filename=${{ steps.build.outputs.filename }}"
-            echo "FILENAME=$FILENAME"
+      #- name: Fetch name of whl
+      #  run: |
+      #      echo "FILENAME=$(find dist -name '*.whl')" >> $GITHUB_ENV
+      #      echo "filename=${{ steps.build.outputs.filename }}"
+      #      echo "FILENAME=$FILENAME"
 
       - name: upload whl
         uses: actions/upload-artifact@v4
