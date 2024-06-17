@@ -13,10 +13,15 @@
 # limitations under the License.
 
 import logging
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.observers.base import Observer
+from compressed_tensors.quantization.quant_args import KVCacheQuantizationArgs
+from compressed_tensors.quantization.quant_scheme import (
+    KVCacheQuantizationScheme,
+    QuantizationScheme,
+)
 from torch.nn import Module
 from tqdm import tqdm
 
@@ -30,6 +35,7 @@ __all__ = [
     "calculate_compression_ratio",
     "get_torch_bit_depth",
     "can_quantize",
+    "parse_out_kv_cache_args",
 ]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -182,3 +188,41 @@ def calculate_compression_ratio(model: Module) -> float:
             total_uncompressed += uncompressed_bits * num_weights
 
     return total_uncompressed / total_compressed
+
+
+def parse_out_kv_cache_args(
+    quant_scheme_to_layers: List[QuantizationScheme],
+) -> Tuple[Optional[KVCacheQuantizationArgs], List[QuantizationScheme]]:
+    """
+    If possible, parse out the KVCacheQuantizationArgs from the
+    list of the QuantizationSchemes. If there is no
+    KVCacheQuantizationScheme in the input, this function acts as
+    identity function
+
+    :param quant_scheme_to_layers: list of QuantizationSchemes
+    :return: kv_cache_args (optional) and the (remaining or original)
+        list of the QuantizationSchemes
+    """
+    kv_cache_quant_scheme_to_layers = [
+        scheme
+        for scheme in quant_scheme_to_layers
+        if isinstance(scheme, KVCacheQuantizationScheme)
+    ]
+    quant_scheme_to_layers = [
+        scheme
+        for scheme in quant_scheme_to_layers
+        if not isinstance(scheme, KVCacheQuantizationScheme)
+    ]
+
+    if kv_cache_quant_scheme_to_layers:
+        if len(kv_cache_quant_scheme_to_layers) > 1:
+            raise ValueError(
+                "Detected more than one KVCacheQuantizationScheme "
+                "in the list, this is not allowed."
+            )
+        kv_cache_quant_scheme_to_layers = kv_cache_quant_scheme_to_layers[0]
+        kv_cache_args = kv_cache_quant_scheme_to_layers.output_activations
+    else:
+        kv_cache_args = None
+
+    return kv_cache_args, quant_scheme_to_layers

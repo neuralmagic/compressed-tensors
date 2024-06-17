@@ -15,7 +15,8 @@
 import logging
 import re
 from collections import OrderedDict
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, List, Optional
+from typing import OrderedDict as OrderedDictType
 
 import torch
 from compressed_tensors.quantization.lifecycle.calibration import (
@@ -28,9 +29,14 @@ from compressed_tensors.quantization.lifecycle.frozen import freeze_module_quant
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
+from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import (
     QuantizationConfig,
     QuantizationStatus,
+)
+from compressed_tensors.quantization.quant_scheme import (
+    KVCacheQuantizationScheme,
+    QuantizationScheme,
 )
 from compressed_tensors.quantization.utils import (
     infer_quantization_status,
@@ -45,7 +51,7 @@ __all__ = [
     "load_pretrained_quantization",
     "apply_quantization_config",
     "apply_quantization_status",
-    "find_first_name_or_class_match",
+    "find_name_or_class_matches",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -106,6 +112,7 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
     # build mapping of targets to schemes for easier matching
     # use ordered dict to preserve target ordering in config
     target_to_scheme = OrderedDict()
+    config = process_quantization_config(config)
     for scheme in config.config_groups.values():
         for target in scheme.targets:
             target_to_scheme[target] = scheme
@@ -116,13 +123,15 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
     for name, submodule in iter_named_leaf_modules(model):
         # potentially fix module name to remove FSDP wrapper prefix
         name = fix_fsdp_module_name(name)
-        if find_first_name_or_class_match(name, submodule, config.ignore):
+        if find_name_or_class_matches(name, submodule, config.ignore):
             ignored_submodules.append(name)
             continue  # layer matches ignore list, continue
-        target = find_first_name_or_class_match(name, submodule, target_to_scheme)
-        if target is not None:
+        targets = find_name_or_class_matches(name, submodule, target_to_scheme)
+        if targets:
             # target matched - add layer and scheme to target list
-            submodule.quantization_scheme = target_to_scheme[target]
+            submodule.quantization_scheme = _scheme_from_targets(
+                target_to_scheme, targets, name
+            )
 
     if config.ignore is not None and ignored_submodules is not None:
         if set(config.ignore) - set(ignored_submodules):
@@ -133,6 +142,93 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
             )
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
+
+
+def _scheme_from_targets(
+    target_to_scheme: OrderedDictType[str, QuantizationScheme],
+    targets: List[str],
+    name: str,
+) -> QuantizationScheme:
+    if len(targets) == 1:
+        # if `targets` list contains a single element
+        # use it as the key
+        return target_to_scheme[targets[0]]
+
+    # otherwise, we need to merge QuantizationSchemes corresponding
+    # to multiple targets
+    merged_scheme = {}
+
+    schemes_to_merge = [target_to_scheme[target] for target in targets]
+    merged_scheme_with_kv_cache = any(
+        isinstance(scheme, KVCacheQuantizationScheme) for scheme in schemes_to_merge
+    )
+
+    if merged_scheme_with_kv_cache:
+        kv_cache_targets = [
+            scheme
+            for scheme in schemes_to_merge
+            if isinstance(scheme, KVCacheQuantizationScheme)
+        ][0].targets
+        _LOGGER.info(
+            "Quantizing the output activation of the "
+            f"layers: {kv_cache_targets} as a result "
+            "of kv cache quantization"
+        )
+    for scheme in schemes_to_merge:
+        scheme_dict = {k: v for k, v in scheme.dict().items() if v is not None}
+        if merged_scheme_with_kv_cache:
+            # if scheme pertains to kv cache quantization
+            # the merged_scheme should take the targets
+            # defined by KVCacheQuantizationScheme
+            del scheme_dict["targets"]
+        # make sure that schemes do not "clash" with each other
+        overlapping_keys = set(merged_scheme.keys()) & set(scheme_dict.keys())
+        if overlapping_keys:
+            raise ValueError(
+                f"The module: {name} is being modified by two clashing "
+                f"quantization schemes, that jointly try to override "
+                f"properties: {overlapping_keys}. Fix the quantization config "
+                "so that it is not ambiguous."
+            )
+        merged_scheme.update(scheme_dict)
+
+    if merged_scheme_with_kv_cache:
+        merged_scheme.update(targets=kv_cache_targets)
+        return KVCacheQuantizationScheme(**merged_scheme)
+    else:
+        return QuantizationScheme(**merged_scheme)
+
+
+def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
+    """
+    Preprocess the raw QuantizationConfig
+
+    :param config: the raw QuantizationConfig
+    :return: the processed QuantizationConfig
+    """
+    if config.kv_cache is not None:
+        config = process_kv_cache_config(config)
+
+    return config
+
+
+def process_kv_cache_config(config: QuantizationConfig) -> QuantizationConfig:
+    """
+    Reformulate the `config.kv_cache` as a `config_group`
+    and add it to the set of existing `config.groups`
+
+    :param config: the QuantizationConfig
+    :return: the QuantizationConfig with additional "kv_cache" group
+    """
+    kv_cache_dict = config.kv_cache.model_dump()
+    targets = kv_cache_dict.pop("targets")
+
+    kv_cache_scheme = KVCacheQuantizationScheme(
+        output_activations=QuantizationArgs(**kv_cache_dict), targets=targets
+    )
+    kv_cache_group = dict(kv_cache=kv_cache_scheme)
+    config.config_groups.update(kv_cache_group)
+    return config
 
 
 def apply_quantization_status(model: Module, status: QuantizationStatus):
@@ -156,36 +252,37 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         model.apply(compress_quantized_weights)
 
 
-def find_first_name_or_class_match(
+def find_name_or_class_matches(
     name: str, module: Module, targets: Iterable[str], check_contains: bool = False
-) -> Optional[str]:
-    # first element of targets that matches the given name
-    # if no name matches returns first target that matches the class name
-    # returns None otherwise
+) -> List[str]:
+    # returns all targets that match the given name or the class name
+    # returns empty list otherwise
     if isinstance(targets, Iterable):
-        return _find_first_match(name, targets) or _find_first_match(
+        matches = _find_matches(name, targets) + _find_matches(
             module.__class__.__name__, targets, check_contains
         )
+        matches = [match for match in matches if match is not None]
+        return matches
 
 
-def _find_first_match(
+def _find_matches(
     value: str, targets: Iterable[str], check_contains: bool = False
-) -> Optional[str]:
-    # returns first element of target that matches value either
+) -> List[str]:
+    # returns all the targets that match value either
     # exactly or as a regex after 're:'. if check_contains is set to True,
     # additionally checks if the target string is contained with value.
-
+    matches = []
     for target in targets:
         if target.startswith("re:"):
             pattern = target[3:]
             if re.match(pattern, value):
-                return target
+                matches.append(target)
         elif check_contains:
             if target.lower() in value.lower():
-                return target
+                matches.append(target)
         elif target == value:
-            return target
-    return None
+            matches.append(target)
+    return matches
 
 
 def _infer_status(model: Module) -> Optional[QuantizationStatus]:
