@@ -17,11 +17,8 @@ from typing import List, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.observers.base import Observer
-from compressed_tensors.quantization.quant_args import KVCacheQuantizationArgs
-from compressed_tensors.quantization.quant_scheme import (
-    KVCacheQuantizationScheme,
-    QuantizationScheme,
-)
+from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from torch.nn import Module
 from tqdm import tqdm
 
@@ -36,8 +33,11 @@ __all__ = [
     "get_torch_bit_depth",
     "can_quantize",
     "parse_out_kv_cache_args",
+    "KV_CACHE_TARGETS",
+    "is_kv_cache_quant_scheme",
 ]
 
+KV_CACHE_TARGETS = ["re:.*k_proj", "re:.*v_proj"]
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
@@ -190,9 +190,24 @@ def calculate_compression_ratio(model: Module) -> float:
     return total_uncompressed / total_compressed
 
 
+def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
+    """
+    Check whether the QuantizationScheme targets the kv cache.
+    It does if all the following criteria are met:
+    - the scheme targets the modules that return the keys and values
+        (to be potentially cached)
+    - the scheme quantizes output_activations (we want to quantize the
+        outputs from the aformentioned modules)
+    """
+    return (
+        set(scheme.targets) == set(KV_CACHE_TARGETS)
+        and scheme.output_activations is not None
+    )
+
+
 def parse_out_kv_cache_args(
     quant_scheme_to_layers: List[QuantizationScheme],
-) -> Tuple[Optional[KVCacheQuantizationArgs], List[QuantizationScheme]]:
+) -> Tuple[Optional[QuantizationArgs], List[QuantizationScheme]]:
     """
     If possible, parse out the KVCacheQuantizationArgs from the
     list of the QuantizationSchemes. If there is no
@@ -204,21 +219,20 @@ def parse_out_kv_cache_args(
         list of the QuantizationSchemes
     """
     kv_cache_quant_scheme_to_layers = [
-        scheme
-        for scheme in quant_scheme_to_layers
-        if isinstance(scheme, KVCacheQuantizationScheme)
+        scheme for scheme in quant_scheme_to_layers if is_kv_cache_quant_scheme(scheme)
     ]
     quant_scheme_to_layers = [
         scheme
         for scheme in quant_scheme_to_layers
-        if not isinstance(scheme, KVCacheQuantizationScheme)
+        if not is_kv_cache_quant_scheme(scheme)
     ]
 
     if kv_cache_quant_scheme_to_layers:
         if len(kv_cache_quant_scheme_to_layers) > 1:
             raise ValueError(
-                "Detected more than one KVCacheQuantizationScheme "
-                "in the list, this is not allowed."
+                "Detected more than one QuantizationScheme "
+                "in the list, that quantizes model's kv cache. "
+                "This is not allowed."
             )
         kv_cache_quant_scheme_to_layers = kv_cache_quant_scheme_to_layers[0]
         kv_cache_args = kv_cache_quant_scheme_to_layers.output_activations
