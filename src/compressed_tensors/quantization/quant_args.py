@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field, validator
 
@@ -123,12 +123,3 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             return QuantizationStrategy.TENSOR
 
         return value
-
-
-class KVCacheQuantizationArgs(QuantizationArgs):
-    """
-    A wrapper around QuantizationScheme that governs the
-    quantized kv cache
-    """
-
-    targets: List[str] = ["re:.*k_proj", "re:.*v_proj"]

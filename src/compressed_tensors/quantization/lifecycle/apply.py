@@ -17,6 +17,7 @@ import re
 from collections import OrderedDict
 from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
+from typing import Union
 
 import torch
 from compressed_tensors.quantization.lifecycle.calibration import (
@@ -34,12 +35,11 @@ from compressed_tensors.quantization.quant_config import (
     QuantizationConfig,
     QuantizationStatus,
 )
-from compressed_tensors.quantization.quant_scheme import (
-    KVCacheQuantizationScheme,
-    QuantizationScheme,
-)
+from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
+    KV_CACHE_TARGETS,
     infer_quantization_status,
+    is_kv_cache_quant_scheme,
     iter_named_leaf_modules,
 )
 from compressed_tensors.utils.helpers import fix_fsdp_module_name
@@ -159,27 +159,26 @@ def _scheme_from_targets(
     merged_scheme = {}
 
     schemes_to_merge = [target_to_scheme[target] for target in targets]
-    merged_scheme_with_kv_cache = any(
-        isinstance(scheme, KVCacheQuantizationScheme) for scheme in schemes_to_merge
+
+    kv_cache_quant_scheme = [
+        scheme for scheme in schemes_to_merge if is_kv_cache_quant_scheme(scheme)
+    ]
+    kv_cache_quant_scheme = (
+        kv_cache_quant_scheme[0] if len(kv_cache_quant_scheme) > 0 else None
     )
 
-    if merged_scheme_with_kv_cache:
-        kv_cache_targets = [
-            scheme
-            for scheme in schemes_to_merge
-            if isinstance(scheme, KVCacheQuantizationScheme)
-        ][0].targets
-        _LOGGER.info(
+    if kv_cache_quant_scheme:
+        _LOGGER.debug(
             "Quantizing the output activation of the "
-            f"layers: {kv_cache_targets} as a result "
+            f"layers: {kv_cache_quant_scheme.targets} as a result "
             "of kv cache quantization"
         )
     for scheme in schemes_to_merge:
-        scheme_dict = {k: v for k, v in scheme.dict().items() if v is not None}
-        if merged_scheme_with_kv_cache:
-            # if scheme pertains to kv cache quantization
+        scheme_dict = {k: v for k, v in scheme.model_dump().items() if v is not None}
+        if kv_cache_quant_scheme:
+            # if the scheme pertains to kv cache quantization
             # the merged_scheme should take the targets
-            # defined by KVCacheQuantizationScheme
+            # defined by the kv cache quantization scheme
             del scheme_dict["targets"]
         # make sure that schemes do not "clash" with each other
         overlapping_keys = set(merged_scheme.keys()) & set(scheme_dict.keys())
@@ -192,11 +191,10 @@ def _scheme_from_targets(
             )
         merged_scheme.update(scheme_dict)
 
-    if merged_scheme_with_kv_cache:
-        merged_scheme.update(targets=kv_cache_targets)
-        return KVCacheQuantizationScheme(**merged_scheme)
-    else:
-        return QuantizationScheme(**merged_scheme)
+    if kv_cache_quant_scheme:
+        merged_scheme.update(targets=kv_cache_quant_scheme.targets)
+
+    return QuantizationScheme(**merged_scheme)
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
@@ -212,7 +210,9 @@ def process_quantization_config(config: QuantizationConfig) -> QuantizationConfi
     return config
 
 
-def process_kv_cache_config(config: QuantizationConfig) -> QuantizationConfig:
+def process_kv_cache_config(
+    config: QuantizationConfig, targets: Union[List[str], str] = KV_CACHE_TARGETS
+) -> QuantizationConfig:
     """
     Reformulate the `config.kv_cache` as a `config_group`
     and add it to the set of existing `config.groups`
@@ -221,10 +221,9 @@ def process_kv_cache_config(config: QuantizationConfig) -> QuantizationConfig:
     :return: the QuantizationConfig with additional "kv_cache" group
     """
     kv_cache_dict = config.kv_cache.model_dump()
-    targets = kv_cache_dict.pop("targets")
-
-    kv_cache_scheme = KVCacheQuantizationScheme(
-        output_activations=QuantizationArgs(**kv_cache_dict), targets=targets
+    kv_cache_scheme = QuantizationScheme(
+        output_activations=QuantizationArgs(**kv_cache_dict),
+        targets=targets,
     )
     kv_cache_group = dict(kv_cache=kv_cache_scheme)
     config.config_groups.update(kv_cache_group)

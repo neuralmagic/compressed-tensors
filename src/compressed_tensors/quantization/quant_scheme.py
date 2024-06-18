@@ -72,15 +72,6 @@ class QuantizationScheme(BaseModel):
         )
 
 
-class KVCacheQuantizationScheme(QuantizationScheme):
-    """
-    A wrapper around QuantizationScheme that governs the
-    quantized kv cache
-    """
-
-    ...
-
-
 """
 Pre-Set Quantization Scheme Args
 """

@@ -42,15 +42,13 @@ config = {
 
 @pytest.mark.parametrize("config", [config])
 def test_kv_cache_quantization(config):
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     sample = {
-        name: torch.ones((1, 32), device=device).long()
+        name: torch.ones((1, 32)).long()
         for name in ["input_ids", "attention_mask", "labels"]
     }
     model = AutoModelForCausalLM.from_pretrained(
         "HuggingFaceM4/tiny-random-LlamaForCausalLM",
-        device_map=device,
         torch_dtype="auto",
     )
     model.eval()
@@ -76,18 +74,16 @@ def test_kv_cache_quantization(config):
 
 
 @pytest.mark.parametrize("config", [config])
-def test_kv_cache_quantization_fail(config):
+def test_kv_cache_quantization_clashing_configs(config):
     config["config_groups"]["group_1"]["output_activations"] = {
         "num_bits": 8,
         "type": "int",
         "symmetric": True,
         "strategy": "tensor",
     }
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     model = AutoModelForCausalLM.from_pretrained(
         "HuggingFaceM4/tiny-random-LlamaForCausalLM",
-        device_map=device,
         torch_dtype="auto",
     )
     model.eval()
