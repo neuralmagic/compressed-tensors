@@ -99,7 +99,7 @@ class QuantizedCacheConfig(BaseQuantizedCacheConfig):
         # to avoid circular imports
         from compressed_tensors.compressors.helpers import load_compressed
 
-        cache_names = ["key", "scale"]
+        cache_names = ["key", "value"]
 
         layer_to_scale = defaultdict(list)
         layer_to_zero_point = defaultdict(list)
