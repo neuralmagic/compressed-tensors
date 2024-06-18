@@ -90,10 +90,10 @@ class PackedQuantizationCompressor(Compressor):
                             args=quant_args,
                             dtype=torch.int8,
                         )
-                    if model_quant_args.get("num_bits") == 4:
-                        value = pack_4bit_ints(value.cpu())
-                    else:
+                    if model_quant_args.get("num_bits") == 8:
                         value = pack_8bit_ints(value.cpu())
+                    else:
+                        value = pack_4bit_ints(value.cpu())
                     compressed_dict[merge_names(prefix, "weight_shape")] = shape
                     compressed_dict[merge_names(prefix, "weight_packed")] = value
                     continue
