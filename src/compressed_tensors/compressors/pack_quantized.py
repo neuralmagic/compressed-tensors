@@ -90,7 +90,7 @@ class PackedQuantizationCompressor(Compressor):
                             args=quant_args,
                             dtype=torch.int8,
                         )
-                    if model_quant_args.num_bits == 4:
+                    if model_quant_args.get("num_bits") == 4:
                         value = pack_4bit_ints(value.cpu())
                     else:
                         value = pack_8bit_ints(value.cpu())
