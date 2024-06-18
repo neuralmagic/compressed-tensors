@@ -96,10 +96,10 @@ def dequantize(
     # ensure all tensors are on the same device
     # assumes that the target device is the input
     # tensor's device
-    if x.device != scale.device:
-        scale = scale.to(x.device)
-    if x.device != zero_point.device:
-        zero_point = zero_point.to(x.device)
+    if x_q.device != scale.device:
+        scale = scale.to(x_q.device)
+    if x_q.device != zero_point.device:
+        zero_point = zero_point.to(x_q.device)
         
     if args is None:
         if scale.ndim == 0 or scale.ndim == 1:
