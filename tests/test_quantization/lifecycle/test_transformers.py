@@ -12,39 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-import os
-
-import pytest
-from compressed_tensors import COMPRESSION_CONFIG_NAME
-from compressed_tensors.quantization import QuantizedCacheConfig
-from compressed_tensors.quantization.quant_args import KVCacheQuantizationArgs
-
-
-@pytest.fixture
-def config():
-    return {
-        COMPRESSION_CONFIG_NAME: {
-            "kv_cache": {
-                "num_bits": 8,
-                "type": "int",
-                "symmetric": True,
-                "strategy": "tensor",
-            }
-        }
-    }
-
-
-def test_quantizated_cache_config(config):
-
-    assert QuantizedCacheConfig(config)
-    assert QuantizedCacheConfig(KVCacheQuantizationArgs(**config))
-
-
-def test_quantized_cache_config_from_pretrained(tmp_path, config):
-    config_path = os.path.join(tmp_path, "config.json")
-
-    with open(config_path, "w") as file_:
-        json.dump(config, file_)
-
-    assert QuantizedCacheConfig.from_pretrained(config_path)
+# TODO: Add once the design is complete
