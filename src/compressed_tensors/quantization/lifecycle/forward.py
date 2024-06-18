@@ -93,6 +93,14 @@ def dequantize(
     :param args: quantization args used to quantize x_q
     :return: dequantized float tensor
     """
+    # ensure all tensors are on the same device
+    # assumes that the target device is the input
+    # tensor's device
+    if x.device != scale.device:
+        scale = scale.to(x.device)
+    if x.device != zero_point.device:
+        zero_point = zero_point.to(x.device)
+        
     if args is None:
         if scale.ndim == 0 or scale.ndim == 1:
             args = QuantizationArgs(strategy=QuantizationStrategy.TENSOR)
