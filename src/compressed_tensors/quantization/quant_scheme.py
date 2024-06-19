@@ -111,11 +111,11 @@ def is_preset_scheme(name: str) -> bool:
     return name.upper() in PRESET_SCHEMES
 
 
-W8A8 = dict(weights=QuantizationArgs(), input_activations=QuantizationArgs())
-
-W4A16 = dict(
-    weights=QuantizationArgs(num_bits=4, strategy=QuantizationStrategy.CHANNEL)
+W8A8 = dict(
+    weights=QuantizationArgs(), input_activations=QuantizationArgs(symmetric=True)
 )
+
+W4A16 = dict(weights=QuantizationArgs(num_bits=4, symmetric=True))
 
 FP8 = dict(
     weights=QuantizationArgs(type=QuantizationType.FLOAT),
