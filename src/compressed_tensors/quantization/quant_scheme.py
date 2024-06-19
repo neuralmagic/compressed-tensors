@@ -115,7 +115,11 @@ W8A8 = dict(
     weights=QuantizationArgs(), input_activations=QuantizationArgs(symmetric=True)
 )
 
-W4A16 = dict(weights=QuantizationArgs(num_bits=4, symmetric=True))
+W4A16 = dict(
+    weights=QuantizationArgs(
+        num_bits=4, strategy=QuantizationStrategy.CHANNEL, symmetric=True
+    )
+)
 
 FP8 = dict(
     weights=QuantizationArgs(type=QuantizationType.FLOAT),
