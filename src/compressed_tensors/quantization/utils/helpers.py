@@ -14,7 +14,7 @@
 
 import logging
 from typing import List, Optional, Tuple
-
+import re
 import torch
 from compressed_tensors.quantization.observers.base import Observer
 from compressed_tensors.quantization.quant_args import QuantizationArgs
@@ -194,13 +194,20 @@ def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
     """
     Check whether the QuantizationScheme targets the kv cache.
     It does if all the following criteria are met:
-    - the scheme targets the modules that return the keys and values
-        (to be potentially cached)
+    - the scheme targets is a single string (the actual layer name),
+      that matches on any of the KV_CACHE_TARGETS
     - the scheme quantizes output_activations (we want to quantize the
-        outputs from the aformentioned modules)
+        outputs from the KV_CACHE_TARGETS, as their correspond to the
+        keys and values that are to be saved in the cache)
+
+    :param scheme: The QuantizationScheme to investigate
+    :return: boolean flag
     """
+    if len(scheme.targets) > 1:
+        return False
+    target = scheme.targets[0]
     return (
-        set(scheme.targets) == set(KV_CACHE_TARGETS)
+        any(re.match(pattern[3:], target) for pattern in KV_CACHE_TARGETS)
         and scheme.output_activations is not None
     )
 
@@ -209,10 +216,10 @@ def parse_out_kv_cache_args(
     quant_scheme_to_layers: List[QuantizationScheme],
 ) -> Tuple[Optional[QuantizationArgs], List[QuantizationScheme]]:
     """
-    If possible, parse out the KVCacheQuantizationArgs from the
-    list of the QuantizationSchemes. If there is no
-    KVCacheQuantizationScheme in the input, this function acts as
-    identity function
+    If possible, parse out the kv cache specific QuantizationArgs
+    from the list of the QuantizationSchemes. If no kv cache
+    specific QuantizationArgs available, this function acts
+    as an identity function
 
     :param quant_scheme_to_layers: list of QuantizationSchemes
     :return: kv_cache_args (optional) and the (remaining or original)
@@ -228,12 +235,6 @@ def parse_out_kv_cache_args(
     ]
 
     if kv_cache_quant_scheme_to_layers:
-        if len(kv_cache_quant_scheme_to_layers) > 1:
-            raise ValueError(
-                "Detected more than one QuantizationScheme "
-                "in the list, that quantizes model's kv cache. "
-                "This is not allowed."
-            )
         kv_cache_quant_scheme_to_layers = kv_cache_quant_scheme_to_layers[0]
         kv_cache_args = kv_cache_quant_scheme_to_layers.output_activations
     else:

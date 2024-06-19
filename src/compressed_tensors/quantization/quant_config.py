@@ -119,18 +119,18 @@ class QuantizationConfig(BaseModel):
     other quantization configs
     :param format: specifies how the quantized model is stored on disk
     :quantization_status: specifies the current status of all quantized layers. It is
+        assumed all layers are in the same state.
     :param kv_cache: optional QuantizationArgs, that specify the quantization of the
         kv cache. If None, kv cache is not quantized.
-        The kv_cache QuantizationArgs get converted into a QuantizationScheme that:
+        When applying kv cache quantization to transformer AutoModelForCausalLM,
+        the kv_cache QuantizationArgs get converted into a QuantizationScheme that:
             - targets the `q_proj` and `k_proj` modules of the model. The outputs
               of those modules are the keys and values that might be cached
             - quantizes the outputs of the aformentioned layers, so that
               keys and values are compressed before storing them in the cache
-
         There is an explicit assumption that the model contains modules with
         `k_proj` and `v_proj` in their names. If this is not the case
         and kv_cache != None, the quantization of kv cache will fail
-    assumed all layers are in the same state.
     :global_compression_ratio: optional informational config to report the model
     compression ratio acheived by the quantization config
     :ignore: optional list of layers to ignore from config_groups. Layers in this list

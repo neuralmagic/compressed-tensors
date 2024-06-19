@@ -39,7 +39,6 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     KV_CACHE_TARGETS,
     infer_quantization_status,
-    is_kv_cache_quant_scheme,
     iter_named_leaf_modules,
 )
 from compressed_tensors.utils.helpers import fix_fsdp_module_name
@@ -142,59 +141,6 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
             )
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
-
-
-def _scheme_from_targets(
-    target_to_scheme: OrderedDictType[str, QuantizationScheme],
-    targets: List[str],
-    name: str,
-) -> QuantizationScheme:
-    if len(targets) == 1:
-        # if `targets` list contains a single element
-        # use it as the key
-        return target_to_scheme[targets[0]]
-
-    # otherwise, we need to merge QuantizationSchemes corresponding
-    # to multiple targets
-    merged_scheme = {}
-
-    schemes_to_merge = [target_to_scheme[target] for target in targets]
-
-    kv_cache_quant_scheme = [
-        scheme for scheme in schemes_to_merge if is_kv_cache_quant_scheme(scheme)
-    ]
-    kv_cache_quant_scheme = (
-        kv_cache_quant_scheme[0] if len(kv_cache_quant_scheme) > 0 else None
-    )
-
-    if kv_cache_quant_scheme:
-        _LOGGER.debug(
-            "Quantizing the output activation of the "
-            f"layers: {kv_cache_quant_scheme.targets} as a result "
-            "of kv cache quantization"
-        )
-    for scheme in schemes_to_merge:
-        scheme_dict = {k: v for k, v in scheme.model_dump().items() if v is not None}
-        if kv_cache_quant_scheme:
-            # if the scheme pertains to kv cache quantization
-            # the merged_scheme should take the targets
-            # defined by the kv cache quantization scheme
-            del scheme_dict["targets"]
-        # make sure that schemes do not "clash" with each other
-        overlapping_keys = set(merged_scheme.keys()) & set(scheme_dict.keys())
-        if overlapping_keys:
-            raise ValueError(
-                f"The module: {name} is being modified by two clashing "
-                f"quantization schemes, that jointly try to override "
-                f"properties: {overlapping_keys}. Fix the quantization config "
-                "so that it is not ambiguous."
-            )
-        merged_scheme.update(scheme_dict)
-
-    if kv_cache_quant_scheme:
-        merged_scheme.update(targets=kv_cache_quant_scheme.targets)
-
-    return QuantizationScheme(**merged_scheme)
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
@@ -323,3 +269,46 @@ def _load_quant_args_from_state_dict(
             zp.data = state_dict[f"{module_name}.{zp_name}"].to(device)
         else:  # fill with zeros matching scale shape
             zp.data = torch.zeros_like(scale, dtype=torch.int8).to(device)
+
+
+def _scheme_from_targets(
+    target_to_scheme: OrderedDictType[str, QuantizationScheme],
+    targets: List[str],
+    name: str,
+) -> QuantizationScheme:
+    if len(targets) == 1:
+        # if `targets` iterable contains a single element
+        # use it as the key
+        return target_to_scheme[targets[0]]
+
+    # otherwise, we need to merge QuantizationSchemes corresponding
+    # to multiple targets. This is most likely because `name` module
+    # is being target both as an ordinary quantization target, as well
+    # as kv cache quantization target
+    schemes_to_merge = [target_to_scheme[target] for target in targets]
+    return _merge_schemes(schemes_to_merge, name)
+
+
+def _merge_schemes(
+    schemes_to_merge: List[QuantizationScheme], name: str
+) -> QuantizationScheme:
+    merged_scheme = {}
+    for scheme in schemes_to_merge:
+        scheme_dict = {k: v for k, v in scheme.model_dump().items() if v is not None}
+        # when merging multiple schemes, the final target will be
+        # the `name` argument - hence erase the original targets
+        del scheme_dict["targets"]
+        # make sure that schemes do not "clash" with each other
+        overlapping_keys = set(merged_scheme.keys()) & set(scheme_dict.keys())
+        if overlapping_keys:
+            raise ValueError(
+                f"The module: {name} is being modified by two clashing "
+                f"quantization schemes, that jointly try to override "
+                f"properties: {overlapping_keys}. Fix the quantization config "
+                "so that it is not ambiguous."
+            )
+        merged_scheme.update(scheme_dict)
+
+    merged_scheme.update(targets=[name])
+
+    return QuantizationScheme(**merged_scheme)
