@@ -115,6 +115,10 @@ def test_reload_match(tmp_path):
         "dummy2.weight_scale": torch.tensor(0.02, dtype=torch.float32),
         "dummy2.weight_zero_point": torch.tensor(15, dtype=torch.int8),
     }
+    names_to_scheme = {
+        "dummy": QuantizationArgs(num_bits=4),
+        "dummy2": QuantizationArgs(num_bits=4),
+    }
     quant_config = get_dummy_quant_config()
 
     compressor = PackedQuantizationCompressor(config=quant_config)
@@ -126,7 +130,9 @@ def test_reload_match(tmp_path):
         dense_state_dict, model_quant_args=quantized_modules_to_args
     )
     save_file(compressed_state_dict, tmp_path / "model.safetensors")
-    reconstructed_dense_gen = compressor.decompress(tmp_path)
+    reconstructed_dense_gen = compressor.decompress(
+        tmp_path, names_to_scheme=names_to_scheme
+    )
     reconstructed_dense = {}
     for name, value in reconstructed_dense_gen:
         reconstructed_dense[name] = value
