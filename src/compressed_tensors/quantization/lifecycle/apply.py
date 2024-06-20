@@ -150,7 +150,7 @@ def process_quantization_config(config: QuantizationConfig) -> QuantizationConfi
     :param config: the raw QuantizationConfig
     :return: the processed QuantizationConfig
     """
-    if config.kv_cache is not None:
+    if config.kv_cache_scheme is not None:
         config = process_kv_cache_config(config)
 
     return config
@@ -166,7 +166,7 @@ def process_kv_cache_config(
     :param config: the QuantizationConfig
     :return: the QuantizationConfig with additional "kv_cache" group
     """
-    kv_cache_dict = config.kv_cache.model_dump()
+    kv_cache_dict = config.kv_cache_scheme.model_dump()
     kv_cache_scheme = QuantizationScheme(
         output_activations=QuantizationArgs(**kv_cache_dict),
         targets=targets,

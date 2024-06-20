@@ -25,7 +25,12 @@ from transformers import AutoModelForCausalLM
 config = {
     "quant_method": "compressed-tensors",
     "format": "fakequant",
-    "kv_cache": {"num_bits": 8, "type": "int", "symmetric": True, "strategy": "tensor"},
+    "kv_cache_scheme": {
+        "num_bits": 8,
+        "type": "int",
+        "symmetric": True,
+        "strategy": "tensor",
+    },
     "config_groups": {
         "group_1": {
             "weights": {
@@ -65,11 +70,11 @@ def test_kv_cache_quantization(config):
     reloaded_config = QuantizationConfig.from_pretrained(model)
 
     assert (
-        config.kv_cache.model_dump().keys()
-        == reloaded_config.kv_cache.model_dump().keys()
+        config.kv_cache_scheme.model_dump().keys()
+        == reloaded_config.kv_cache_scheme.model_dump().keys()
     )
-    assert list(config.kv_cache.model_dump().values()) == list(
-        reloaded_config.kv_cache.model_dump().values()
+    assert list(config.kv_cache_scheme.model_dump().values()) == list(
+        reloaded_config.kv_cache_scheme.model_dump().values()
     )
 
 

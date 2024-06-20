@@ -100,7 +100,7 @@ def dequantize(
         scale = scale.to(x_q.device)
     if x_q.device != zero_point.device:
         zero_point = zero_point.to(x_q.device)
-        
+
     if args is None:
         if scale.ndim == 0 or scale.ndim == 1:
             args = QuantizationArgs(strategy=QuantizationStrategy.TENSOR)

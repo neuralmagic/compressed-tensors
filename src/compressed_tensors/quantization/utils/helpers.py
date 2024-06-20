@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import logging
-from typing import List, Optional, Tuple
 import re
+from typing import List, Optional, Tuple
+
 import torch
 from compressed_tensors.quantization.observers.base import Observer
 from compressed_tensors.quantization.quant_args import QuantizationArgs

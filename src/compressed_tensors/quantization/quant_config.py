@@ -120,17 +120,17 @@ class QuantizationConfig(BaseModel):
     :param format: specifies how the quantized model is stored on disk
     :quantization_status: specifies the current status of all quantized layers. It is
         assumed all layers are in the same state.
-    :param kv_cache: optional QuantizationArgs, that specify the quantization of the
-        kv cache. If None, kv cache is not quantized.
+    :param kv_cache_scheme: optional QuantizationArgs, that specify the
+        quantization of the kv cache. If None, kv cache is not quantized.
         When applying kv cache quantization to transformer AutoModelForCausalLM,
-        the kv_cache QuantizationArgs get converted into a QuantizationScheme that:
+        the kv_cache_scheme gets converted into a QuantizationScheme that:
             - targets the `q_proj` and `k_proj` modules of the model. The outputs
               of those modules are the keys and values that might be cached
             - quantizes the outputs of the aformentioned layers, so that
               keys and values are compressed before storing them in the cache
         There is an explicit assumption that the model contains modules with
         `k_proj` and `v_proj` in their names. If this is not the case
-        and kv_cache != None, the quantization of kv cache will fail
+        and kv_cache_scheme != None, the quantization of kv cache will fail
     :global_compression_ratio: optional informational config to report the model
     compression ratio acheived by the quantization config
     :ignore: optional list of layers to ignore from config_groups. Layers in this list
@@ -139,7 +139,7 @@ class QuantizationConfig(BaseModel):
 
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
     quant_method: str = DEFAULT_QUANTIZATION_METHOD
-    kv_cache: Optional[QuantizationArgs] = None
+    kv_cache_scheme: Optional[QuantizationArgs] = None
     format: str = DEFAULT_QUANTIZATION_FORMAT
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
@@ -212,7 +212,7 @@ class QuantizationConfig(BaseModel):
         kv_cache_args, quant_scheme_to_layers = parse_out_kv_cache_args(
             quant_scheme_to_layers
         )
-        kv_cache = (
+        kv_cache_scheme = (
             kv_cache_args.model_dump() if kv_cache_args is not None else kv_cache_args
         )
 
@@ -234,7 +234,7 @@ class QuantizationConfig(BaseModel):
         return QuantizationConfig(
             config_groups=config_groups,
             quantization_status=quantization_status,
-            kv_cache=kv_cache,
+            kv_cache_scheme=kv_cache_scheme,
             global_compression_ratio=compression_ratio,
             format=format,
             ignore=consolidated_ignore,
