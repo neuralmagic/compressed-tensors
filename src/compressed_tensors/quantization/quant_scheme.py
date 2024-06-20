@@ -111,7 +111,7 @@ W8A8 = dict(
     weights=QuantizationArgs(), input_activations=QuantizationArgs(symmetric=True)
 )
 
-W4A16 = dict(weights=QuantizationArgs(num_bits=4, symmetric=True))
+W4A16 = dict(weights=QuantizationArgs(num_bits=4, group_size=128))
 
 PRESET_SCHEMES = {
     "W8A8": W8A8,
