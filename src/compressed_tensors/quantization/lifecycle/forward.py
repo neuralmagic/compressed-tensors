@@ -14,7 +14,7 @@
 
 from functools import wraps
 from math import ceil
-from typing import Optional
+from typing import Optional, List
 
 import torch
 from compressed_tensors.quantization.quant_args import (
@@ -42,6 +42,7 @@ def quantize(
     zero_point: torch.Tensor,
     args: QuantizationArgs,
     dtype: Optional[torch.dtype] = None,
+    g_idx: Optional[List] = None,
 ) -> torch.Tensor:
     """
     Quantize the input tensor x using the QuantizationStrategy specified in args.
@@ -73,6 +74,7 @@ def quantize(
         dtype=dtype,
         do_quantize=True,
         do_dequantize=False,
+        g_idx=g_idx,
     )
 
 
@@ -158,7 +160,12 @@ def _process_quantization(
     dtype: Optional[torch.dtype] = None,
     do_quantize: bool = True,
     do_dequantize: bool = True,
+    g_idx: Optional[List[int]] = None
 ) -> torch.Tensor:
+    if g_idx is not None:
+        scale = scale[g_idx]
+        zero_point = zero_point[g_idx]
+
     bit_range = 2**args.num_bits
     q_max = torch.tensor(bit_range / 2 - 1, device=x.device)
     q_min = torch.tensor(-bit_range / 2, device=x.device)
@@ -193,6 +200,11 @@ def _process_quantization(
         for i in range(ceil(columns / group_size)):
             # scale.shape should be [nchan, ndim]
             # sc.shape should be [nchan, 1] after unsqueeze
+            
+            """
+            
+            
+            """
             sc = scale[:, i].view(-1, 1)
             zp = zero_point[:, i].view(-1, 1)
 
