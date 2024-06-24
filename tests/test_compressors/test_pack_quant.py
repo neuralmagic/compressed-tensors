@@ -32,10 +32,10 @@ from compressed_tensors.quantization.lifecycle.forward import fake_quantize
 from safetensors.torch import save_file
 
 
-def get_dummy_quant_config():
+def get_dummy_quant_config(num_bits=4):
     config_groups = {
         "group_1": QuantizationScheme(
-            targets=["Linear"], weights=QuantizationArgs(num_bits=4)
+            targets=["Linear"], weights=QuantizationArgs(num_bits=num_bits)
         ),
     }
     ignore = ["lm_head"]
@@ -106,7 +106,8 @@ def test_repack(value):
     assert torch.equal(value, unpacked)
 
 
-def test_reload_match(tmp_path):
+@pytest.mark.parametrize("num_bits", [4, 8])
+def test_reload_match(tmp_path, num_bits):
     dense_state_dict = {
         "dummy.weight": torch.rand((511, 350)),
         "dummy.weight_scale": torch.tensor(0.01, dtype=torch.float32),
@@ -115,11 +116,12 @@ def test_reload_match(tmp_path):
         "dummy2.weight_scale": torch.tensor(0.02, dtype=torch.float32),
         "dummy2.weight_zero_point": torch.tensor(15, dtype=torch.int8),
     }
+    print("num bits", num_bits)
     names_to_scheme = {
-        "dummy": QuantizationArgs(num_bits=4),
-        "dummy2": QuantizationArgs(num_bits=4),
+        "dummy": QuantizationArgs(num_bits=num_bits),
+        "dummy2": QuantizationArgs(num_bits=num_bits),
     }
-    quant_config = get_dummy_quant_config()
+    quant_config = get_dummy_quant_config(num_bits)
 
     compressor = PackedQuantizationCompressor(config=quant_config)
     quantized_modules_to_args = {

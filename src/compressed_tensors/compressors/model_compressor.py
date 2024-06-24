@@ -28,7 +28,7 @@ from compressed_tensors.base import (
     SPARSITY_CONFIG_NAME,
 )
 from compressed_tensors.compressors import Compressor
-from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
+from compressed_tensors.config import SparsityCompressionConfig
 from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationStatus,
@@ -262,15 +262,9 @@ class ModelCompressor:
         if self.quantization_compressor is not None:
             names_to_scheme = apply_quantization_config(model, self.quantization_config)
             load_pretrained_quantization(model, model_path)
-            if (
-                self.quantization_config.format
-                == CompressionFormat.pack_quantized.value
-            ):
-                dense_gen = self.quantization_compressor.decompress(
-                    model_path, names_to_scheme=names_to_scheme
-                )
-            else:
-                dense_gen = self.quantization_compressor.decompress(model_path)
+            dense_gen = self.quantization_compressor.decompress(
+                model_path, names_to_scheme=names_to_scheme
+            )
             self._replace_weights(dense_gen, model)
 
             def update_status(module):
