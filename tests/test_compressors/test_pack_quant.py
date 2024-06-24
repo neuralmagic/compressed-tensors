@@ -67,7 +67,7 @@ def test_quant_format(shape):
     compressor = PackedQuantizationCompressor(config=quant_config)
     quantized_modules_to_args = {"dummy": quant_config.config_groups["group_1"].weights}
     compressed_state_dict = compressor.compress(
-        dense_state_dict, model_quant_args=quantized_modules_to_args
+        dense_state_dict, names_to_scheme=quantized_modules_to_args
     )
 
     # compressed state_dict adds one entry for shape
@@ -129,7 +129,7 @@ def test_reload_match(tmp_path, num_bits):
         "dummy2": quant_config.config_groups["group_1"].weights,
     }
     compressed_state_dict = compressor.compress(
-        dense_state_dict, model_quant_args=quantized_modules_to_args
+        dense_state_dict, names_to_scheme=quantized_modules_to_args
     )
     save_file(compressed_state_dict, tmp_path / "model.safetensors")
     reconstructed_dense_gen = compressor.decompress(
