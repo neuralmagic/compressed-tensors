@@ -231,7 +231,7 @@ class ModelCompressor:
         quantized_modules_to_args = map_modules_to_quant_args(model)
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(
-                state_dict, model_quant_args=quantized_modules_to_args
+                state_dict, names_to_scheme=quantized_modules_to_args
             )
 
         if self.sparsity_compressor is not None:
