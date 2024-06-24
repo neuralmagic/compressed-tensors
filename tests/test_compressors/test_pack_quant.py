@@ -116,7 +116,7 @@ def test_reload_match(tmp_path, num_bits):
         "dummy2.weight_scale": torch.tensor(0.02, dtype=torch.float32),
         "dummy2.weight_zero_point": torch.tensor(15, dtype=torch.int8),
     }
-    print("num bits", num_bits)
+
     names_to_scheme = {
         "dummy": QuantizationArgs(num_bits=num_bits),
         "dummy2": QuantizationArgs(num_bits=num_bits),

@@ -56,14 +56,14 @@ class PackedQuantizationCompressor(Compressor):
     def compress(
         self,
         model_state: Dict[str, Tensor],
-        model_quant_args: Dict[str, QuantizationArgs],
+        names_to_scheme: Dict[str, QuantizationArgs],
         **kwargs,
     ) -> Dict[str, Tensor]:
         """
         Compresses a dense state dict
 
         :param model_state: state dict of uncompressed model
-        :param model_quant_args: quantization args for each quantized weight, needed for
+        :param names_to_scheme: quantization args for each quantized weight, needed for
         quantize function to calculate bit depth
         :return: compressed state dict
         """
@@ -81,7 +81,7 @@ class PackedQuantizationCompressor(Compressor):
                 shape = torch.tensor(value.shape)
                 if scale is not None and zp is not None:
                     # weight is quantized, compress it
-                    quant_args = model_quant_args[prefix]
+                    quant_args = names_to_scheme[prefix]
                     if can_quantize(value, quant_args):
                         # convert weight to an int if not already compressed
                         value = quantize(
