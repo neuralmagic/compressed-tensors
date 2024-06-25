@@ -101,7 +101,7 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
             )
 
 
-def apply_quantization_config(model: Module, config: QuantizationConfig):
+def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict:
     """
     Initializes the model for quantization in-place based on the given config
 
@@ -112,6 +112,7 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
     # use ordered dict to preserve target ordering in config
     target_to_scheme = OrderedDict()
     config = process_quantization_config(config)
+    names_to_scheme = OrderedDict()
     for scheme in config.config_groups.values():
         for target in scheme.targets:
             target_to_scheme[target] = scheme
@@ -131,6 +132,7 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
             submodule.quantization_scheme = _scheme_from_targets(
                 target_to_scheme, targets, name
             )
+            names_to_scheme[name] = submodule.quantization_scheme.weights
 
     if config.ignore is not None and ignored_submodules is not None:
         if set(config.ignore) - set(ignored_submodules):
@@ -140,7 +142,42 @@ def apply_quantization_config(model: Module, config: QuantizationConfig):
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
     # apply current quantization status across all targeted layers
+
     apply_quantization_status(model, config.quantization_status)
+    return names_to_scheme
+
+
+def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
+    """
+    Preprocess the raw QuantizationConfig
+
+    :param config: the raw QuantizationConfig
+    :return: the processed QuantizationConfig
+    """
+    if config.kv_cache_scheme is not None:
+        config = process_kv_cache_config(config)
+
+    return config
+
+
+def process_kv_cache_config(
+    config: QuantizationConfig, targets: Union[List[str], str] = KV_CACHE_TARGETS
+) -> QuantizationConfig:
+    """
+    Reformulate the `config.kv_cache` as a `config_group`
+    and add it to the set of existing `config.groups`
+
+    :param config: the QuantizationConfig
+    :return: the QuantizationConfig with additional "kv_cache" group
+    """
+    kv_cache_dict = config.kv_cache_scheme.model_dump()
+    kv_cache_scheme = QuantizationScheme(
+        output_activations=QuantizationArgs(**kv_cache_dict),
+        targets=targets,
+    )
+    kv_cache_group = dict(kv_cache=kv_cache_scheme)
+    config.config_groups.update(kv_cache_group)
+    return config
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
