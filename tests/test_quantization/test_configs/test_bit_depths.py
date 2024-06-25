@@ -26,7 +26,6 @@ from torch.nn import Linear
 
 
 def create_config(bit_depth, quant_type, input_symmetry, weight_symmetry):
-    print(quant_type)
     weights = QuantizationArgs(
         num_bits=bit_depth, type=quant_type, symmetric=weight_symmetry
     )

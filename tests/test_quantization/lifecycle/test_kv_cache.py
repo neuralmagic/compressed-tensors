@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
+
 import pytest
 import torch
 from compressed_tensors.quantization import (
@@ -81,7 +83,8 @@ def test_kv_cache_quantization(config):
 
 @pytest.mark.parametrize("config", [config])
 def test_kv_cache_quantization_clashing_configs(config):
-    config["config_groups"]["group_1"]["output_activations"] = {
+    config_ = copy.deepcopy(config)
+    config_["config_groups"]["group_1"]["output_activations"] = {
         "num_bits": 8,
         "type": "int",
         "symmetric": True,
@@ -94,7 +97,7 @@ def test_kv_cache_quantization_clashing_configs(config):
     )
     model.eval()
 
-    config = QuantizationConfig(**config)
+    config = QuantizationConfig(**config_)
     config.quantization_status = QuantizationStatus.CALIBRATION
     with pytest.raises(ValueError):
         # raise ValueError, because there is a clash between the

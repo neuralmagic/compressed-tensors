@@ -166,7 +166,7 @@ def disable_built_in_kv_cache(model: "PreTrainedModel"):  # noqa F821
             # `model.forward` has been already wrapped, return
             return forward_method
 
-        original_forward_method = forward_method.__func__
+        original_forward_method = forward_method
 
         @wraps(original_forward_method)
         def forward_method_wrapper(*args, **kwargs):
