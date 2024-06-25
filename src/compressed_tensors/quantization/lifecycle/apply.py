@@ -154,11 +154,9 @@ def disable_built_in_kv_cache(model: "PreTrainedModel"):  # noqa F821
     Overrides a PreTrainedModel's forward() method with a wrapped version that
     inspects the properties of the implemented kv cache.
 
-    It raises an error
-    if any type of quantized kv cache is being used. This is to avoid any
-    types of clashes between our quantization logic and an arbitrary
-    quantization logic applied in the implementation of the QuantizedCache
-    interface.
+    It raises an error if any type of quantized kv cache is being used.
+    This is to avoid any types of clashes between our quantization logic
+    and an arbitrary quantization logic of the QuantizdCache implementation
     """
 
     def disable_kv_cache_on_forward(forward_method):
@@ -172,6 +170,9 @@ def disable_built_in_kv_cache(model: "PreTrainedModel"):  # noqa F821
         def forward_method_wrapper(*args, **kwargs):
             from transformers.cache_utils import QuantizedCache
 
+            # the check below works both for both
+            # model(*args, **kwargs) as well as for
+            # model.generate(*args, **kwargs)
             past_key_values = kwargs.get("past_key_values")
             if isinstance(past_key_values, QuantizedCache):
                 raise ValueError(
