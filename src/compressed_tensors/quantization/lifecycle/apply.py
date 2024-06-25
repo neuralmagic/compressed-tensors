@@ -15,6 +15,7 @@
 import logging
 import re
 from collections import OrderedDict
+from functools import wraps
 from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
 from typing import Union
@@ -142,42 +143,51 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
     # apply current quantization status across all targeted layers
-
     apply_quantization_status(model, config.quantization_status)
+    if config.quantization_status <= QuantizationStatus.CALIBRATION:
+        disable_built_in_kv_cache(model)
     return names_to_scheme
 
 
-def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
+def disable_built_in_kv_cache(model: "PreTrainedModel"):  # noqa F821
     """
-    Preprocess the raw QuantizationConfig
+    Overrides a PreTrainedModel's forward() method with a wrapped version that
+    inspects the properties of the implemented kv cache.
 
-    :param config: the raw QuantizationConfig
-    :return: the processed QuantizationConfig
+    It raises an error
+    if any type of quantized kv cache is being used. This is to avoid any
+    types of clashes between our quantization logic and an arbitrary
+    quantization logic applied in the implementation of the QuantizedCache
+    interface.
     """
-    if config.kv_cache_scheme is not None:
-        config = process_kv_cache_config(config)
 
-    return config
+    def disable_kv_cache_on_forward(forward_method):
+        if getattr(forward_method, "_kv_cache_disabled", False):
+            # `model.forward` has been already wrapped, return
+            return forward_method
 
+        original_forward_method = forward_method.__func__
 
-def process_kv_cache_config(
-    config: QuantizationConfig, targets: Union[List[str], str] = KV_CACHE_TARGETS
-) -> QuantizationConfig:
-    """
-    Reformulate the `config.kv_cache` as a `config_group`
-    and add it to the set of existing `config.groups`
+        @wraps(original_forward_method)
+        def forward_method_wrapper(*args, **kwargs):
+            from transformers.cache_utils import QuantizedCache
 
-    :param config: the QuantizationConfig
-    :return: the QuantizationConfig with additional "kv_cache" group
-    """
-    kv_cache_dict = config.kv_cache_scheme.model_dump()
-    kv_cache_scheme = QuantizationScheme(
-        output_activations=QuantizationArgs(**kv_cache_dict),
-        targets=targets,
-    )
-    kv_cache_group = dict(kv_cache=kv_cache_scheme)
-    config.config_groups.update(kv_cache_group)
-    return config
+            past_key_values = kwargs.get("past_key_values")
+            if isinstance(past_key_values, QuantizedCache):
+                raise ValueError(
+                    "Attempting to run quantization calibration, "
+                    "but the transformers model is using "
+                    "`QuantizedCache` in the forward pass. "
+                    "This is an ambiguous setup and may lead to errors. "
+                    "Disable the cache quantization and retry."
+                )
+
+            return original_forward_method(*args, **kwargs)
+
+        forward_method_wrapper._kv_cache_disabled = True
+        return forward_method_wrapper
+
+    model.forward = disable_kv_cache_on_forward(model.forward)
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:

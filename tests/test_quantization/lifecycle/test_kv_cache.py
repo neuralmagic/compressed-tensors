@@ -20,6 +20,7 @@ from compressed_tensors.quantization import (
     freeze_module_quantization,
 )
 from transformers import AutoModelForCausalLM
+from transformers.cache_utils import QuantizedCache, QuantizedCacheConfig
 
 
 config = {
@@ -102,3 +103,43 @@ def test_kv_cache_quantization_clashing_configs(config):
         # (they are both adding output activations to the
         # re:.*k_proj and re:.*q_proj)
         apply_quantization_config(model, config)
+
+
+@pytest.mark.parametrize("config", [config])
+def test_kv_cache_fail_with_quantized_cache_1(config):
+    model = AutoModelForCausalLM.from_pretrained(
+        "HuggingFaceM4/tiny-random-LlamaForCausalLM",
+        torch_dtype="auto",
+    )
+    sample = {
+        name: torch.ones((1, 32)).long()
+        for name in ["input_ids", "attention_mask", "labels"]
+    }
+    model.eval()
+
+    config = QuantizationConfig(**config)
+    config.quantization_status = QuantizationStatus.CALIBRATION
+    apply_quantization_config(model, config)
+    with pytest.raises(ValueError):
+        with torch.no_grad():
+            _ = model(**sample, past_key_values=QuantizedCache(QuantizedCacheConfig()))
+
+
+@pytest.mark.parametrize("config", [config])
+def test_kv_cache_fail_with_quantized_cache_2(config):
+    model = AutoModelForCausalLM.from_pretrained(
+        "HuggingFaceM4/tiny-random-LlamaForCausalLM",
+        torch_dtype="auto",
+    )
+    sample = {
+        name: torch.ones((1, 32)).long()
+        for name in ["input_ids", "attention_mask", "labels"]
+    }
+    model.eval()
+
+    config = QuantizationConfig(**config)
+    config.quantization_status = QuantizationStatus.CALIBRATION
+    apply_quantization_config(model, config)
+    with pytest.raises(ValueError):
+        with torch.no_grad():
+            _ = model.generate(**sample, cache_implementation="quantized")
