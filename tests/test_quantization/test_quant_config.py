@@ -13,7 +13,52 @@
 # limitations under the License.
 
 import pytest
-from compressed_tensors.quantization import QuantizationConfig, QuantizationScheme
+from compressed_tensors.quantization import (
+    DEFAULT_QUANTIZATION_FORMAT,
+    DEFAULT_QUANTIZATION_METHOD,
+    QuantizationConfig,
+    QuantizationScheme,
+    QuantizationStatus,
+)
+from pydantic import ValidationError
+
+
+def test_basic_config():
+    config_groups = {"group_1": QuantizationScheme(targets=[])}
+    config = QuantizationConfig(config_groups=config_groups)
+
+    assert config.config_groups == config_groups
+    assert config.quant_method == DEFAULT_QUANTIZATION_METHOD
+    assert config.format == DEFAULT_QUANTIZATION_FORMAT
+    assert config.quantization_status == QuantizationStatus.INITIALIZED
+    assert config.global_compression_ratio is None
+    assert isinstance(config.ignore, list) and len(config.ignore) == 0
+
+
+def test_full_config():
+    config_groups = {
+        "group_1": QuantizationScheme(targets=[]),
+        "group_2": QuantizationScheme(targets=[]),
+    }
+    global_compression_ratio = 3.5
+    ignore = ["model.layers.0"]
+    quantization_status = "compressed"
+
+    config = QuantizationConfig(
+        config_groups=config_groups,
+        global_compression_ratio=global_compression_ratio,
+        ignore=ignore,
+        quantization_status=quantization_status,
+    )
+    assert config.config_groups == config_groups
+    assert config.global_compression_ratio == global_compression_ratio
+    assert config.ignore == ignore
+    assert config.quantization_status == QuantizationStatus.COMPRESSED
+
+
+def test_need_config_groups():
+    with pytest.raises(ValidationError):
+        _ = QuantizationScheme()
 
 
 @pytest.mark.parametrize(
