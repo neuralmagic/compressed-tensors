@@ -195,8 +195,8 @@ def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
     """
     Check whether the QuantizationScheme targets the kv cache.
     It does if all the following criteria are met:
-    - the scheme targets is a single string (the actual layer name),
-      that matches on any of the KV_CACHE_TARGETS
+    - the scheme targets either exactly match the KV_CACHE_TARGETS
+        or the match KV_CACHE_TARGETS regex pattern
     - the scheme quantizes output_activations (we want to quantize the
         outputs from the KV_CACHE_TARGETS, as their correspond to the
         keys and values that are to be saved in the cache)
@@ -204,13 +204,19 @@ def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
     :param scheme: The QuantizationScheme to investigate
     :return: boolean flag
     """
-    if len(scheme.targets) > 1:
-        return False
-    target = scheme.targets[0]
-    return (
-        any(re.match(pattern[3:], target) for pattern in KV_CACHE_TARGETS)
-        and scheme.output_activations is not None
-    )
+    if len(scheme.targets) == 1:
+        # match on the KV_CACHE_TARGETS regex pattern
+        # if there is only one target
+        is_match_targets = any(
+            [re.match(pattern[3:], scheme.targets[0]) for pattern in KV_CACHE_TARGETS]
+        )
+    else:
+        # match on the exact KV_CACHE_TARGETS
+        # if there are multiple targets
+        is_match_targets = set(KV_CACHE_TARGETS) == set(scheme.targets)
+
+    is_match_output_activations = scheme.output_activations is not None
+    return is_match_targets and is_match_output_activations
 
 
 def parse_out_kv_cache_args(

@@ -34,7 +34,7 @@ config = {
     "config_groups": {
         "group_1": {
             "weights": {
-                "num_bits": 8,
+                "num_bits": 4,
                 "type": "int",
                 "symmetric": True,
                 "strategy": "tensor",
