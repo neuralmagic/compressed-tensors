@@ -14,7 +14,7 @@
 
 from functools import wraps
 from math import ceil
-from typing import List, Optional
+from typing import Optional
 
 import torch
 from compressed_tensors.quantization.observers.helpers import calculate_range
@@ -44,7 +44,6 @@ def quantize(
     zero_point: torch.Tensor,
     args: QuantizationArgs,
     dtype: Optional[torch.dtype] = None,
-    g_idx: Optional[List[int]] = None,
 ) -> torch.Tensor:
     """
     Quantize the input tensor x using the QuantizationStrategy specified in args.
@@ -76,7 +75,6 @@ def quantize(
         dtype=dtype,
         do_quantize=True,
         do_dequantize=False,
-        g_idx=g_idx,
     )
 
 
@@ -87,7 +85,6 @@ def dequantize(
     zero_point: torch.Tensor = None,
     args: QuantizationArgs = None,
     dtype: Optional[torch.dtype] = None,
-    g_idx: Optional[List[int]] = None,
 ) -> torch.Tensor:
     """
     Dequantize a quantized input tensor x_q based on the strategy specified in args. If
@@ -128,7 +125,6 @@ def dequantize(
         do_quantize=False,
         do_dequantize=True,
         dtype=dtype,
-        g_idx=g_idx,
     )
 
 
@@ -138,7 +134,6 @@ def fake_quantize(
     scale: torch.Tensor,
     zero_point: torch.Tensor,
     args: QuantizationArgs,
-    g_idx: Optional[List[int]] = None,
 ) -> torch.Tensor:
     """
     Fake quantize the input tensor x by quantizing then dequantizing with
@@ -160,7 +155,6 @@ def fake_quantize(
         args=args,
         do_quantize=True,
         do_dequantize=True,
-        g_idx=g_idx,
     )
 
 
@@ -173,11 +167,7 @@ def _process_quantization(
     dtype: Optional[torch.dtype] = None,
     do_quantize: bool = True,
     do_dequantize: bool = True,
-    g_idx: Optional[List[int]] = None,
 ) -> torch.Tensor:
-    if g_idx is not None:
-        scale = scale[g_idx]
-        zero_point = zero_point[g_idx]
 
     q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
