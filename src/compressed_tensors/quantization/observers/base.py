@@ -46,7 +46,10 @@ class Observer(Module, RegistryMixin):
         self._num_observed_tokens = None
 
     @torch.no_grad()
-    def forward(self, observed: Tensor) -> Tuple[FloatTensor, IntTensor]:
+    def forward(
+        self,
+        observed: Tensor,
+    ) -> Tuple[FloatTensor, IntTensor]:
         """
         maps directly to get_qparams
         :param observed: optional observed tensor to calculate quantization parameters
@@ -77,7 +80,8 @@ class Observer(Module, RegistryMixin):
         ...
 
     def get_qparams(
-        self, observed: Optional[Tensor] = None
+        self,
+        observed: Optional[Tensor] = None,
     ) -> Tuple[FloatTensor, IntTensor]:
         """
         Convenience function to wrap overwritten calculate_qparams
