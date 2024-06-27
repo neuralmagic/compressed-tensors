@@ -23,9 +23,11 @@ from typing import Callable, Dict, Iterable, Iterator, Tuple, Union
 import torch
 from compressed_tensors.registry.registry import RegistryMixin
 from compressed_tensors.utils.converters.transformations import (
+    remove_unused_tensors,
     transform_autogptq_weights_and_reshape_tensors,
     transform_exllama_names,
 )
+from compressed_tensors.utils.safetensors_load import validate_safetensors_file_path
 from safetensors import safe_open
 from safetensors.torch import save_file
 from tqdm import tqdm
@@ -38,7 +40,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 class ConverterNames(str, Enum):
-    EXLLAMA_TO_COMPRESSED_TENSOR = "exllama_to_compressed_tensor"
+    AutoGPTQConverter: str = "exllama_to_compressed_tensor"
 
 
 class BaseConverter(ABC, RegistryMixin):
@@ -71,7 +73,7 @@ class BaseConverter(ABC, RegistryMixin):
         :param save_dir: The directory to save the converted state_dict to
         :return: The directory where the converted state_dict was saved
         """
-        _validate_safetensors_file_path(filepath)
+        validate_safetensors_file_path(filepath)
 
         filepath_: Path = Path(filepath)
         if not save_dir:
@@ -84,16 +86,23 @@ class BaseConverter(ABC, RegistryMixin):
         # transform and save the state_dict
         if filepath_.is_dir():
             tqdm.write(f"Converting directory: {filepath}")
-            tqdm.write(f"Found: {len(list(filepath_.glob('*.safetensors')))} .safetensors files")
+            tqdm.write(
+                f"Found: {len(list(filepath_.glob('*.safetensors')))} "
+                ".safetensors files"
+            )
             for file in filepath_.glob("*.safetensors"):
                 tqdm.write(f"Converting file: {file.name}")
                 new_state_dict = {}
                 state_dict: Iterable[StateDictType] = load_safetensors_state_dict(
                     file, by_layers=True
                 )
-                layer_progress_bar = tqdm(state_dict, total=layer_count(file), desc="Converting layers")
+                layer_progress_bar = tqdm(
+                    state_dict, total=layer_count(file), desc="Converting layers"
+                )
                 for layer_state_dict in layer_progress_bar:
-                    layer_name = list(layer_state_dict.keys())[0][:len("model.layers.0")]
+                    layer_name = list(layer_state_dict.keys())[0][
+                        : len("model.layers.0")
+                    ]
                     layer_progress_bar.set_description(f"Converting layer {layer_name}")
                     layer_progress_bar.update()
                     new_state_dict.update(
@@ -101,13 +110,18 @@ class BaseConverter(ABC, RegistryMixin):
                     )
 
                 if new_state_dict:
+                    # compress before saving
+                    # compressor = Compressor.load_from_registry(
+                    # name=CompressionFormat.pack_quantized.value
+                    # )
+                    # new_state_dict = compressor.compress(new_state_dict)
                     save_file(
                         new_state_dict,
                         filename=save_dir_ / file.name,
                         metadata=metadata,
                     )
             _copy_non_safetensor_files_(filepath_, save_dir_)
-            _update_quantization_config(filepath_, save_dir_)
+            # _update_quantization_config(filepath_, save_dir_)
 
         elif filepath_.is_file():
             new_state_dict = {}
@@ -134,39 +148,28 @@ class BaseConverter(ABC, RegistryMixin):
         raise NotImplementedError()
 
 
-@BaseConverter.register(name=ConverterNames.EXLLAMA_TO_COMPRESSED_TENSOR)
-class ExllamaToCompressedTensorConverter(BaseConverter):
+@BaseConverter.register(name=ConverterNames.AutoGPTQConverter)
+class AutoGPTQConverter(BaseConverter):
     """
     A converter that applies transformations to the state_dict of a autogptq
-    quantized model to convert it to a compressed tensor model, which can be
-    loaded by the SparseAutoModel classes
+    quantized model to convert it to a compressed tensor model
+
+    Transformations made:
+
+    -> Unpack autogptq 4 bit weight packing
+    -> Translate exllama names to compressed tensor names
+    -> Pack 4 bit weights with compressed tensor format
+    -> Remove unused tensors
+    -> Update quantization config in config.json file
     """
 
     @classmethod
     def transformations(cls):
-        return (transform_autogptq_weights_and_reshape_tensors, transform_exllama_names)
-
-
-def _validate_safetensors_file_path(filepath: str):
-    """
-    Given a file path, it is valid if:
-        - The file exists
-        - The file is either a single .safetensors file or a
-            directory containing .safetensors files
-
-    :param filepath: A string file path to validate
-    """
-
-    filepath_: Path = Path(filepath)
-
-    if not filepath_.exists():
-        raise FileNotFoundError(f"File not found: {filepath}")
-
-    if filepath_.is_dir() and not any(filepath_.glob("*.safetensors")):
-        raise FileNotFoundError(f"No .safetensors files found in directory: {filepath}")
-
-    if filepath_.is_file() and not filepath_.suffix == ".safetensors":
-        raise ValueError(f"File must be a .safetensors file: {filepath}")
+        return (
+            transform_autogptq_weights_and_reshape_tensors,
+            transform_exllama_names,
+            remove_unused_tensors,
+        )
 
 
 def _copy_non_safetensor_files_(source_dir: Path, dest_dir: Path):
@@ -178,7 +181,7 @@ def _copy_non_safetensor_files_(source_dir: Path, dest_dir: Path):
     :param dest_dir: The directory to copy files to
     """
     for file in source_dir.glob("*"):
-        if file.suffix != ".safetensors":
+        if file.suffix != ".safetensors" and file.name != "config.json":
             _LOGGER.info(f"Copying file: {file} to {dest_dir}")
             shutil.copy(file, dest_dir / file.name)
 
@@ -198,7 +201,9 @@ def _update_quantization_config(source_dir: Path, dest_dir: Path):
     if hasattr(config, "quantization_config"):
         _LOGGER.info("Updating quantization config...")
         quantization_config = config.quantization_config
-        config.quantization_config = _convert_to_compressed_tensors_config(quantization_config)
+        config.quantization_config = _convert_to_compressed_tensors_config(
+            quantization_config
+        )
     config.save_pretrained(dest_dir)
 
 
@@ -207,11 +212,13 @@ def _convert_to_compressed_tensors_config(quantization_config):
     Converts the quantization_config attribute from a config.json file
     to a dictionary
 
-    :param quantization_config: The quantization_config attribute from a config.json file
+    :param quantization_config: The quantization_config
+        attribute from a config.json file
     :return: The quantization_config as a dictionary
     """
     compressed_tensor_config = ...
     return compressed_tensor_config
+
 
 def layer_count(file_path: str) -> int:
     """
@@ -222,16 +229,15 @@ def layer_count(file_path: str) -> int:
     """
     with safe_open(file_path, framework="pt", device="cpu") as f:
         keys = sorted(f.keys())
-        
+
         last_layer_name = None
         layer_count = 0
         for key in keys:
-            layer_name = key[:len("model.layers.0")]
+            layer_name = key[: len("model.layers.0")]
             if layer_name != last_layer_name:
                 last_layer_name = layer_name
                 layer_count += 1
         return layer_count
-            
 
 
 def load_safetensors_state_dict(
@@ -251,7 +257,7 @@ def load_safetensors_state_dict(
             current_layer = None
             layer_data = {}
             for key in sorted(f.keys()):
-                layer_name = key[:len("model.layers.0")]
+                layer_name = key[: len("model.layers.0")]
                 if current_layer is None:
                     current_layer = layer_name
                 elif layer_name != current_layer:

@@ -69,7 +69,7 @@ def transform_exllama_names(state_dict: Dict[str, Tensor]) -> Dict[str, Tensor]:
     name_map: Dict[str, str] = {
         ".scales": ".weight_scale",
         ".qzeros": ".weight_zero_point",
-        ".qweight": ".weight",
+        ".qweight": ".weight_packed",
     }
 
     updated_state_dict = {}
@@ -91,7 +91,7 @@ def transform_autogptq_weights_and_reshape_tensors(
     to CompressedTensors conversion
 
     The transformations include:
-        - Unpack ad dequantize the weight tensor using the scales, zeros, and g_idx tensors
+        - Unpack and dequantize the weight tensor using the scales, zeros, and g_idx tensors
         - Squeeze the scales tensor to [x] from [1, x]
 
     :pre-condition: The state_dict should be for a quantized model
@@ -117,13 +117,15 @@ def transform_autogptq_weights_and_reshape_tensors(
             g_idx = state_dict[key.replace("qweight", "g_idx")]
 
             zeros = unpack_zeros(qzeros)
-            qweight = unpack_int32_into_fp32(
-                qweight=tensor,
-                scales=scales,
-                zeros=zeros,
-                g_idx=g_idx,
-            )
-            transformed_weights_dict[key] = qweight
+            # qweight = unpack_int32_into_fp32(
+            #     qweight=tensor,
+            #     scales=scales,
+            #     zeros=zeros,
+            #     g_idx=g_idx,
+            # )
+            new_shape = torch.tensor([tensor.shape[0] * 8, tensor.shape[1]])
+            transformed_weights_dict[key] = tensor
+            transformed_weights_dict[key.replace("qweight", "weight_shape")] = new_shape
 
     # transform scales
     for key, tensor in state_dict.items():
@@ -222,3 +224,17 @@ def unpack_int32_into_fp32(
     weight = torch.cat(weight, dim=1)
 
     return weight
+
+
+def remove_unused_tensors(state_dict: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    """
+    Remove unused tensors from the state_dict
+
+    :param state_dict: The state_dict to be cleaned
+    :return: The cleaned state_dict
+    """
+    return {
+        key: tensor
+        for key, tensor in state_dict.items()
+        if is_gptq_quantization_target(key) and not key.endswith(".g_idx")
+    }

@@ -15,11 +15,12 @@
 
 from compressed_tensors.utils.converters.converters import BaseConverter, ConverterNames
 
+
 __all__ = ["convert_autogptq_checkpoint"]
 
 
 def convert_autogptq_checkpoint(
-    old_checkpoint_path, new_checkpoint_path ,**kwargs
+    old_checkpoint_path, new_checkpoint_path, **kwargs
 ) -> str:
     """
     Convert an autogptq checkpoint to a compressed tensor checkpoint
@@ -31,7 +32,7 @@ def convert_autogptq_checkpoint(
     :return: the path to the new checkpoint
     """
     converter: BaseConverter = BaseConverter.load_from_registry(
-        ConverterNames.EXLLAMA_TO_COMPRESSED_TENSOR
+        ConverterNames.AutoGPTQConverter
     )
     checkpoint_path = converter.convert_from_safetensors(
         old_checkpoint_path, new_checkpoint_path, **kwargs
