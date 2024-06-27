@@ -150,6 +150,37 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
     return names_to_scheme
 
 
+def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
+    """
+    Preprocess the raw QuantizationConfig
+    :param config: the raw QuantizationConfig
+    :return: the processed QuantizationConfig
+    """
+    if config.kv_cache_scheme is not None:
+        config = process_kv_cache_config(config)
+
+    return config
+
+
+def process_kv_cache_config(
+    config: QuantizationConfig, targets: Union[List[str], str] = KV_CACHE_TARGETS
+) -> QuantizationConfig:
+    """
+    Reformulate the `config.kv_cache` as a `config_group`
+    and add it to the set of existing `config.groups`
+    :param config: the QuantizationConfig
+    :return: the QuantizationConfig with additional "kv_cache" group
+    """
+    kv_cache_dict = config.kv_cache_scheme.model_dump()
+    kv_cache_scheme = QuantizationScheme(
+        output_activations=QuantizationArgs(**kv_cache_dict),
+        targets=targets,
+    )
+    kv_cache_group = dict(kv_cache=kv_cache_scheme)
+    config.config_groups.update(kv_cache_group)
+    return config
+
+
 def disable_built_in_kv_cache(model: "PreTrainedModel"):  # noqa F821
     """
     Overrides a PreTrainedModel's forward() method with a wrapped version that
