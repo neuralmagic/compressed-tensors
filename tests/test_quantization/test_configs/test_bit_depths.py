@@ -134,7 +134,6 @@ def test_fp8(bit_depth, quant_type, input_symmetry, weight_symmetry):
         input_min = torch.min(inputs_fake_quant)
         diff_from_max = abs(input_max - max)
         diff_from_min = abs(input_min - min)
-        print(diff_from_min, diff_from_max)
         assert diff_from_max.item() == 0.0 or diff_from_min.item() == 0.0
 
     assert model.weight_zero_point >= min
@@ -150,5 +149,4 @@ def test_fp8(bit_depth, quant_type, input_symmetry, weight_symmetry):
     weight_min = torch.min(weight_fake_quant)
     diff_from_max = abs(weight_max - max)
     diff_from_min = abs(weight_min - min)
-    print(diff_from_min, diff_from_max)
     assert diff_from_max.item() == 0.0 or diff_from_min.item() == 0.0
