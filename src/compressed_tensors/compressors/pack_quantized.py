@@ -29,13 +29,7 @@ from torch import Tensor
 from tqdm import tqdm
 
 
-__all__ = [
-    "PackedQuantizationCompressor",
-    "pack_4bit_ints",
-    "pack_8bit_ints",
-    "unpack_4bit_ints",
-    "unpack_8bit_ints",
-]
+__all__ = ["PackedQuantizationCompressor", "pack_to_int32", "unpack_from_int32"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -91,11 +85,7 @@ class PackedQuantizationCompressor(Compressor):
                             args=quant_args,
                             dtype=torch.int8,
                         )
-
-                    if quant_args.num_bits == 8:
-                        value = pack_8bit_ints(value.cpu())
-                    else:
-                        value = pack_4bit_ints(value.cpu())
+                    value = pack_to_int32(value.cpu(), quant_args.num_bits)
                     compressed_dict[merge_names(prefix, "weight_shape")] = shape
                     compressed_dict[merge_names(prefix, "weight_packed")] = value
                     continue
@@ -143,10 +133,7 @@ class PackedQuantizationCompressor(Compressor):
                 weight = weight_data["weight_packed"]
                 num_bits = weight_data["num_bits"]
                 original_shape = torch.Size(weight_data["weight_shape"])
-                if num_bits == 4:
-                    unpacked = unpack_4bit_ints(weight, original_shape)
-                else:
-                    unpacked = unpack_8bit_ints(weight, original_shape)
+                unpacked = unpack_from_int32(weight, num_bits, original_shape)
                 decompressed = dequantize(
                     x_q=unpacked,
                     scale=scale,
@@ -155,42 +142,46 @@ class PackedQuantizationCompressor(Compressor):
                 yield merge_names(weight_name, "weight"), decompressed
 
 
-def pack_8bit_ints(value: torch.Tensor) -> torch.Tensor:
+def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
     """
-    Packs a tensor of int8 into int32s with padding
+    Packs a tensor of int4 or int8 weights stored in int8 into int32s with padding
 
     :param value: tensor to pack
-    :returns: packed int32 tensor
-    """
-    # need to convert to unsigned 8bit to use numpy's pack/unpack
-    value_uint = (value - 128).to(torch.uint8)
-    bits = np.unpackbits(value_uint, axis=-1, bitorder="little")
-    return _pack_bits(bits_to_pack=bits)
-
-
-def pack_4bit_ints(value: torch.Tensor) -> torch.Tensor:
-    """
-    Packs a tensor of int4 weights stored in int8 into int32s with padding
-
-    :param value: tensor to pack
+    :param num_bits: number of bits used to store underlying data
     :returns: packed int32 tensor
     """
     if value.dtype is not torch.int8:
         raise ValueError("Tensor must be quantized to torch.int8 before packing")
 
-    # need to convert to unsigned 8bit to use numpy's pack/unpack
-    temp = (value - 8).to(torch.uint8)
-    bits = np.unpackbits(temp.numpy(), axis=-1, bitorder="little")
-    ranges = np.array([range(x, x + 4) for x in range(0, bits.shape[1], 8)]).flatten()
-    only_4_bits = bits[:, ranges]  # top 4 bits are 0 because we're really uint4
-    return _pack_bits(bits_to_pack=only_4_bits)
+    if num_bits > 8:
+        raise ValueError("Packing is only supported for less than 8 bits")
+
+    offset = pow(2, num_bits) // 2
+    temp = (value + offset).to(torch.uint8)
+    q_w = temp.cpu().numpy().astype(np.uint32)
+    pack_factor = 32 // num_bits
+
+    q_packed = np.zeros(
+        (q_w.shape[0], math.ceil(q_w.shape[1] / pack_factor)), dtype=np.uint32
+    )
+    padding = q_packed.shape[1] * pack_factor - q_w.shape[1]
+    q_w = np.pad(q_w, pad_width=[(0, 0), (0, padding)], constant_values=0)
+    for i in range(pack_factor):
+        q_packed |= q_w[:, i::pack_factor] << num_bits * i
+
+    q_packed = np.ascontiguousarray(q_packed).view(np.int32)
+    return torch.from_numpy(q_packed)
 
 
-def unpack_8bit_ints(value: torch.Tensor, shape: torch.Size) -> torch.Tensor:
+def unpack_from_int32(
+    value: torch.Tensor, num_bits: int, shape: torch.Size
+) -> torch.Tensor:
     """
-    Unpacks a tensor packed int8 weights in int32
+    Unpacks a tensor of packed int32 weights into individual int8s, maintaining the
+    original their bit range
 
     :param value: tensor to upack
+    :param num_bits: number of bits to unpack each data point into
     :param shape: shape to unpack into, used to remove padding
     :returns: unpacked int8 tensor
     """
@@ -199,74 +190,23 @@ def unpack_8bit_ints(value: torch.Tensor, shape: torch.Size) -> torch.Tensor:
             f"Expected {torch.int32} but got {value.dtype}, Aborting unpack."
         )
 
-    # unpack bits and undo padding to nearest int32 bits
-    individual_depth = 8
-    as_uint8 = value.numpy().view(np.uint8)
-    bits = np.unpackbits(as_uint8, axis=-1, bitorder="little")
-    original_row_size = int(shape[1] * individual_depth)
-    bits = bits[:, :original_row_size]
-    bits = np.packbits(bits, axis=-1, bitorder="little")
-    final = (bits - 128).astype(np.int8)
-    return torch.from_numpy(final)
+    if num_bits > 8:
+        raise ValueError("Unpacking is only supported for less than 8 bits")
 
+    mask = pow(2, num_bits) - 1
+    packed_value = value.numpy().view(np.uint32)
+    pack_factor = 32 // num_bits
 
-def unpack_4bit_ints(value: torch.Tensor, shape: torch.Size) -> torch.Tensor:
-    """
-    Unpacks a tensor packed int4 weights into individual int8s, maintaining the
-    original their int4 range
+    output = np.zeros((packed_value.shape[0], packed_value.shape[1] * pack_factor))
+    for i in range(pack_factor):
+        output[:, i::pack_factor] = (packed_value >> (num_bits * i)) & mask
 
-    :param value: tensor to upack
-    :param shape: shape to unpack into, used to remove padding
-    :returns: unpacked int8 tensor
-    """
-    if value.dtype is not torch.int32:
-        raise ValueError(
-            f"Expected {torch.int32} but got {value.dtype}, Aborting unpack."
-        )
-
-    # unpack bits and undo padding to nearest int32 bits
-    individual_depth = 4
-    as_uint8 = value.numpy().view(np.uint8)
-    bits = np.unpackbits(as_uint8, axis=-1, bitorder="little")
-    original_row_size = int(shape[1] * individual_depth)
-    bits = bits[:, :original_row_size]
-
-    # reformat each packed uint4 to a uint8 by filling to top 4 bits with zeros
-    # (uint8 format is required by np.packbits)
-    shape_8bit = (bits.shape[0], bits.shape[1] * 2)
-    bits_as_8bit = np.zeros(shape_8bit, dtype=np.uint8)
-    ranges = np.array([range(x, x + 4) for x in range(0, shape_8bit[1], 8)]).flatten()
-    bits_as_8bit[:, ranges] = bits
-
-    # repack the bits to uint8
-    repacked = np.packbits(bits_as_8bit, axis=-1, bitorder="little")
+    original_row_size = int(shape[1])
+    output = output[:, :original_row_size]
 
     # bits are packed in unsigned format, reformat to signed
-    # update the value range from uint4 to int4
-    final = repacked.astype(np.int8) - 8
+    # update the value range from unsigned to signed
+    offset = pow(2, num_bits) // 2
+    final = (output.astype(np.int16) - offset).astype(np.int8)
 
     return torch.from_numpy(final)
-
-
-def _pack_bits(bits_to_pack: torch.Tensor) -> torch.Tensor:
-    """
-    Pack a tensor of bits to int32.
-
-    :param bits_to_pack: tensor of bits to pack
-    """
-    # pad each row to fill a full 32bit int
-    pack_depth = 32
-    padding = (
-        math.ceil(bits_to_pack.shape[1] / pack_depth) * pack_depth
-        - bits_to_pack.shape[1]
-    )
-    padded_bits = np.pad(
-        bits_to_pack, pad_width=[(0, 0), (0, padding)], constant_values=0
-    )
-
-    # after packbits each uint8 is two packed uint4s
-    # then we keep the bit pattern the same but convert to int32
-    compressed = np.packbits(padded_bits, axis=-1, bitorder="little")
-    compressed = np.ascontiguousarray(compressed).view(np.int32)
-
-    return torch.from_numpy(compressed)
