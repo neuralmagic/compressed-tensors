@@ -144,7 +144,7 @@ class PackedQuantizationCompressor(Compressor):
 
 def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
     """
-    Packs a tensor of int4 or int8 weights stored in int8 into int32s with padding
+    Packs a tensor of quantized weights stored in int8 into int32s with padding
 
     :param value: tensor to pack
     :param num_bits: number of bits used to store underlying data
@@ -156,21 +156,25 @@ def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
     if num_bits > 8:
         raise ValueError("Packing is only supported for less than 8 bits")
 
+    # convert to unsigned for packing
     offset = pow(2, num_bits) // 2
-    temp = (value + offset).to(torch.uint8)
-    q_w = temp.cpu().numpy().astype(np.uint32)
+    value = (value + offset).to(torch.uint8)
+    value = value.cpu().numpy().astype(np.uint32)
     pack_factor = 32 // num_bits
 
-    q_packed = np.zeros(
-        (q_w.shape[0], math.ceil(q_w.shape[1] / pack_factor)), dtype=np.uint32
-    )
-    padding = q_packed.shape[1] * pack_factor - q_w.shape[1]
-    q_w = np.pad(q_w, pad_width=[(0, 0), (0, padding)], constant_values=0)
-    for i in range(pack_factor):
-        q_packed |= q_w[:, i::pack_factor] << num_bits * i
+    # pad input tensor and initialize packed output
+    packed_size = math.ceil(value.shape[1] / pack_factor)
+    packed = np.zeros((value.shape[0], packed_size), dtype=np.uint32)
+    padding = packed.shape[1] * pack_factor - value.shape[1]
+    value = np.pad(value, pad_width=[(0, 0), (0, padding)], constant_values=0)
 
-    q_packed = np.ascontiguousarray(q_packed).view(np.int32)
-    return torch.from_numpy(q_packed)
+    # pack values
+    for i in range(pack_factor):
+        packed |= value[:, i::pack_factor] << num_bits * i
+
+    # convert back to signed and torch
+    packed = np.ascontiguousarray(packed).view(np.int32)
+    return torch.from_numpy(packed)
 
 
 def unpack_from_int32(
@@ -193,20 +197,23 @@ def unpack_from_int32(
     if num_bits > 8:
         raise ValueError("Unpacking is only supported for less than 8 bits")
 
-    mask = pow(2, num_bits) - 1
-    packed_value = value.numpy().view(np.uint32)
+    # convert packed input to unsigned numpy
+    value = value.numpy().view(np.uint32)
     pack_factor = 32 // num_bits
 
-    output = np.zeros((packed_value.shape[0], packed_value.shape[1] * pack_factor))
+    # unpack
+    mask = pow(2, num_bits) - 1
+    unpacked = np.zeros((value.shape[0], value.shape[1] * pack_factor))
     for i in range(pack_factor):
-        output[:, i::pack_factor] = (packed_value >> (num_bits * i)) & mask
+        unpacked[:, i::pack_factor] = (value >> (num_bits * i)) & mask
 
+    # remove padding
     original_row_size = int(shape[1])
-    output = output[:, :original_row_size]
+    unpacked = unpacked[:, :original_row_size]
 
     # bits are packed in unsigned format, reformat to signed
     # update the value range from unsigned to signed
     offset = pow(2, num_bits) // 2
-    final = (output.astype(np.int16) - offset).astype(np.int8)
+    unpacked = (unpacked.astype(np.int16) - offset).astype(np.int8)
 
-    return torch.from_numpy(final)
+    return torch.from_numpy(unpacked)
