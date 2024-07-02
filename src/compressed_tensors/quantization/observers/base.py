@@ -42,8 +42,7 @@ class Observer(Module, RegistryMixin):
 
     @torch.no_grad()
     def forward(
-        self,
-        observed: Tensor,
+        self, observed: Tensor, g_idx: Optional[Tensor] = None
     ) -> Tuple[FloatTensor, IntTensor]:
         """
         maps directly to get_qparams
@@ -51,7 +50,8 @@ class Observer(Module, RegistryMixin):
             from
         :return: tuple of scale and zero point based on last observed value
         """
-        return self.get_qparams(observed=observed)
+        breakpoint()
+        return self.get_qparams(observed=observed, g_idx=g_idx)
 
     def calculate_qparams(
         self,
@@ -76,6 +76,7 @@ class Observer(Module, RegistryMixin):
     def get_qparams(
         self,
         observed: Optional[Tensor] = None,
+        g_idx: Optional[Tensor] = None,
     ) -> Tuple[FloatTensor, IntTensor]:
         """
         Convenience function to wrap overwritten calculate_qparams
@@ -99,13 +100,23 @@ class Observer(Module, RegistryMixin):
                 scales, zero_points = [], []
                 group_idxs = range(0, columns, self.quantization_args.group_size)
                 for group_id, group_idx in enumerate(group_idxs):
-                    scale, zero_point = self.get_qparams_along_dim(
-                        observed[:, group_idx : (group_idx + group_size)],
-                        0,
-                        tensor_id=group_id,
-                    )
-                    scales.append(scale)
-                    zero_points.append(zero_point)
+                    if g_idx is not None:
+                        scale, zero_point = self.get_qparams_along_dim(
+                            observed[:, g_idx == group_idx],
+                            0,
+                            tensor_id=group_id,
+                        )
+                        scales.append(scale)
+                        zero_points.append(zero_point)
+
+                    else:
+                        scale, zero_point = self.get_qparams_along_dim(
+                            observed[:, group_idx : (group_idx + group_size)],
+                            0,
+                            tensor_id=group_id,
+                        )
+                        scales.append(scale)
+                        zero_points.append(zero_point)
 
                 self._scale = torch.cat(scales, dim=1, out=self._scale)
                 self._zero_point = torch.cat(zero_points, dim=1, out=self._zero_point)

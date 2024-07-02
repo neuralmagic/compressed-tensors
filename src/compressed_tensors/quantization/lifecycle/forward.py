@@ -296,7 +296,10 @@ def maybe_calibrate_or_quantize(
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
         observer = getattr(module, f"{base_name}_observer")
-        scale, zero_point = observer(value)
+        g_idx = None
+        if hasattr(module, "weight_g_idx"):
+            g_idx = getattr(module, "weight_g_idx")
+        scale, zero_point = observer(value, g_idx)
     else:
         # static quantization - get previous scale and zero point from layer
         scale = getattr(module, f"{base_name}_scale")
