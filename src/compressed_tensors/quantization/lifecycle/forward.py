@@ -67,6 +67,7 @@ def quantize(
     if x.device != zero_point.device:
         zero_point = zero_point.to(x.device)
 
+    breakpoint()
     return _process_quantization(
         x=x,
         scale=scale,
@@ -134,6 +135,7 @@ def fake_quantize(
     scale: torch.Tensor,
     zero_point: torch.Tensor,
     args: QuantizationArgs,
+    g_idx: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
     Fake quantize the input tensor x by quantizing then dequantizing with
@@ -155,6 +157,7 @@ def fake_quantize(
         args=args,
         do_quantize=True,
         do_dequantize=True,
+        g_idx=g_idx,
     )
 
 
@@ -167,8 +170,9 @@ def _process_quantization(
     dtype: Optional[torch.dtype] = None,
     do_quantize: bool = True,
     do_dequantize: bool = True,
+    g_idx: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-
+    print(1)
     q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
 
@@ -199,24 +203,40 @@ def _process_quantization(
             sc = scale[:, i].view(-1, 1)
             zp = zero_point[:, i].view(-1, 1) if zero_point is not None else None
 
-            idx = i * group_size
-            if do_quantize:
-                output[:, idx : (idx + group_size)] = _quantize(
-                    x[:, idx : (idx + group_size)],
-                    sc,
-                    zp,
-                    q_min,
-                    q_max,
-                    args,
-                    dtype=dtype,
-                )
-            if do_dequantize:
-                input = (
-                    output[:, idx : (idx + group_size)]
-                    if do_quantize
-                    else x[:, idx : (idx + group_size)]
-                )
-                output[:, idx : (idx + group_size)] = _dequantize(input, sc, zp)
+            if g_idx is not None:
+                group_idx = g_idx == i
+                if do_quantize:
+                    output[:, group_idx] = _quantize(
+                        x[:, group_idx],
+                        sc,
+                        zp,
+                        q_min,
+                        q_max,
+                        args,
+                        dtype=dtype,
+                    )
+                if do_dequantize:
+                    input = output[:, group_idx] if do_quantize else x[:, group_idx]
+                    output[:, group_idx] = _dequantize(input, sc, zp)
+            else:
+                idx = i * group_size
+                if do_quantize:
+                    output[:, idx : (idx + group_size)] = _quantize(
+                        x[:, idx : (idx + group_size)],
+                        sc,
+                        zp,
+                        q_min,
+                        q_max,
+                        args,
+                        dtype=dtype,
+                    )
+                if do_dequantize:
+                    input = (
+                        output[:, idx : (idx + group_size)]
+                        if do_quantize
+                        else x[:, idx : (idx + group_size)]
+                    )
+                    output[:, idx : (idx + group_size)] = _dequantize(input, sc, zp)
 
     else:  # covers channel, token and tensor strategies
         if do_quantize:
