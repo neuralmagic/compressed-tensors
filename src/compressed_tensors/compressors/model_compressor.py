@@ -233,6 +233,7 @@ class ModelCompressor:
             compressed_state_dict = self.quantization_compressor.compress(
                 state_dict, names_to_scheme=quantized_modules_to_args
             )
+            self.quantization_config.quantization_status = QuantizationStatus.COMPRESSED
 
         if self.sparsity_compressor is not None:
             compressed_state_dict = self.sparsity_compressor.compress(

@@ -20,6 +20,7 @@ from typing import OrderedDict as OrderedDictType
 from typing import Union
 
 import torch
+from compressed_tensors.linear.compressed_linear import CompressedLinear
 from compressed_tensors.quantization.lifecycle.calibration import (
     set_module_for_calibration,
 )
@@ -129,6 +130,18 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
             continue  # layer matches ignore list, continue
         targets = find_name_or_class_matches(name, submodule, target_to_scheme)
         if targets:
+            scheme = _scheme_from_targets(target_to_scheme, targets, name)
+            if config.quantization_status == QuantizationStatus.COMPRESSED:
+                weight_shape = submodule.weight.shape
+                device = next(submodule.parameters()).device
+                format = config.quantization_format
+                compressed_linear = CompressedLinear(
+                    quantization_scheme=scheme,
+                    quantization_format=format,
+                    device=device,
+                    weight_shape=weight_shape,
+                )
+
             # target matched - add layer and scheme to target list
             submodule.quantization_scheme = _scheme_from_targets(
                 target_to_scheme, targets, name
@@ -144,7 +157,8 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
             )
     # apply current quantization status across all targeted layers
 
-    apply_quantization_status(model, config.quantization_status)
+    if config.quantization_status != QuantizationStatus.COMPRESSED:
+        apply_quantization_status(model, config.quantization_status)
     return names_to_scheme
 
 
@@ -343,3 +357,15 @@ def _merge_schemes(
         merged_scheme.update(targets=[name])
 
         return QuantizationScheme(**merged_scheme)
+
+
+def replace_module(model: Module, name: str, new_module: torch.nn.Module):
+    if "." in name:
+        parent_name = name.rsplit(".", 1)[0]
+        child_name = name[len(parent_name) + 1 :]
+        parent = model.get_submodule(parent_name)
+    else:
+        parent_name = ""
+        parent = model
+        child_name = name
+    setattr(parent, child_name, new_module)
