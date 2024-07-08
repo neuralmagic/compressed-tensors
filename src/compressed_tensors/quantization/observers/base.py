@@ -56,7 +56,7 @@ class Observer(Module, RegistryMixin):
         :return: tuple of scale and zero point based on last observed value
         """
         self.record_observed_tokens(observed)
-        return self.get_qparams(observed=observed)
+        return self.get_qparams(observed=observed, g_idx=g_idx)
 
     def calculate_qparams(
         self,
