@@ -111,6 +111,24 @@ def is_preset_scheme(name: str) -> bool:
     return name.upper() in PRESET_SCHEMES
 
 
+# 8 bit integer weights and 8 bit activations quantization
+W8A8 = dict(
+    weights=QuantizationArgs(
+        num_bits=8,
+        type=QuantizationType.INT,
+        strategy=QuantizationStrategy.CHANNEL,
+        symmetric=True,
+        dynamic=False,
+    ),
+    input_activations=QuantizationArgs(
+        num_bits=8,
+        type=QuantizationType.INT,
+        strategy=QuantizationStrategy.TOKEN,
+        symmetric=True,
+        dynamic=True,
+    ),
+)
+
 # 8 bit integer weights only quantization
 W8A16 = dict(
     weights=QuantizationArgs(
@@ -131,24 +149,6 @@ W4A16 = dict(
         group_size=128,
         symmetric=True,
         dynamic=False,
-    ),
-)
-
-# 8 bit integer weights and 8 bit activations quantization
-W8A8 = dict(
-    weights=QuantizationArgs(
-        num_bits=8,
-        type=QuantizationType.INT,
-        strategy=QuantizationStrategy.CHANNEL,
-        symmetric=True,
-        dynamic=False,
-    ),
-    input_activations=QuantizationArgs(
-        num_bits=8,
-        type=QuantizationType.INT,
-        strategy=QuantizationStrategy.TOKEN,
-        symmetric=True,
-        dynamic=True,
     ),
 )
 
