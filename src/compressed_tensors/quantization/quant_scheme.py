@@ -156,16 +156,16 @@ W4A16 = dict(
 W4A8 = dict(
     weights=QuantizationArgs(
         num_bits=4,
-        type=QuantizationType.INT.value,
+        type=QuantizationType.INT,
         group_size=128,
-        strategy=QuantizationStrategy.GROUP.value,
+        strategy=QuantizationStrategy.GROUP,
         symmetric=True,
         dynamic=False,
     ),
     input_activations=QuantizationArgs(
         num_bits=8,
-        type=QuantizationType.INT.value,
-        strategy=QuantizationStrategy.TENSOR.value,
+        type=QuantizationType.INT,
+        strategy=QuantizationStrategy.TENSOR,
         symmetric=True,
         dynamic=True,
     ),
