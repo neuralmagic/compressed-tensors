@@ -49,7 +49,7 @@ class Observer(Module, RegistryMixin):
         :param observed: optional observed tensor to calculate quantization parameters
             from
         :return: tuple of scale and zero point based on last observed value
-        """            
+        """
         return self.get_qparams(observed=observed, g_idx=g_idx)
 
     def calculate_qparams(

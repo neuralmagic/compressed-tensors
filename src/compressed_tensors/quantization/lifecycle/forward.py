@@ -67,7 +67,6 @@ def quantize(
     if x.device != zero_point.device:
         zero_point = zero_point.to(x.device)
 
-    breakpoint()
     return _process_quantization(
         x=x,
         scale=scale,
