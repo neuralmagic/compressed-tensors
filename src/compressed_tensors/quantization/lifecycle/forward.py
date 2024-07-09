@@ -172,7 +172,6 @@ def _process_quantization(
     do_dequantize: bool = True,
     g_idx: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-    print(1)
     q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
 
@@ -203,11 +202,11 @@ def _process_quantization(
             sc = scale[:, i].view(-1, 1)
             zp = zero_point[:, i].view(-1, 1) if zero_point is not None else None
 
-            if g_idx is not None:
-                group_idx = g_idx == i
+            if g_idx is not None and i in g_idx:
+                grouped_idx = g_idx == i
                 if do_quantize:
-                    output[:, group_idx] = _quantize(
-                        x[:, group_idx],
+                    output[:, grouped_idx] = _quantize(
+                        x[:, grouped_idx],
                         sc,
                         zp,
                         q_min,
@@ -216,8 +215,8 @@ def _process_quantization(
                         dtype=dtype,
                     )
                 if do_dequantize:
-                    input = output[:, group_idx] if do_quantize else x[:, group_idx]
-                    output[:, group_idx] = _dequantize(input, sc, zp)
+                    input = output[:, grouped_idx] if do_quantize else x[:, grouped_idx]
+                    output[:, grouped_idx] = _dequantize(input, sc, zp)
             else:
                 idx = i * group_size
                 if do_quantize:
@@ -322,13 +321,15 @@ def maybe_calibrate_or_quantize(
         # if the tensor is empty,
         # skip quantization
         return value
+    
+    g_idx = None
+    if hasattr(module, "weight_g_idx"):
+        g_idx = getattr(module, "weight_g_idx")
 
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
         observer = getattr(module, f"{base_name}_observer")
-        g_idx = None
-        if hasattr(module, "weight_g_idx"):
-            g_idx = getattr(module, "weight_g_idx")
+
         scale, zero_point = observer(value, g_idx)
     else:
         # static quantization - get previous scale and zero point from layer
@@ -342,7 +343,7 @@ def maybe_calibrate_or_quantize(
             # calibration mode - get new quant params from observer
             observer = getattr(module, f"{base_name}_observer")
 
-            updated_scale, updated_zero_point = observer(value)
+            updated_scale, updated_zero_point = observer(value, g_idx)
 
             # update scale and zero point
             update_parameter_data(module, updated_scale, f"{base_name}_scale")

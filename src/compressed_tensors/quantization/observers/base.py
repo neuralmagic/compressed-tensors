@@ -105,9 +105,12 @@ class Observer(Module, RegistryMixin):
                 scales, zero_points = [], []
                 group_idxs = range(0, columns, self.quantization_args.group_size)
                 for group_id, group_idx in enumerate(group_idxs):
-                    if g_idx is not None:
+
+                    # initialized g_idx are Tensor of -1s
+                    if g_idx is not None and group_idx // group_size in g_idx:
+                        grouped_idx = g_idx == (group_idx // group_size)
                         scale, zero_point = self.get_qparams_along_dim(
-                            observed[:, g_idx == group_idx],
+                            observed[:, grouped_idx],
                             0,
                             tensor_id=group_id,
                         )
