@@ -130,7 +130,7 @@ def _initialize_scale_zero_point_observer(
     if quantization_args.actorder:
         _, column_size = module.weight.shape
         init_g_idx = Parameter(
-            torch.zeros(column_size, dtype=torch.int32, device=device),
+            torch.full((column_size,), -1, dtype=torch.int32, device=device),
             requires_grad=False,
         )
         module.register_parameter(f"{base_name}_g_idx", init_g_idx)
