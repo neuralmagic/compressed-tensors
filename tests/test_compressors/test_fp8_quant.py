@@ -51,28 +51,25 @@ def get_dummy_quant_config(strategy, group_size=None):
 
 
 @pytest.mark.parametrize(
-    "strategy,group_size,sc,zp",
+    "strategy,group_size,sc",
     [
-        [QuantizationStrategy.TENSOR, None, 0.01, 0],
+        [QuantizationStrategy.TENSOR, None, 0.01],
         [
             QuantizationStrategy.GROUP,
             128,
             torch.rand((512, 8, 1)) * 0.01,
-            torch.zeros((512, 8, 1), dtype=torch.int8),
         ],
         [
             QuantizationStrategy.CHANNEL,
             128,
             torch.rand((512, 1)) * 0.01,
-            torch.zeros((512, 1), dtype=torch.int8),
         ],
     ],
 )
-def test_quant_format(strategy, group_size, sc, zp):
+def test_quant_format(strategy, group_size, sc):
     dense_state_dict = {
         "dummy.weight": torch.rand((512, 1024)),
         "dummy.weight_scale": torch.tensor(sc, dtype=torch.float32),
-        "dummy.weight_zero_point": torch.tensor(zp, dtype=torch.float32),
     }
     quant_config = get_dummy_quant_config(strategy=strategy, group_size=group_size)
 
@@ -82,8 +79,7 @@ def test_quant_format(strategy, group_size, sc, zp):
         dense_state_dict, names_to_scheme=quantized_modules_to_args
     )
 
-    # state_dict params should be the same, minus the zero_point if symmetric
-    assert len(dense_state_dict) == len(compressed_state_dict) + 1
+    assert len(dense_state_dict) == len(compressed_state_dict)
 
     # check compressed to int8
     assert compressed_state_dict["dummy.weight"].dtype == torch.float8_e4m3fn
@@ -121,7 +117,9 @@ def test_reload_match(strategy, group_size, tmp_path):
         model.state_dict(), names_to_scheme=quantized_modules_to_args
     )
     save_file(compressed_state_dict, tmp_path / "model.safetensors")
-    reconstructed_dense_gen = compressor.decompress(tmp_path)
+    reconstructed_dense_gen = compressor.decompress(
+        tmp_path, names_to_scheme=quantized_modules_to_args
+    )
     reconstructed_dense = {}
     for name, value in reconstructed_dense_gen:
         reconstructed_dense[name] = value
@@ -129,7 +127,7 @@ def test_reload_match(strategy, group_size, tmp_path):
     fake_quant_dummy = fake_quantize(
         model.dummy.weight,
         scale=model.dummy.weight_scale,
-        zero_point=model.dummy.weight_zero_point,
+        zero_point=None,
         args=quantized_modules_to_args["dummy"],
     )
     assert torch.equal(fake_quant_dummy, reconstructed_dense["dummy.weight"])

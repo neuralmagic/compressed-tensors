@@ -59,14 +59,6 @@ def quantize(
     :param dtype: optional dtype to cast the quantized output to
     :return: fake quantized tensor
     """
-    # ensure all tensors are on the same device
-    # assumes that the target device is the input
-    # tensor's device
-    if x.device != scale.device:
-        scale = scale.to(x.device)
-    if x.device != zero_point.device:
-        zero_point = zero_point.to(x.device)
-
     return _process_quantization(
         x=x,
         scale=scale,
@@ -311,7 +303,9 @@ def maybe_calibrate_or_quantize(
             # update scale and zero point
             device = next(module.parameters()).device
             scale.data = updated_scale.to(device)
-            zero_point.data = updated_zero_point.to(device)
+            if zero_point is not None:
+                zero_point.data = updated_zero_point.to(device)
+
     return fake_quantize(value, scale, zero_point, args)
 
 

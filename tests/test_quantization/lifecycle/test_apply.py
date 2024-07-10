@@ -171,11 +171,13 @@ def _test_layer_quantization_status(
 
     # check inputs matches expected
     assert hasattr(module, "input_scale") == inputs
-    assert hasattr(module, "input_zero_point") == inputs
+    if inputs and module.quantization_scheme.input_activations.symmetric is False:
+        assert hasattr(module, "input_zero_point") == inputs
 
     # check weights matches expected
     assert hasattr(module, "weight_scale") == weights
-    assert hasattr(module, "weight_zero_point") == weights
+    if inputs and module.quantization_scheme.weights.symmetric is False:
+        assert hasattr(module, "weight_zero_point") == weights
     if weights and expected_dtype is not None:
         assert module.weight.dtype is expected_dtype
 

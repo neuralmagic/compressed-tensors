@@ -132,8 +132,8 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
         targets = find_name_or_class_matches(name, submodule, target_to_scheme)
         if targets:
             scheme = _scheme_from_targets(target_to_scheme, targets, name)
-            config.quantization_status = QuantizationStatus.COMPRESSED
-            if config.quantization_status == QuantizationStatus.COMPRESSED:
+            run_compressed = False
+            if run_compressed:
                 weight_shape = submodule.weight.shape
                 device = next(submodule.parameters()).device
                 format = config.format

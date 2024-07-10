@@ -52,13 +52,14 @@ class QuantizationCompressor(Compressor):
         return {"weight": (weight_shape, dtype)}
 
     def compress_weight(
+        self,
         weight: Tensor,
         scale: Tensor,
         zero_point: Optional[Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
     ):
         if can_quantize(weight, quantization_args):
-            compressed_weight = quantize(
+            weight = quantize(
                 x=weight,
                 scale=scale,
                 zero_point=zero_point,
@@ -66,9 +67,7 @@ class QuantizationCompressor(Compressor):
                 dtype=quantization_args.pytorch_dtype(),
             )
 
-            return compressed_weight
-
-        return None
+        return {"weight": weight}
 
     def decompress_weight(
         self,

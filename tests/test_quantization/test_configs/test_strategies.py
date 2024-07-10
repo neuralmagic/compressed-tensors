@@ -64,7 +64,8 @@ def test_channelwise(input_symmetry, weight_symmetry, model_shape):
     model(inputs)
 
     assert list(model.weight_scale.shape) == [model_shape[1], 1]
-    assert list(model.weight_zero_point.shape) == [model_shape[1], 1]
+    if weight_symmetry is False:
+        assert list(model.weight_zero_point.shape) == [model_shape[1], 1]
 
 
 @torch.no_grad
@@ -89,10 +90,12 @@ def test_group(input_symmetry, weight_symmetry, model_shape, group_size):
         model_shape[1],
         int(model_shape[0] / group_size),
     ]
-    assert list(model.weight_zero_point.shape) == [
-        model_shape[1],
-        int(model_shape[0] / group_size),
-    ]
+
+    if weight_symmetry is False:
+        assert list(model.weight_zero_point.shape) == [
+            model_shape[1],
+            int(model_shape[0] / group_size),
+        ]
 
 
 @torch.no_grad
@@ -113,7 +116,9 @@ def test_token(input_symmetry, weight_symmetry, input_shape):
     model(inputs)
 
     assert list(model.input_scale.shape) == [1, 1]
-    assert list(model.input_zero_point.shape) == [1, 1]
+    if input_symmetry is False:
+        assert list(model.input_zero_point.shape) == [1, 1]
 
     assert list(model.weight_scale.shape) == [256, 1]
-    assert list(model.weight_zero_point.shape) == [256, 1]
+    if weight_symmetry is False:
+        assert list(model.weight_zero_point.shape) == [256, 1]

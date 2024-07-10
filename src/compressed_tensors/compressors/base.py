@@ -75,7 +75,7 @@ class Compressor(RegistryMixin):
                 prefix = name[: -(len(weight_suffix))]
                 scale = model_state.get(merge_names(prefix, "weight_scale"), None)
                 zp = model_state.get(merge_names(prefix, "weight_zero_point"), None)
-                if scale is not None and zp is not None:
+                if scale is not None:
                     # weight is quantized, compress it
                     quant_args = names_to_scheme[prefix]
                     compressed_data = self.compress_weight(
@@ -85,13 +85,11 @@ class Compressor(RegistryMixin):
                         quantization_args=quant_args,
                     )
                     for key, value in compressed_data.items():
-                        compressed_dict[key] = value
-            elif name.endswith("zero_point"):
-                if torch.all(value == 0):
-                    # all zero_points are 0, no need to include in
-                    # compressed state_dict
-                    continue
-            compressed_dict[name] = value.to("cpu")
+                        compressed_dict[merge_names(prefix, key)] = value
+                else:
+                    compressed_dict[name] = value.to("cpu")
+            else:
+                compressed_dict[name] = value.to("cpu")
 
         return compressed_dict
 
