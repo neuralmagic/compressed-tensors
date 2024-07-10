@@ -20,7 +20,6 @@ from typing import OrderedDict as OrderedDictType
 from typing import Union
 
 import torch
-from compressed_tensors.linear.compressed_linear import CompressedLinear
 from compressed_tensors.quantization.lifecycle.calibration import (
     set_module_for_calibration,
 )
@@ -119,6 +118,9 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
+
+    from compressed_tensors.linear.compressed_linear import CompressedLinear
+
     # list of submodules to ignore
     ignored_submodules = []
     # mark appropriate layers for quantization by setting their quantization schemes
@@ -141,6 +143,7 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
                     device=device,
                     weight_shape=weight_shape,
                 )
+                replace_module(model, name, compressed_linear)
 
             # target matched - add layer and scheme to target list
             submodule.quantization_scheme = _scheme_from_targets(
