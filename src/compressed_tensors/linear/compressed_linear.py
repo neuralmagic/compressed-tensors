@@ -17,6 +17,7 @@ from typing import Optional
 import torch
 from compressed_tensors.quantization import (
     QuantizationScheme,
+    QuantizationStatus,
     initialize_module_for_quantization,
 )
 from torch import Tensor
@@ -68,6 +69,8 @@ class CompressedLinear(Module):
                 torch.empty(shape, device=device, dtype=dtype), requires_grad=False
             )
             self.register_parameter(name, param)
+
+        self.quantization_status = QuantizationStatus.COMPRESSED
 
     def forward(self, input: Tensor) -> Tensor:
         # this decompress call would become its own kernel,

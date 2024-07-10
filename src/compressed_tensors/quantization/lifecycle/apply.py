@@ -102,7 +102,9 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
             )
 
 
-def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict:
+def apply_quantization_config(
+    model: Module, config: QuantizationConfig, run_compressed: bool = False
+) -> Dict:
     """
     Initializes the model for quantization in-place based on the given config
 
@@ -132,7 +134,6 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
         targets = find_name_or_class_matches(name, submodule, target_to_scheme)
         if targets:
             scheme = _scheme_from_targets(target_to_scheme, targets, name)
-            run_compressed = False
             if run_compressed:
                 weight_shape = submodule.weight.shape
                 device = next(submodule.parameters()).device
@@ -149,6 +150,7 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
             submodule.quantization_scheme = _scheme_from_targets(
                 target_to_scheme, targets, name
             )
+
             names_to_scheme[name] = submodule.quantization_scheme.weights
 
     if config.ignore is not None and ignored_submodules is not None:
