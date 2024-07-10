@@ -113,8 +113,7 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
     # remove reference to the original `config`
     # argument. This function can mutate it, and we'd
     # like to keep the original `config` as it is.
-    _config = config
-    config = deepcopy(_config)
+    config = deepcopy(config)
     # build mapping of targets to schemes for easier matching
     # use ordered dict to preserve target ordering in config
     target_to_scheme = OrderedDict()
