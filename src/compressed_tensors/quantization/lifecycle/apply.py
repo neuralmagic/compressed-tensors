@@ -118,7 +118,6 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
-
     from compressed_tensors.linear.compressed_linear import CompressedLinear
 
     # list of submodules to ignore
@@ -288,13 +287,14 @@ def _load_quant_args_from_state_dict(
     zp = getattr(module, zp_name, None)
     if scale is not None:
         state_dict_scale = state_dict[f"{module_name}.{scale_name}"]
-        scale.data = state_dict_scale.to(device).to(scale.dtype)
+        scale.copy_(state_dict_scale.to(device).to(scale.dtype))
     if zp is not None:
         zp_from_state = state_dict.get(f"{module_name}.{zp_name}", None)
         if zp_from_state is not None:  # load the non-zero zero points
             zp.data = zp_from_state.to(device).to(zp.dtype)
         else:  # fill with zeros matching scale shape
-            zp.data = torch.zeros_like(scale, dtype=zp.dtype).to(device)
+
+            zp.copy_(torch.zeros_like(scale, dtype=zp.dtype).to(device))
 
 
 def _scheme_from_targets(
