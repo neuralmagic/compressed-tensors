@@ -20,8 +20,8 @@ import pytest
 import torch
 from compressed_tensors import PackedQuantizationCompressor
 from compressed_tensors.compressors.pack_quantized import (
-    pack_4bit_ints,
-    unpack_4bit_ints,
+    pack_to_int32,
+    unpack_from_int32,
 )
 from compressed_tensors.quantization import (
     QuantizationArgs,
@@ -32,10 +32,10 @@ from compressed_tensors.quantization.lifecycle.forward import fake_quantize
 from safetensors.torch import save_file
 
 
-def get_dummy_quant_config():
+def get_dummy_quant_config(num_bits=4):
     config_groups = {
         "group_1": QuantizationScheme(
-            targets=["Linear"], weights=QuantizationArgs(num_bits=4)
+            targets=["Linear"], weights=QuantizationArgs(num_bits=num_bits)
         ),
     }
     ignore = ["lm_head"]
@@ -67,7 +67,7 @@ def test_quant_format(shape):
     compressor = PackedQuantizationCompressor(config=quant_config)
     quantized_modules_to_args = {"dummy": quant_config.config_groups["group_1"].weights}
     compressed_state_dict = compressor.compress(
-        dense_state_dict, model_quant_args=quantized_modules_to_args
+        dense_state_dict, names_to_scheme=quantized_modules_to_args
     )
 
     # compressed state_dict adds one entry for shape
@@ -95,27 +95,54 @@ def test_quant_format(shape):
         (torch.rand((32, 100)) * 16 - 8),
     ],
 )
-def test_repack(value):
+def test_repack_4bit(value):
     value = value.to(torch.int8)
     shape = value.shape
     assert not torch.any(value > 7).item()
     assert not torch.any(value < -8).item()
 
-    packed = pack_4bit_ints(value)
-    unpacked = unpack_4bit_ints(packed, shape)
+    packed = pack_to_int32(value, 4)
+    unpacked = unpack_from_int32(packed, 4, shape)
     assert torch.equal(value, unpacked)
 
 
-def test_reload_match(tmp_path):
+@pytest.mark.parametrize(
+    "value",
+    [
+        torch.tensor([[30, 40], [50, 60]]),
+        torch.tensor(
+            [[10, 15, 20, 25, 30, 35, 40, 45], [-10, -20, -30, -40, -50, -60, -70, -80]]
+        ),
+        (torch.rand((32, 100)) * 256 - 128),
+    ],
+)
+def test_repack_8bit(value):
+    value = value.to(torch.int8)
+    shape = value.shape
+    assert not torch.any(value > 127).item()
+    assert not torch.any(value < -128).item()
+
+    packed = pack_to_int32(value, 8)
+    unpacked = unpack_from_int32(packed, 8, shape)
+    assert torch.equal(value, unpacked)
+
+
+@pytest.mark.parametrize("num_bits", [4, 8])
+def test_reload_match(tmp_path, num_bits):
     dense_state_dict = {
         "dummy.weight": torch.rand((511, 350)),
         "dummy.weight_scale": torch.tensor(0.01, dtype=torch.float32),
-        "dummy.weight_zero_point": torch.tensor(0, dtype=torch.int32),
+        "dummy.weight_zero_point": torch.tensor(0, dtype=torch.int8),
         "dummy2.weight": torch.rand((128, 280)),
         "dummy2.weight_scale": torch.tensor(0.02, dtype=torch.float32),
-        "dummy2.weight_zero_point": torch.tensor(15, dtype=torch.int32),
+        "dummy2.weight_zero_point": torch.tensor(15, dtype=torch.int8),
     }
-    quant_config = get_dummy_quant_config()
+
+    names_to_scheme = {
+        "dummy": QuantizationArgs(num_bits=num_bits),
+        "dummy2": QuantizationArgs(num_bits=num_bits),
+    }
+    quant_config = get_dummy_quant_config(num_bits)
 
     compressor = PackedQuantizationCompressor(config=quant_config)
     quantized_modules_to_args = {
@@ -123,10 +150,12 @@ def test_reload_match(tmp_path):
         "dummy2": quant_config.config_groups["group_1"].weights,
     }
     compressed_state_dict = compressor.compress(
-        dense_state_dict, model_quant_args=quantized_modules_to_args
+        dense_state_dict, names_to_scheme=quantized_modules_to_args
     )
     save_file(compressed_state_dict, tmp_path / "model.safetensors")
-    reconstructed_dense_gen = compressor.decompress(tmp_path)
+    reconstructed_dense_gen = compressor.decompress(
+        tmp_path, names_to_scheme=names_to_scheme
+    )
     reconstructed_dense = {}
     for name, value in reconstructed_dense_gen:
         reconstructed_dense[name] = value

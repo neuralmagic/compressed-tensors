@@ -16,9 +16,12 @@ import json
 import logging
 import operator
 import os
+import re
 from copy import deepcopy
 from typing import Any, Dict, Optional, Union
 
+import torch
+import transformers
 from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
     QUANTIZATION_CONFIG_NAME,
@@ -78,6 +81,7 @@ class ModelCompressor:
     def from_pretrained(
         cls,
         pretrained_model_name_or_path: str,
+        **kwargs,
     ) -> Optional["ModelCompressor"]:
         """
         Given a path to a model config, extract the sparsity and/or quantization
@@ -86,7 +90,7 @@ class ModelCompressor:
         :param pretrained_model_name_or_path: path to model config on disk or HF hub
         :return: compressor for the extracted configs
         """
-        config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+        config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
         compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
         return cls.from_compression_config(compression_config)
 
@@ -228,13 +232,18 @@ class ModelCompressor:
         quantized_modules_to_args = map_modules_to_quant_args(model)
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(
-                state_dict, model_quant_args=quantized_modules_to_args
+                state_dict, names_to_scheme=quantized_modules_to_args
             )
 
         if self.sparsity_compressor is not None:
             compressed_state_dict = self.sparsity_compressor.compress(
                 compressed_state_dict
             )
+
+        # HACK: Override the dtype_byte_size function in transformers to
+        # support float8 types. Fix is posted upstream
+        # https://github.com/huggingface/transformers/pull/30488
+        transformers.modeling_utils.dtype_byte_size = new_dtype_byte_size
 
         return compressed_state_dict
 
@@ -252,9 +261,11 @@ class ModelCompressor:
             setattr(model, SPARSITY_CONFIG_NAME, self.sparsity_compressor.config)
 
         if self.quantization_compressor is not None:
-            apply_quantization_config(model, self.quantization_config)
+            names_to_scheme = apply_quantization_config(model, self.quantization_config)
             load_pretrained_quantization(model, model_path)
-            dense_gen = self.quantization_compressor.decompress(model_path)
+            dense_gen = self.quantization_compressor.decompress(
+                model_path, names_to_scheme=names_to_scheme
+            )
             self._replace_weights(dense_gen, model)
 
             def update_status(module):
@@ -320,3 +331,15 @@ def map_modules_to_quant_args(model: Module) -> Dict:
                 quantized_modules_to_args[name] = submodule.quantization_scheme.weights
 
     return quantized_modules_to_args
+
+
+# HACK: Override the dtype_byte_size function in transformers to support float8 types
+# Fix is posted upstream https://github.com/huggingface/transformers/pull/30488
+def new_dtype_byte_size(dtype):
+    if dtype == torch.bool:
+        return 1 / 8
+    bit_search = re.search(r"[^\d](\d+)_?", str(dtype))
+    if bit_search is None:
+        raise ValueError(f"`dtype` is not a valid dtype: {dtype}.")
+    bit_size = int(bit_search.groups()[0])
+    return bit_size // 8
