@@ -300,7 +300,7 @@ def maybe_calibrate_or_quantize(
     else:
         # static quantization - get previous scale and zero point from layer
         scale = getattr(module, f"{base_name}_scale")
-        zero_point = getattr(module, f"{base_name}_zero_point")
+        zero_point = getattr(module, f"{base_name}_zero_point", None)
 
         if module.quantization_status == QuantizationStatus.CALIBRATION:
             # calibration mode - get new quant params from observer
@@ -326,7 +326,9 @@ def _quantize(
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
 
-    scaled = x / scale + zero_point.to(x.dtype)
+    scaled = x / scale
+    if zero_point is not None:
+        scaled += zero_point.to(x.dtype)
     # clamp first because cast isn't guaranteed to be saturated (ie for fp8)
     clamped_value = torch.clamp(
         scaled,

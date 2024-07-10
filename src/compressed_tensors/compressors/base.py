@@ -122,7 +122,7 @@ class Compressor(RegistryMixin):
                     weight_data[param_name] = f.get_tensor(full_name)
 
             if "weight_scale" in weight_data:
-                quant_args = names_to_scheme[full_name]
+                quant_args = names_to_scheme[weight_name]
                 decompressed = self.decompress_weight(
                     compressed_data=weight_data, quantization_args=quant_args
                 )

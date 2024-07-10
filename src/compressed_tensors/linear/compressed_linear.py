@@ -15,13 +15,13 @@
 from typing import Optional
 
 import torch
-import torch.functional as F
 from compressed_tensors.quantization import (
     QuantizationScheme,
     initialize_module_for_quantization,
 )
 from torch import Tensor
 from torch.nn import Parameter
+from torch.nn.functional import linear
 from torch.nn.modules import Module
 
 
@@ -51,7 +51,7 @@ class CompressedLinear(Module):
         if quantization_scheme.weights is not None:
             dtype = quantization_scheme.weights.pytorch_dtype()
             self.weight = Parameter(
-                torch.empty(self.weight_shape, device=device, dtype=dtype),
+                torch.empty(weight_shape, device=device, dtype=dtype),
                 requires_grad=False,
             )
 
@@ -59,7 +59,9 @@ class CompressedLinear(Module):
         initialize_module_for_quantization(self, quantization_scheme)
         delattr(self, "weight")
 
-        compression_params = self.compressor.compression_param_shapes(weight_shape)
+        compression_params = self.compressor.compression_param_info(
+            weight_shape, quantization_scheme.weights
+        )
         for name, (shape, dtype) in compression_params.items():
             # todo, fill in dtype
             param = Parameter(
@@ -71,4 +73,4 @@ class CompressedLinear(Module):
         # this decompress call would become its own kernel,
         # in most use cases instead we would call a specific kernel
         uncompressed_weight = self.compressor.decompress_module(self)
-        return F.linear(input, uncompressed_weight, self.bias)
+        return linear(input, uncompressed_weight, self.bias)

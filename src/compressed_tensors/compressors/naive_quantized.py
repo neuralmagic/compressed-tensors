@@ -77,7 +77,7 @@ class QuantizationCompressor(Compressor):
     ):
         weight = compressed_data["weight"]
         scale = compressed_data["weight_scale"]
-        zero_point = compressed_data["weight_zero_point"]
+        zero_point = compressed_data.get("weight_zero_point", None)
         decompressed_weight = dequantize(
             x_q=weight,
             scale=scale,
