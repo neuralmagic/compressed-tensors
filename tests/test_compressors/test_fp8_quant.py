@@ -13,25 +13,32 @@
 # limitations under the License.
 
 import shutil
+from collections import OrderedDict
 
 import pytest
 import torch
-from compressed_tensors import IntQuantizationCompressor
+from compressed_tensors import FloatQuantizationCompressor
 from compressed_tensors.quantization import (
     QuantizationArgs,
     QuantizationConfig,
     QuantizationScheme,
+    QuantizationStatus,
     QuantizationStrategy,
+    apply_quantization_config,
+    apply_quantization_status,
 )
 from compressed_tensors.quantization.lifecycle.forward import fake_quantize
 from safetensors.torch import save_file
+from torch.nn.modules import Linear, Sequential
 
 
 def get_dummy_quant_config(strategy, group_size=None):
     config_groups = {
         "group_1": QuantizationScheme(
             targets=["Linear"],
-            weights=QuantizationArgs(strategy=strategy, group_size=group_size),
+            weights=QuantizationArgs(
+                strategy=strategy, type="float", group_size=group_size
+            ),
         ),
     }
     ignore = ["lm_head"]
@@ -44,88 +51,74 @@ def get_dummy_quant_config(strategy, group_size=None):
 
 
 @pytest.mark.parametrize(
-    "strategy,symmetric,group_size,sc,zp",
-    [
-        [QuantizationStrategy.TENSOR, True, None, 0.01, 0],
-        [
-            QuantizationStrategy.GROUP,
-            True,
-            128,
-            torch.rand((512, 8, 1)) * 0.01,
-            torch.zeros((512, 8, 1), dtype=torch.int8),
-        ],
-        [
-            QuantizationStrategy.CHANNEL,
-            False,
-            128,
-            torch.rand((512, 1)) * 0.01,
-            ((torch.rand((512, 1)) - 0.5) * 127).to(torch.int8),
-        ],
-    ],
-)
-def test_quant_format(strategy, symmetric, group_size, sc, zp):
-    dense_state_dict = {
-        "dummy.weight": torch.rand((512, 1024)),
-        "dummy.weight_scale": torch.tensor(sc, dtype=torch.float32),
-        "dummy.weight_zero_point": torch.tensor(zp, dtype=torch.int32),
-    }
-    quant_config = get_dummy_quant_config(strategy=strategy, group_size=group_size)
-
-    compressor = IntQuantizationCompressor(config=quant_config)
-    quantized_modules_to_args = {"dummy": quant_config.config_groups["group_1"].weights}
-    compressed_state_dict = compressor.compress(
-        dense_state_dict, names_to_scheme=quantized_modules_to_args
-    )
-
-    # state_dict params should be the same, minus the zero_point if symmetric
-    if symmetric:
-        assert len(dense_state_dict) == len(compressed_state_dict) + 1
-    else:
-        assert len(dense_state_dict) == len(compressed_state_dict)
-
-    # check compressed to int8
-    assert compressed_state_dict["dummy.weight"].dtype == torch.int8
-    assert compressed_state_dict["dummy.weight_scale"].dtype == torch.float32
-    if not symmetric:
-        assert compressed_state_dict["dummy.weight_zero_point"].dtype == torch.int32
-
-
-@pytest.mark.parametrize(
     "strategy,group_size,sc,zp",
     [
         [QuantizationStrategy.TENSOR, None, 0.01, 0],
         [
             QuantizationStrategy.GROUP,
             128,
-            torch.rand((300, 8)) * 0.01,
-            torch.zeros((300, 8), dtype=torch.int8),
+            torch.rand((512, 8, 1)) * 0.01,
+            torch.zeros((512, 8, 1), dtype=torch.int8),
         ],
         [
             QuantizationStrategy.CHANNEL,
             128,
-            torch.rand((300, 1)) * 0.01,
-            torch.zeros((300, 1), dtype=torch.int8),
+            torch.rand((512, 1)) * 0.01,
+            torch.zeros((512, 1), dtype=torch.int8),
         ],
     ],
 )
-def test_reload_match(strategy, group_size, sc, zp, tmp_path):
+def test_quant_format(strategy, group_size, sc, zp):
     dense_state_dict = {
-        "dummy.weight": torch.rand((300, 1024)),
+        "dummy.weight": torch.rand((512, 1024)),
         "dummy.weight_scale": torch.tensor(sc, dtype=torch.float32),
-        "dummy.weight_zero_point": torch.tensor(zp, dtype=torch.int32),
-        "dummy2.weight": torch.rand((300, 1024)),
-        "dummy2.weight_scale": torch.tensor(sc, dtype=torch.float32),
-        "dummy2.weight_zero_point": torch.tensor(zp, dtype=torch.int32),
+        "dummy.weight_zero_point": torch.tensor(zp, dtype=torch.float32),
     }
     quant_config = get_dummy_quant_config(strategy=strategy, group_size=group_size)
 
-    compressor = IntQuantizationCompressor(config=quant_config)
-    quantized_modules_to_args = {
-        "dummy": quant_config.config_groups["group_1"].weights,
-        "dummy2": quant_config.config_groups["group_1"].weights,
-    }
+    compressor = FloatQuantizationCompressor(config=quant_config)
+    quantized_modules_to_args = {"dummy": quant_config.config_groups["group_1"].weights}
     compressed_state_dict = compressor.compress(
         dense_state_dict, names_to_scheme=quantized_modules_to_args
+    )
+
+    # state_dict params should be the same, minus the zero_point if symmetric
+    assert len(dense_state_dict) == len(compressed_state_dict) + 1
+
+    # check compressed to int8
+    assert compressed_state_dict["dummy.weight"].dtype == torch.float8_e4m3fn
+    assert compressed_state_dict["dummy.weight_scale"].dtype == torch.float32
+
+
+@pytest.mark.parametrize(
+    "strategy,group_size",
+    [
+        [QuantizationStrategy.TENSOR, None],
+        [QuantizationStrategy.CHANNEL, None],
+    ],
+)
+def test_reload_match(strategy, group_size, tmp_path):
+    model = Sequential(
+        OrderedDict(
+            [
+                ("dummy", Linear(512, 1024, bias=None)),
+            ]
+        )
+    )
+    quant_config = get_dummy_quant_config(strategy=strategy, group_size=group_size)
+    apply_quantization_config(model, quant_config)
+    apply_quantization_status(model, QuantizationStatus.CALIBRATION)
+
+    for _ in range(16):
+        inputs = torch.rand((512, 512))
+        _ = model(inputs)
+
+    compressor = FloatQuantizationCompressor(config=quant_config)
+    quantized_modules_to_args = {
+        "dummy": quant_config.config_groups["group_1"].weights,
+    }
+    compressed_state_dict = compressor.compress(
+        model.state_dict(), names_to_scheme=quantized_modules_to_args
     )
     save_file(compressed_state_dict, tmp_path / "model.safetensors")
     reconstructed_dense_gen = compressor.decompress(tmp_path)
@@ -134,23 +127,11 @@ def test_reload_match(strategy, group_size, sc, zp, tmp_path):
         reconstructed_dense[name] = value
 
     fake_quant_dummy = fake_quantize(
-        dense_state_dict["dummy.weight"],
-        scale=dense_state_dict["dummy.weight_scale"],
-        zero_point=dense_state_dict["dummy.weight_zero_point"],
+        model.dummy.weight,
+        scale=model.dummy.weight_scale,
+        zero_point=model.dummy.weight_zero_point,
         args=quantized_modules_to_args["dummy"],
     )
-    assert torch.equal(
-        fake_quant_dummy, reconstructed_dense["dummy.weight"].to(torch.float32)
-    )
-
-    fake_quant_dummy2 = fake_quantize(
-        dense_state_dict["dummy2.weight"],
-        scale=dense_state_dict["dummy2.weight_scale"],
-        zero_point=dense_state_dict["dummy2.weight_zero_point"],
-        args=quantized_modules_to_args["dummy2"],
-    )
-    assert torch.equal(
-        fake_quant_dummy2, reconstructed_dense["dummy2.weight"].to(torch.float32)
-    )
+    assert torch.equal(fake_quant_dummy, reconstructed_dense["dummy.weight"])
 
     shutil.rmtree(tmp_path)

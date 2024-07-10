@@ -16,9 +16,12 @@ import json
 import logging
 import operator
 import os
+import re
 from copy import deepcopy
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
+import torch
+import transformers
 from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
     QUANTIZATION_CONFIG_NAME,
@@ -45,7 +48,7 @@ from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
 
 
-__all__ = ["ModelCompressor"]
+__all__ = ["ModelCompressor", "map_modules_to_quant_args"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -88,20 +91,41 @@ class ModelCompressor:
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
         compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
+        return cls.from_compression_config(compression_config)
+
+    @classmethod
+    def from_compression_config(cls, compression_config: Dict[str, Any]):
+        """
+        :param compression_config: compression/quantization config dictionary
+            found under key "quantization_config" in HF model config
+        :return: compressor for the extracted configs
+        """
         if compression_config is None:
             return None
+
+        try:
+            from transformers.utils.quantization_config import CompressedTensorsConfig
+
+            if isinstance(compression_config, CompressedTensorsConfig):
+                compression_config = compression_config.to_dict()
+        except ImportError:
+            pass
 
         sparsity_config = cls.parse_sparsity_config(compression_config)
         quantization_config = cls.parse_quantization_config(compression_config)
         if sparsity_config is None and quantization_config is None:
             return None
 
-        if sparsity_config is not None:
+        if sparsity_config is not None and not isinstance(
+            sparsity_config, SparsityCompressionConfig
+        ):
             format = sparsity_config.get("format")
             sparsity_config = SparsityCompressionConfig.load_from_registry(
                 format, **sparsity_config
             )
-        if quantization_config is not None:
+        if quantization_config is not None and not isinstance(
+            quantization_config, QuantizationConfig
+        ):
             quantization_config = QuantizationConfig.parse_obj(quantization_config)
 
         return cls(
@@ -146,15 +170,36 @@ class ModelCompressor:
     def parse_sparsity_config(compression_config: Dict) -> Union[Dict, None]:
         if compression_config is None:
             return None
+        if SPARSITY_CONFIG_NAME not in compression_config:
+            return None
+        if hasattr(compression_config, SPARSITY_CONFIG_NAME):
+            # for loaded HFQuantizer config
+            return getattr(compression_config, SPARSITY_CONFIG_NAME)
+        if SPARSITY_CONFIG_NAME in compression_config:
+            # for loaded HFQuantizer config from dict
+            return compression_config[SPARSITY_CONFIG_NAME]
+
+        # SparseAutoModel format
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
 
     @staticmethod
     def parse_quantization_config(compression_config: Dict) -> Union[Dict, None]:
+        if compression_config is None:
+            return None
+
+        if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
+            # for loaded HFQuantizer config
+            return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
+
+        if QUANTIZATION_CONFIG_NAME in compression_config:
+            # for loaded HFQuantizer config from dict
+            return compression_config[QUANTIZATION_CONFIG_NAME]
+
+        # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
         if len(quantization_config) == 0:
             quantization_config = None
-
         return quantization_config
 
     def __init__(
@@ -190,16 +235,21 @@ class ModelCompressor:
             state_dict = model.state_dict()
 
         compressed_state_dict = state_dict
-        quantized_modules_to_args = _get_weight_arg_mappings(model)
+        quantized_modules_to_args = map_modules_to_quant_args(model)
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(
-                state_dict, model_quant_args=quantized_modules_to_args
+                state_dict, names_to_scheme=quantized_modules_to_args
             )
 
         if self.sparsity_compressor is not None:
             compressed_state_dict = self.sparsity_compressor.compress(
                 compressed_state_dict
             )
+
+        # HACK: Override the dtype_byte_size function in transformers to
+        # support float8 types. Fix is posted upstream
+        # https://github.com/huggingface/transformers/pull/30488
+        transformers.modeling_utils.dtype_byte_size = new_dtype_byte_size
 
         return compressed_state_dict
 
@@ -217,9 +267,11 @@ class ModelCompressor:
             setattr(model, SPARSITY_CONFIG_NAME, self.sparsity_compressor.config)
 
         if self.quantization_compressor is not None:
-            apply_quantization_config(model, self.quantization_config)
+            names_to_scheme = apply_quantization_config(model, self.quantization_config)
             load_pretrained_quantization(model, model_path)
-            dense_gen = self.quantization_compressor.decompress(model_path)
+            dense_gen = self.quantization_compressor.decompress(
+                model_path, names_to_scheme=names_to_scheme
+            )
             self._replace_weights(dense_gen, model)
 
             def update_status(module):
@@ -269,7 +321,7 @@ class ModelCompressor:
             data_old.data = data_new.data
 
 
-def _get_weight_arg_mappings(model: Module) -> Dict:
+def map_modules_to_quant_args(model: Module) -> Dict:
     quantized_modules_to_args = {}
     for name, submodule in iter_named_leaf_modules(model):
         if is_module_quantized(submodule):
@@ -278,3 +330,15 @@ def _get_weight_arg_mappings(model: Module) -> Dict:
                 quantized_modules_to_args[name] = submodule.quantization_scheme.weights
 
     return quantized_modules_to_args
+
+
+# HACK: Override the dtype_byte_size function in transformers to support float8 types
+# Fix is posted upstream https://github.com/huggingface/transformers/pull/30488
+def new_dtype_byte_size(dtype):
+    if dtype == torch.bool:
+        return 1 / 8
+    bit_search = re.search(r"[^\d](\d+)_?", str(dtype))
+    if bit_search is None:
+        raise ValueError(f"`dtype` is not a valid dtype: {dtype}.")
+    bit_size = int(bit_search.groups()[0])
+    return bit_size // 8

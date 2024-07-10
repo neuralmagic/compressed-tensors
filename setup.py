@@ -15,22 +15,27 @@
 import os
 from setuptools import setup, find_packages
 from typing import List, Dict, Tuple
+from utils.artifacts import get_release_and_version
 
-# default variables to be overwritten by the version.py file
-is_release = None
-version = "unknown"
-version_major_minor = version
 
-# load and overwrite version and release info from compressed-tensors package
-exec(open(os.path.join("src", "compressed_tensors", "version.py")).read())
-version_nm_deps = f"{version_major_minor}.0"
+package_path = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), "src", "compressed_tensors"
+)
+(
+    is_release,
+    version,
+    version_major,
+    version_minor,
+    version_bug,
+) = get_release_and_version(package_path)
+
+version_nm_deps = f"{version_major}.{version_minor}.0"
 
 if is_release:
     _PACKAGE_NAME = "compressed-tensors"
 else:
     _PACKAGE_NAME = "compressed-tensors-nightly"
     
-
 
 def _setup_long_description() -> Tuple[str, str]:
     return open("README.md", "r", encoding="utf-8").read(), "text/markdown"
@@ -41,7 +46,7 @@ def _setup_packages() -> List:
     )
     
 def _setup_install_requires() -> List:
-    return ["torch>=1.7.0", "transformers", "pydantic<2.7"]
+    return ["torch>=1.7.0", "transformers", "pydantic>=2.0"]
 
 def _setup_extras() -> Dict:
     return {"dev": ["black==22.12.0", "isort==5.8.0", "wheel>=0.36.2", "flake8>=3.8.3", "pytest>=6.0.0", "nbconvert>=7.16.3"]}
