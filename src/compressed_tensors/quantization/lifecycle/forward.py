@@ -171,6 +171,8 @@ def _process_quantization(
     do_dequantize: bool = True,
     g_idx: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
+    print(f"g_idx: {g_idx}")
+    breakpoint()
     q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
 
