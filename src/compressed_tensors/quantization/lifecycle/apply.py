@@ -120,7 +120,8 @@ def apply_quantization_config(
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
-    from compressed_tensors.linear.compressed_linear import CompressedLinear
+    if run_compressed:
+        from compressed_tensors.linear.compressed_linear import CompressedLinear
 
     # list of submodules to ignore
     ignored_submodules = []

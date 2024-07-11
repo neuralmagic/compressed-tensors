@@ -15,6 +15,7 @@
 from typing import Optional
 
 import torch
+from compressed_tensors.compressors.base import Compressor
 from compressed_tensors.quantization import (
     QuantizationScheme,
     QuantizationStatus,
@@ -44,8 +45,6 @@ class CompressedLinear(Module):
         # These will get replaced
         self.weight = None
         self.bias = None
-
-        from compressed_tensors.compressors.base import Compressor
 
         self.compressor = Compressor.load_from_registry(quantization_format)
 
