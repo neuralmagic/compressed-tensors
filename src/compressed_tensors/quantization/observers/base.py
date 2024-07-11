@@ -50,7 +50,6 @@ class Observer(Module, RegistryMixin):
             from
         :return: tuple of scale and zero point based on last observed value
         """
-        breakpoint()
         return self.get_qparams(observed=observed, g_idx=g_idx)
 
     def calculate_qparams(
