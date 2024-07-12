@@ -195,14 +195,20 @@ def _process_quantization(
                     "tesnor column shape must be divisble "
                     f"by the given group_size {group_size}"
                 )
-        for i in range(ceil(columns / group_size)):
+
+        # g_idx intialized to -1. If updated will have values > -1
+        is_g_idx_updated = False
+        if g_idx is not None:
+            is_g_idx_updated = -1 not in g_idx
+
+        for group_id in range(ceil(columns / group_size)):
             # scale.shape should be [nchan, ndim]
             # sc.shape should be [nchan, 1] after unsqueeze
-            sc = scale[:, i].view(-1, 1)
-            zp = zero_point[:, i].view(-1, 1) if zero_point is not None else None
+            sc = scale[:, group_id].view(-1, 1)
+            zp = zero_point[:, group_id].view(-1, 1) if zero_point is not None else None
 
-            if g_idx is not None and i in g_idx:
-                grouped_idx = g_idx == i
+            if is_g_idx_updated:
+                grouped_idx = g_idx == group_id
                 if do_quantize:
                     output[:, grouped_idx] = _quantize(
                         x[:, grouped_idx],
@@ -217,7 +223,7 @@ def _process_quantization(
                     input = output[:, grouped_idx] if do_quantize else x[:, grouped_idx]
                     output[:, grouped_idx] = _dequantize(input, sc, zp)
             else:
-                idx = i * group_size
+                idx = group_id * group_size
                 if do_quantize:
                     output[:, idx : (idx + group_size)] = _quantize(
                         x[:, idx : (idx + group_size)],
@@ -311,7 +317,6 @@ def maybe_calibrate_or_quantize(
     }:
         return value
 
-
     g_idx = None
     if hasattr(module, "weight_g_idx"):
         g_idx = getattr(module, "weight_g_idx")
@@ -320,7 +325,6 @@ def maybe_calibrate_or_quantize(
         # if the tensor is empty,
         # skip quantization
         return value
-
 
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
@@ -342,7 +346,8 @@ def maybe_calibrate_or_quantize(
             device = next(module.parameters()).device
             scale.data = updated_scale.to(device)
             zero_point.data = updated_zero_point.to(device)
-    return fake_quantize(value, scale, zero_point, args)
+
+    return fake_quantize(value, scale, zero_point, args, g_idx)
 
 
 @torch.no_grad()

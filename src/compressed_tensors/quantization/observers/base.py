@@ -57,8 +57,7 @@ class Observer(Module, RegistryMixin):
         """
 
         self.record_observed_tokens(observed)
-        return self.get_qparams(observed=observed,  g_idx=g_idx)
-
+        return self.get_qparams(observed=observed, g_idx=g_idx)
 
     def calculate_qparams(
         self,
@@ -106,10 +105,14 @@ class Observer(Module, RegistryMixin):
                 columns = observed.shape[1]
                 scales, zero_points = [], []
                 group_idxs = range(0, columns, self.quantization_args.group_size)
+
+                # initialized g_idx are Tensor of -1s
+                is_g_idx_updated = False
+                if g_idx is not None:
+                    is_g_idx_updated = -1 not in g_idx
                 for group_id, group_idx in enumerate(group_idxs):
 
-                    # initialized g_idx are Tensor of -1s
-                    if g_idx is not None and group_idx // group_size in g_idx:
+                    if is_g_idx_updated:
                         grouped_idx = g_idx == (group_idx // group_size)
                         scale, zero_point = self.get_qparams_along_dim(
                             observed[:, grouped_idx],
