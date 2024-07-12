@@ -311,9 +311,16 @@ def maybe_calibrate_or_quantize(
     }:
         return value
 
+
     g_idx = None
     if hasattr(module, "weight_g_idx"):
         g_idx = getattr(module, "weight_g_idx")
+
+    if value.numel() == 0:
+        # if the tensor is empty,
+        # skip quantization
+        return value
+
 
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
