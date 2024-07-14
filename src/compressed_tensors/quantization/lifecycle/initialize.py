@@ -17,6 +17,8 @@ import logging
 from typing import Optional
 
 import torch
+from accelerate.hooks import add_hook_to_module, remove_hook_from_module
+from accelerate.utils import PrefixedDataset
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
@@ -81,8 +83,27 @@ def initialize_module_for_quantization(
     module.quantization_scheme = scheme
     module.quantization_status = QuantizationStatus.INITIALIZED
 
+    offloaded = False
+    if hasattr(module, "_hf_hook") and module._hf_hook.offload:
+        offloaded = True
+        hook = module._hf_hook
+        prefix_dict = module._hf_hook.weights_map
+        new_prefix = {}
+        for key, data in module.named_parameters():
+            if key not in prefix_dict:
+                new_prefix[f"{prefix_dict.prefix}{key}"] = data
+            else:
+                new_prefix[f"{prefix_dict.prefix}{key}"] = prefix_dict[key]
+        new_prefix_dict = PrefixedDataset(new_prefix, prefix_dict.prefix)
+        remove_hook_from_module(module)
+
     # wrap forward call of module to perform quantized actions based on calltime status
     wrap_module_forward_quantized(module, scheme)
+
+    if offloaded:
+        add_hook_to_module(module, hook)
+        if prefix_dict is not None:
+            module._hf_hook.weights_map = new_prefix_dict
 
 
 def _initialize_scale_zero_point_observer(
@@ -99,6 +120,8 @@ def _initialize_scale_zero_point_observer(
         return  # no need to register a scale and zero point for a dynamic observer
 
     device = next(module.parameters()).device
+    if hasattr(module, "_hf_hook") and module._hf_hook.offload:
+        device = torch.device("cpu")
 
     # infer expected scale/zero point shape
     expected_shape = 1  # per tensor
