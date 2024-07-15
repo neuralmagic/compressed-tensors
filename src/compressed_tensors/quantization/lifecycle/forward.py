@@ -314,9 +314,19 @@ def maybe_calibrate_or_quantize(
             updated_scale, updated_zero_point = observer(value)
 
             # update scale and zero point
-            device = next(module.parameters()).device
-            scale.data = updated_scale.to(device)
-            zero_point.data = updated_zero_point.to(device)
+            if hasattr(module, "_hf_hook") and module._hf_hook.offload:
+                mappings = module._hf_hook.weights_map
+                mappings[f"{base_name}_scale"].data = updated_scale.to(
+                    mappings[f"{base_name}_scale"].device
+                )
+                mappings[f"{base_name}_zero_point"].data = updated_zero_point.to(
+                    mappings[f"{base_name}_zero_point"].device
+                )
+            else:
+                device = next(module.parameters()).device
+                scale.data = updated_scale.to(device)
+                zero_point.data = updated_zero_point.to(device)
+
     return fake_quantize(value, scale, zero_point, args)
 
 
