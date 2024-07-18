@@ -17,6 +17,9 @@ Miscelaneous helpers for the quantization lifecycle
 """
 
 
+from typing import Optional
+
+import torch
 from torch.nn import Module
 
 
@@ -27,7 +30,9 @@ __all__ = [
 ]
 
 
-def update_layer_weight_quant_params(layer: Module):
+def update_layer_weight_quant_params(
+    layer: Module, g_idx: Optional[torch.Tensor] = None
+):
     weight = getattr(layer, "weight", None)
     scale = getattr(layer, "weight_scale", None)
     zero_point = getattr(layer, "weight_zero_point", None)
@@ -37,7 +42,7 @@ def update_layer_weight_quant_params(layer: Module):
         # scale, zp, or observer not calibratable or weight not available
         return
 
-    updated_scale, updated_zero_point = observer(weight)
+    updated_scale, updated_zero_point = observer(weight, g_idx)
 
     # update scale and zero point
     device = next(layer.parameters()).device
