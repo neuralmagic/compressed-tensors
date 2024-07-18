@@ -327,6 +327,7 @@ class ModelCompressor:
                 data_new = Parameter(data.to(model_device).to(data_dtype))
                 data_old.data = data_new.data
 
+
 def map_modules_to_quant_args(model: Module) -> Dict:
     quantized_modules_to_args = {}
     for name, submodule in iter_named_leaf_modules(model):

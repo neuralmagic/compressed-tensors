@@ -277,7 +277,11 @@ def _load_quant_args_from_state_dict(
         if arg_parameter is not None:
             state_dict_arg = state_dict.get(f"{module_name}.{arg_name}", None)
             if state_dict_arg is None and fill:
-                state_dict_arg = torch.zeros_like(arg_parameter, dtype=torch.float16, device="cpu").to(device).to(arg_parameter.dtype)
+                state_dict_arg = (
+                    torch.zeros_like(arg_parameter, dtype=torch.float16, device="cpu")
+                    .to(device)
+                    .to(arg_parameter.dtype)
+                )
             arg_data = state_dict_arg.to(device).to(arg_parameter.dtype)
             if offloaded:
                 prefix_dict = module._hf_hook.weights_map.dataset
@@ -286,7 +290,7 @@ def _load_quant_args_from_state_dict(
                 arg_parameter.data = arg_data
 
     load_quant_arg_by_name(scale_name)
-    load_quant_arg_by_name(zp_name, fill = True)
+    load_quant_arg_by_name(zp_name, fill=True)
 
 
 def _scheme_from_targets(
