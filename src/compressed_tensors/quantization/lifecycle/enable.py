@@ -12,14 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# flake8: noqa
-# isort: skip_file
+"""
+Enable/Disable compressed-tensors quantization from being used during
+model forward passes
+"""
 
-from .calibration import *
-from .forward import *
-from .frozen import *
-from .initialize import *
-from .compressed import *
-from .apply import *
-from .helpers import *
-from .enable import *
+
+from torch.nn import Module
+
+
+__all__ = [
+    "enable_quantization",
+    "disable_quantization",
+]
+
+
+def enable_quantization(module: Module):
+    module.quantization_enabled = True
+
+
+def disable_quantization(module: Module):
+    module.quantization_enabled = False
