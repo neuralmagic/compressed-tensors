@@ -267,17 +267,26 @@ def _load_quant_args_from_state_dict(
     zp_name = f"{base_name}_zero_point"
     device = next(module.parameters()).device
 
-    scale = getattr(module, scale_name, None)
-    zp = getattr(module, zp_name, None)
-    if scale is not None:
-        state_dict_scale = state_dict[f"{module_name}.{scale_name}"]
-        scale.data = state_dict_scale.to(device).to(scale.dtype)
-    if zp is not None:
-        zp_from_state = state_dict.get(f"{module_name}.{zp_name}", None)
-        if zp_from_state is not None:  # load the non-zero zero points
-            zp.data = zp_from_state.to(device).to(zp.dtype)
-        else:  # fill with zeros matching scale shape
-            zp.data = torch.zeros_like(scale, dtype=zp.dtype).to(device)
+    offloaded = False
+    if hasattr(module, "_hf_hook") and module._hf_hook.offload:
+        device = "cpu"
+        offloaded = True
+
+    def load_quant_arg_by_name(arg_name: str, fill: bool = False):
+        arg_parameter = getattr(module, arg_name, None)
+        if arg_parameter is not None:
+            state_dict_arg = state_dict.get(f"{module_name}.{arg_name}", None)
+            if state_dict_arg is None and fill:
+                state_dict_arg = torch.zeros_like(arg_parameter, dtype=torch.float16, device="cpu").to(device).to(arg_parameter.dtype)
+            arg_data = state_dict_arg.to(device).to(arg_parameter.dtype)
+            if offloaded:
+                prefix_dict = module._hf_hook.weights_map.dataset
+                prefix_dict[f"{module_name}.{arg_name}"] = arg_data
+            else:
+                arg_parameter.data = arg_data
+
+    load_quant_arg_by_name(scale_name)
+    load_quant_arg_by_name(zp_name, fill = True)
 
 
 def _scheme_from_targets(

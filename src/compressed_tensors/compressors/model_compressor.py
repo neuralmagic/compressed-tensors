@@ -307,13 +307,25 @@ class ModelCompressor:
 
     def _replace_weights(self, dense_weight_generator, model):
         for name, data in tqdm(dense_weight_generator, desc="Decompressing model"):
-            # loading the decompressed weights into the model
+            prefix = ".".join(name.split(".")[:-1])
+            module = operator.attrgetter(prefix)(model)
             model_device = operator.attrgetter(name)(model).device
+
+            offloaded = False
+            if hasattr(module, "_hf_hook") and module._hf_hook.offload:
+                model_device = torch.device("cpu")
+                offloaded = True
+
+            # loading the decompressed weights into the model
             data_old = operator.attrgetter(name)(model)
             data_dtype = data_old.dtype
-            data_new = Parameter(data.to(model_device).to(data_dtype))
-            data_old.data = data_new.data
 
+            if offloaded:
+                prefix_dict = module._hf_hook.weights_map.dataset
+                prefix_dict[name] = data.to(model_device).to(data_dtype)
+            else:
+                data_new = Parameter(data.to(model_device).to(data_dtype))
+                data_old.data = data_new.data
 
 def map_modules_to_quant_args(model: Module) -> Dict:
     quantized_modules_to_args = {}
