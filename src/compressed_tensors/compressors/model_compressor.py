@@ -39,10 +39,10 @@ from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
 )
-from compressed_tensors.utils import get_safetensors_folder
+from compressed_tensors.utils import get_safetensors_folder, update_parameter_data
 from compressed_tensors.utils.helpers import fix_fsdp_module_name
 from torch import Tensor
-from torch.nn import Module, Parameter
+from torch.nn import Module
 from tqdm import tqdm
 from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
@@ -307,25 +307,10 @@ class ModelCompressor:
 
     def _replace_weights(self, dense_weight_generator, model):
         for name, data in tqdm(dense_weight_generator, desc="Decompressing model"):
-            prefix = ".".join(name.split(".")[:-1])
+            split_name = name.split(".")
+            prefix, param_name = ".".join(split_name[:-1]), split_name[-1]
             module = operator.attrgetter(prefix)(model)
-            model_device = operator.attrgetter(name)(model).device
-
-            offloaded = False
-            if hasattr(module, "_hf_hook") and module._hf_hook.offload:
-                model_device = torch.device("cpu")
-                offloaded = True
-
-            # loading the decompressed weights into the model
-            data_old = operator.attrgetter(name)(model)
-            data_dtype = data_old.dtype
-
-            if offloaded:
-                prefix_dict = module._hf_hook.weights_map.dataset
-                prefix_dict[name] = data.to(model_device).to(data_dtype)
-            else:
-                data_new = Parameter(data.to(model_device).to(data_dtype))
-                data_old.data = data_new.data
+            update_parameter_data(module, data, param_name)
 
 
 def map_modules_to_quant_args(model: Module) -> Dict:

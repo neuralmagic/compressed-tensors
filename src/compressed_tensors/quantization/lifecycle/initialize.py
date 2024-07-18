@@ -28,6 +28,7 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.utils import get_execution_device, is_module_offloaded
 from torch.nn import Module, Parameter
 
 
@@ -84,7 +85,7 @@ def initialize_module_for_quantization(
     module.quantization_status = QuantizationStatus.INITIALIZED
 
     offloaded = False
-    if hasattr(module, "_hf_hook") and module._hf_hook.offload:
+    if is_module_offloaded(module):
         offloaded = True
         hook = module._hf_hook
         prefix_dict = module._hf_hook.weights_map
@@ -101,6 +102,7 @@ def initialize_module_for_quantization(
     wrap_module_forward_quantized(module, scheme)
 
     if offloaded:
+        # we need to re-add the hook for offloading now that we've wrapped forward
         add_hook_to_module(module, hook)
         if prefix_dict is not None:
             module._hf_hook.weights_map = new_prefix_dict
@@ -120,8 +122,8 @@ def _initialize_scale_zero_point_observer(
         return  # no need to register a scale and zero point for a dynamic observer
 
     device = next(module.parameters()).device
-    if hasattr(module, "_hf_hook") and module._hf_hook.offload:
-        device = torch.device("cpu")
+    if is_module_offloaded(module):
+        device = get_execution_device(module)
 
     # infer expected scale/zero point shape
     expected_shape = 1  # per tensor

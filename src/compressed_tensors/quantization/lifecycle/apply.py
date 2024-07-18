@@ -43,6 +43,7 @@ from compressed_tensors.quantization.utils import (
     iter_named_leaf_modules,
 )
 from compressed_tensors.utils.helpers import fix_fsdp_module_name
+from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
 
@@ -265,32 +266,17 @@ def _load_quant_args_from_state_dict(
     """
     scale_name = f"{base_name}_scale"
     zp_name = f"{base_name}_zero_point"
-    device = next(module.parameters()).device
 
-    offloaded = False
-    if hasattr(module, "_hf_hook") and module._hf_hook.offload:
-        device = "cpu"
-        offloaded = True
+    state_dict_scale = state_dict.get(f"{module_name}.{scale_name}", None)
+    state_dict_zp = state_dict.get(f"{module_name}.{zp_name}", None)
 
-    def load_quant_arg_by_name(arg_name: str, fill: bool = False):
-        arg_parameter = getattr(module, arg_name, None)
-        if arg_parameter is not None:
-            state_dict_arg = state_dict.get(f"{module_name}.{arg_name}", None)
-            if state_dict_arg is None and fill:
-                state_dict_arg = (
-                    torch.zeros_like(arg_parameter, dtype=torch.float16, device="cpu")
-                    .to(device)
-                    .to(arg_parameter.dtype)
-                )
-            arg_data = state_dict_arg.to(device).to(arg_parameter.dtype)
-            if offloaded:
-                prefix_dict = module._hf_hook.weights_map.dataset
-                prefix_dict[f"{module_name}.{arg_name}"] = arg_data
-            else:
-                arg_parameter.data = arg_data
-
-    load_quant_arg_by_name(scale_name)
-    load_quant_arg_by_name(zp_name, fill=True)
+    if state_dict_scale is not None:
+        # module is quantized
+        update_parameter_data(module, state_dict_scale, scale_name)
+        if state_dict_zp is None:
+            # fill in zero point for symmetric quantization
+            state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
+            update_parameter_data(module, state_dict_zp, zp_name)
 
 
 def _scheme_from_targets(
