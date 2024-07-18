@@ -13,8 +13,7 @@
 # limitations under the License.
 
 """
-Enable/Disable compressed-tensors quantization from being used during
-model forward passes
+Miscelaneous helpers for the quantization lifecycle
 """
 
 
@@ -22,9 +21,28 @@ from torch.nn import Module
 
 
 __all__ = [
+    "update_layer_weight_quant_params",
     "enable_quantization",
     "disable_quantization",
 ]
+
+
+def update_layer_weight_quant_params(layer: Module):
+    weight = getattr(layer, "weight", None)
+    scale = getattr(layer, "weight_scale", None)
+    zero_point = getattr(layer, "weight_zero_point", None)
+    observer = getattr(layer, "weight_observer", None)
+
+    if weight is None or observer is None or scale is None or zero_point is None:
+        # scale, zp, or observer not calibratable or weight not available
+        return
+
+    updated_scale, updated_zero_point = observer(weight)
+
+    # update scale and zero point
+    device = next(layer.parameters()).device
+    scale.data = updated_scale.to(device)
+    zero_point.data = updated_zero_point.to(device)
 
 
 def enable_quantization(module: Module):
