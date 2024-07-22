@@ -119,7 +119,6 @@ def _initialize_scale_zero_point_observer(
     if hasattr(module, base_name):
         data = getattr(module, base_name).data
         init_scale_data, init_zero_point_data = observer(data)
-        print(init_scale_data)
     else:
         init_scale_data = torch.empty(
             expected_shape, dtype=module.weight.dtype, device=device
