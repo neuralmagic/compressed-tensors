@@ -245,6 +245,11 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 
     @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
     def wrapped_forward(self, *args, **kwargs):
+        if not getattr(module, "quantization_enabled", True):
+            # quantization is disabled on forward passes, return baseline
+            # forward call
+            return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
+
         input_ = args[0]
 
         if scheme.input_activations is not None:
@@ -291,6 +296,11 @@ def maybe_calibrate_or_quantize(
         QuantizationStatus.CALIBRATION,
         QuantizationStatus.FROZEN,
     }:
+        return value
+
+    if value.numel() == 0:
+        # if the tensor is empty,
+        # skip quantization
         return value
 
     if args.dynamic:
