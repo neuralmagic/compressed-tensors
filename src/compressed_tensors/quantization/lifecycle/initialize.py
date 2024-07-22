@@ -115,9 +115,11 @@ def _initialize_scale_zero_point_observer(
 
     zp_dtype = quantization_args.pytorch_dtype()
 
-    # compute scale, zp if weight exists
-    if hasattr(module, "weight"):
-        init_scale_data, init_zero_point_data = observer(module.weight.data)
+    # compute scale, zp if the base_name attr exists
+    if hasattr(module, base_name):
+        data = getattr(module, base_name).data
+        init_scale_data, init_zero_point_data = observer(data)
+        print(init_scale_data)
     else:
         init_scale_data = torch.empty(
             expected_shape, dtype=module.weight.dtype, device=device
