@@ -14,4 +14,7 @@
 # flake8: noqa
 
 from .offload import *
+from .helpers import *
+from .permutations_24 import *
 from .safetensors_load import *
+from .semi_structured_conversions import *
