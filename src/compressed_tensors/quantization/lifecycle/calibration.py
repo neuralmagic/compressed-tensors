@@ -50,6 +50,7 @@ def set_module_for_calibration(module: Module):
         )
 
     if module.quantization_scheme.weights is not None:
+        # set weight scale and zero_point up front, calibration data doesn't affect it
         observer = module.weight_observer
 
         offloaded = False

@@ -77,29 +77,3 @@ def test_initialize_module_for_quantization(
     assert hasattr(layer, "quantization_status")
 
     assert layer.quantization_status == QuantizationStatus.INITIALIZED
-
-
-def test_initialize_module__propagate_weights_for_initial_scale_zp_computation(
-    create_quantization_scheme,
-):
-    weights, input_activations = (
-        QuantizationArgs(num_bits=NUM_BITS, symmetric=False),
-        None,
-    )
-    quantization_scheme = create_quantization_scheme(
-        targets=["*"],
-        weights=weights,
-        input_activations=input_activations,
-    )
-    layer = Linear(4, 4)
-
-    assert not hasattr(layer, "quantization_scheme")
-    assert not hasattr(layer, "quantization_status")
-
-    # add attributes, zero_points and scale
-    initialize_module_for_quantization(layer, quantization_scheme)
-
-    # module has weights, check that those are used to compute the scales and zp
-    # and not initialized to 0
-    assert layer.weight_scale != 0
-    assert layer.weight_zero_point != 0

@@ -90,6 +90,9 @@ def initialize_module_for_quantization(
         hook = module._hf_hook
         prefix_dict = module._hf_hook.weights_map
         new_prefix = {}
+
+        # recreate the prefix dict (since it is immutable)
+        # and add quantization parameters
         for key, data in module.named_parameters():
             if key not in prefix_dict:
                 new_prefix[f"{prefix_dict.prefix}{key}"] = data
