@@ -259,6 +259,13 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
                 module, input_, "input", scheme.input_activations
             )
 
+        if scheme.weights is not None:
+            # calibrate and (fake) quantize weights when applicable
+            unquantized_weight = self.weight.data.clone()
+            self.weight.data = maybe_calibrate_or_quantize(
+                module, self.weight, "weight", scheme.weights
+            )
+
         # perform wrapped forward call
         output = forward_func_orig.__get__(module, module.__class__)(
             input_, *args[1:], **kwargs
@@ -269,6 +276,10 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             output = maybe_calibrate_or_quantize(
                 module, output, "output", scheme.output_activations
             )
+
+        # restore back to unquantized_value
+        if scheme.weights is not None:
+            self.weight.data = unquantized_weight
 
         return output
 
