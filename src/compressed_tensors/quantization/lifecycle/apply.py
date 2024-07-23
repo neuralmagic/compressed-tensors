@@ -276,7 +276,7 @@ def _load_quant_args_from_state_dict(
         if state_dict_zp is None:
             # fill in zero point for symmetric quantization
             state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
-            update_parameter_data(module, state_dict_zp, zp_name)
+        update_parameter_data(module, state_dict_zp, zp_name)
 
 
 def _scheme_from_targets(
