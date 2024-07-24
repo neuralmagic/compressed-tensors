@@ -28,7 +28,7 @@ __all__ = ["MovingAverageMSEObserver"]
 class MovingAverageMSEObserver(Observer):
     """
     Implements a dynamic quantization observer that sets the scale and
-    zero point based on a moving average of the overall min and max observed values
+    zero point based on a moving average of the mse-clipped min and max observed values
     """
 
     def __init__(
@@ -53,6 +53,15 @@ class MovingAverageMSEObserver(Observer):
         observed: Tensor,
         reduce_dims: Optional[Tuple[int]] = None,
     ):
+        """
+        Computes the mse-clipped min and max values of the observed tensor by 
+        optimizing for quantization error
+
+        :param observed: observed tensor to calculate quantization parameters for
+        :param reduce_dims: optional tuple of dimensions to reduce along,
+            returned values will be shaped (1,) along the reduced dimensions
+        :return: tuple of min and max values derived from the observed tensor
+        """
         from compressed_tensors.quantization.lifecycle import fake_quantize
 
         if not reduce_dims:
@@ -101,8 +110,8 @@ class MovingAverageMSEObserver(Observer):
         tensor_id: Optional[Any] = None,
     ) -> Tuple[FloatTensor, IntTensor]:
         """
-        Updates the observed min and max using a moving average smoothed by the
-        averaging_constant
+        Updates the mse-clipped min and max values of the observed tensor using
+        a moving average smoothed by the averaging_constant
 
         :param observed: observed tensor to calculate quantization parameters for
         :param reduce_dims: optional tuple of dimensions to reduce along,
@@ -113,6 +122,12 @@ class MovingAverageMSEObserver(Observer):
         :return: tuple of scale and zero point derived from the observed tensor
         """
         tensor_id = tensor_id or "default"
+        # only compute this once. Currently, calibration is called multiple times for weight vector
+        if tensor_id in self.min_val.keys():
+            return calculate_qparams(
+                self.min_val[tensor_id], self.max_val[tensor_id], self.quantization_args
+            )
+
         min_val, max_val = self.calculate_mse_min_max(observed, reduce_dims)
 
         running_min_val = self.min_val.get(tensor_id, None)
