@@ -122,7 +122,7 @@ class MovingAverageMSEObserver(Observer):
         :return: tuple of scale and zero point derived from the observed tensor
         """
         tensor_id = tensor_id or "default"
-        # only compute this once. Currently, calibration is called multiple times for weight vector
+        # Hacky: only compute this once. Currently, calibration is called multiple times for weight vector
         if tensor_id in self.min_val.keys():
             return calculate_qparams(
                 self.min_val[tensor_id], self.max_val[tensor_id], self.quantization_args
