@@ -265,10 +265,13 @@ def _load_quant_args_from_state_dict(
     """
     scale_name = f"{base_name}_scale"
     zp_name = f"{base_name}_zero_point"
+    g_idx_name = f"{base_name}_g_idx"
     device = next(module.parameters()).device
 
     scale = getattr(module, scale_name, None)
     zp = getattr(module, zp_name, None)
+    g_idx = getattr(module, g_idx_name, None)
+
     if scale is not None:
         state_dict_scale = state_dict[f"{module_name}.{scale_name}"]
         scale.data = state_dict_scale.to(device).to(scale.dtype)
@@ -278,6 +281,10 @@ def _load_quant_args_from_state_dict(
             zp.data = zp_from_state.to(device).to(zp.dtype)
         else:  # fill with zeros matching scale shape
             zp.data = torch.zeros_like(scale, dtype=zp.dtype).to(device)
+    if g_idx is not None:
+        g_idx_from_state = state_dict.get(f"{module_name}.{g_idx_name}", None)
+        if g_idx_from_state is not None:  # load the non-zero zero points
+            g_idx.data = g_idx_from_state.to(device).to(g_idx.dtype)
 
 
 def _scheme_from_targets(
