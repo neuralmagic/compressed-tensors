@@ -313,7 +313,10 @@ def maybe_calibrate_or_quantize(
         scale = getattr(module, f"{base_name}_scale")
         zero_point = getattr(module, f"{base_name}_zero_point")
 
-        if module.quantization_status == QuantizationStatus.CALIBRATION and base_name != "weight":
+        if (
+            module.quantization_status == QuantizationStatus.CALIBRATION
+            and base_name != "weight"
+        ):
             # calibration mode - get new quant params from observer
             observer = getattr(module, f"{base_name}_observer")
 
