@@ -108,17 +108,33 @@ class Observer(Module, RegistryMixin):
 
                 # initialized g_idx are Tensor of -1s
                 is_g_idx_updated = False
+                g_idx_sort_indices = None
                 if g_idx is not None:
                     is_g_idx_updated = -1 not in g_idx
+                    g_idx_sort_indices = torch.argsort(g_idx).to(torch.int)
+                    
                 for group_id, group_idx in enumerate(group_idxs):
 
                     if is_g_idx_updated:
-                        grouped_idx = g_idx == (group_idx // group_size)
+                        grouped_idx = g_idx_sort_indices[group_idx : (group_idx + group_size)]
+                        
+                        # grouped_idx = g_idx == (group_idx // group_size)
+                        # grouped_idx = g_idx == group_id
+                        
                         scale, zero_point = self.get_qparams_along_dim(
                             observed[:, grouped_idx],
                             0,
                             tensor_id=group_id,
                         )
+                        """
+        tensor([[0.0047],
+        [0.0055],
+        [0.0043],
+        ...,
+        [0.0077],
+        [0.0070],
+        [0.0071]], device='cuda:0', dtype=torch.bfloat16)
+                        """
                         scales.append(scale)
                         zero_points.append(zero_point)
 
@@ -128,6 +144,15 @@ class Observer(Module, RegistryMixin):
                             0,
                             tensor_id=group_id,
                         )
+                        """
+                        tensor([[0.0038],
+                                [0.0143],
+                                [0.0034],
+                                ...,
+                                [0.0077],
+                                [0.0067],
+                                [0.0067]], device='cuda:0', dtype=torch.bfloat16)
+                        """
                         scales.append(scale)
                         zero_points.append(zero_point)
 

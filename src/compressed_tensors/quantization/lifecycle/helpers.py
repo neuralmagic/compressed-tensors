@@ -42,12 +42,23 @@ def update_layer_weight_quant_params(
         # scale, zp, or observer not calibratable or weight not available
         return
 
+    # breakpoint()
     updated_scale, updated_zero_point = observer(weight, g_idx)
 
     # update scale and zero point
     device = next(layer.parameters()).device
     scale.data = updated_scale.to(device)
     zero_point.data = updated_zero_point.to(device)
+    """
+    Parameter containing:
+tensor([[0.0047, 0.0044, 0.0076,  ..., 0.0063, 0.0059, 0.0046],
+        [0.0055, 0.0143, 0.0060,  ..., 0.0104, 0.0098, 0.0049],
+        [0.0043, 0.0066, 0.0060,  ..., 0.0048, 0.0061, 0.0051],
+        ...,
+        [0.0077, 0.0062, 0.0059,  ..., 0.0069, 0.0115, 0.0045],
+        [0.0070, 0.0058, 0.0058,  ..., 0.0063, 0.0118, 0.0045],
+        [0.0071, 0.0058, 0.0058,  ..., 0.0064, 0.0120, 0.0045]],
+       device='cuda:0', dtype=torch.bfloat16)"""
 
 
 def enable_quantization(module: Module):
