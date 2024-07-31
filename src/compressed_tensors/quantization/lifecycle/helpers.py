@@ -31,7 +31,7 @@ __all__ = [
 
 
 def update_layer_weight_quant_params(
-    layer: Module, g_idx: Optional[torch.Tensor] = None
+    layer: Module, g_idx: Optional[torch.Tensor] = None, perm: Optional[torch.Tensor] = None,
 ):
     weight = getattr(layer, "weight", None)
     scale = getattr(layer, "weight_scale", None)
@@ -42,8 +42,12 @@ def update_layer_weight_quant_params(
         # scale, zp, or observer not calibratable or weight not available
         return
 
+    if perm is not None:
+        weight= weight[:, perm]
+
     # breakpoint()
-    updated_scale, updated_zero_point = observer(weight, g_idx)
+    # updated_scale, updated_zero_point = observer(weight)
+    updated_scale, updated_zero_point = observer(weight, g_idx=g_idx)
 
     # update scale and zero point
     device = next(layer.parameters()).device
