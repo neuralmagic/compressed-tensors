@@ -1,8 +1,9 @@
 name: Build, test, and publish nightly wheel
 
 on:
-  schedule:
-    - cron: '0 22 * * *'
+  push:
+    branches:
+      - push-nightly
 
 jobs:
   build-test-publish-nightly-wheel:
