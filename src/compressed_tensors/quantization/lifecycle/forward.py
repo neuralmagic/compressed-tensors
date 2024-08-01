@@ -201,15 +201,17 @@ def _process_quantization(
         is_g_idx_updated = False
         if g_idx is not None:
             is_g_idx_updated = -1 not in g_idx
+            g_idx_sort_indices = torch.argsort(g_idx).to(torch.int)
 
         for group_id in range(ceil(columns / group_size)):
             # scale.shape should be [nchan, ndim]
             # sc.shape should be [nchan, 1] after unsqueeze
             sc = scale[:, group_id].view(-1, 1)
             zp = zero_point[:, group_id].view(-1, 1) if zero_point is not None else None
-
+            idx = group_id * group_size
             if is_g_idx_updated:
-                grouped_idx = g_idx == group_id
+                # grouped_idx = g_idx == group_id
+                grouped_idx = g_idx_sort_indices[idx : (idx + group_size)]
                 if do_quantize:
                     output[:, grouped_idx] = _quantize(
                         x[:, grouped_idx],
@@ -224,7 +226,7 @@ def _process_quantization(
                     input = output[:, grouped_idx] if do_quantize else x[:, grouped_idx]
                     output[:, grouped_idx] = _dequantize(input, sc, zp)
             else:
-                idx = group_id * group_size
+                
                 if do_quantize:
                     output[:, idx : (idx + group_size)] = _quantize(
                         x[:, idx : (idx + group_size)],
