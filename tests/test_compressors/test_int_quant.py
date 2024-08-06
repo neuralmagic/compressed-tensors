@@ -52,7 +52,7 @@ def get_dummy_quant_config(strategy, group_size=None):
             True,
             128,
             torch.rand((512, 8, 1)) * 0.01,
-            None,
+            torch.zeros((512, 8, 1), dtype=torch.int8),
         ],
         [
             QuantizationStrategy.CHANNEL,
@@ -67,11 +67,8 @@ def test_quant_format(strategy, symmetric, group_size, sc, zp):
     dense_state_dict = {
         "dummy.weight": torch.rand((512, 1024)),
         "dummy.weight_scale": torch.tensor(sc, dtype=torch.float32),
+        "dummy.weight_zero_point": torch.tensor(zp, dtype=torch.int32),
     }
-    if zp is not None:
-        dense_state_dict["dummy.weight_zero_point"] = torch.tensor(
-            zp, dtype=torch.int32
-        )
     quant_config = get_dummy_quant_config(strategy=strategy, group_size=group_size)
 
     compressor = IntQuantizationCompressor(config=quant_config)
@@ -80,7 +77,11 @@ def test_quant_format(strategy, symmetric, group_size, sc, zp):
         dense_state_dict, names_to_scheme=quantized_modules_to_args
     )
 
-    assert len(dense_state_dict) == len(compressed_state_dict)
+    # state_dict params should be the same, minus the zero_point if symmetric
+    if symmetric:
+        assert len(dense_state_dict) == len(compressed_state_dict) + 1
+    else:
+        assert len(dense_state_dict) == len(compressed_state_dict)
 
     # check compressed to int8
     assert compressed_state_dict["dummy.weight"].dtype == torch.int8

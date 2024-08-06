@@ -77,6 +77,7 @@ def _test_layer_dynamic_quantization_status(
 
     # check weights always have scale/zp and observer only if not frozen
     assert hasattr(module, "weight_scale") == weights
+    assert hasattr(module, "weight_zero_point") == weights
     assert hasattr(module, "weight_observer") == (weights and not frozen)
 
 

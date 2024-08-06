@@ -60,6 +60,7 @@ def test_quant_format(shape):
     dense_state_dict = {
         "dummy.weight": torch.rand(shape),
         "dummy.weight_scale": torch.tensor(0.01, dtype=torch.float32),
+        "dummy.weight_zero_point": torch.tensor(0, dtype=torch.int32),
     }
     quant_config = get_dummy_quant_config()
 
@@ -71,7 +72,7 @@ def test_quant_format(shape):
 
     # compressed state_dict adds one entry for shape
     # but removes the zero points since we are symmetric
-    assert len(dense_state_dict) + 1 == len(compressed_state_dict)
+    assert len(dense_state_dict) == len(compressed_state_dict)
 
     # check compressed and packed
     assert compressed_state_dict["dummy.weight_packed"].dtype == torch.int32

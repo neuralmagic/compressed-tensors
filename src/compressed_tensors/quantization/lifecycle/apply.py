@@ -167,10 +167,9 @@ def apply_quantization_config(
                 "not found in the model: "
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
-    # apply current quantization status across all targeted layers
 
-    if config.quantization_status != QuantizationStatus.COMPRESSED:
-        apply_quantization_status(model, config.quantization_status)
+    # apply current quantization status across all targeted layers
+    apply_quantization_status(model, config.quantization_status)
     return names_to_scheme
 
 

@@ -63,7 +63,7 @@ def test_bit_depths(bit_depth, quant_type, input_symmetry, weight_symmetry):
 
     inputs = torch.randn(32, 64)
     model(inputs)
-    if input_symmetry is False:
+    if input_symmetry is not None:
         assert model.input_zero_point >= min
         assert model.input_zero_point <= max
 
@@ -77,11 +77,9 @@ def test_bit_depths(bit_depth, quant_type, input_symmetry, weight_symmetry):
         )
         assert diff_from_max < model.input_scale or diff_from_min < model.input_scale
 
-    if weight_symmetry is False:
-        assert model.weight_zero_point >= min
-        assert model.weight_zero_point <= max
+    assert model.weight_zero_point >= min
+    assert model.weight_zero_point <= max
 
-    model.weight_zero_point = torch.nn.Parameter(torch.zeros(model.weight_scale.shape))
     weight_max = torch.max(model.weight)
     weight_min = torch.min(model.weight)
     diff_from_max = abs(
@@ -95,7 +93,7 @@ def test_bit_depths(bit_depth, quant_type, input_symmetry, weight_symmetry):
     quantized_weight = fake_quantize(
         model.weight,
         model.weight_scale,
-        model.weight_zero_point if weight_symmetry is False else None,
+        model.weight_zero_point,
         model.quantization_scheme.weights,
     )
     assert not torch.any(quantized_weight < min).item()
@@ -118,10 +116,9 @@ def test_fp8(bit_depth, quant_type, input_symmetry, weight_symmetry):
 
     inputs = torch.randn(32, 64)
     model(inputs)
-    if weight_symmetry is False:
-        assert model.weight_zero_point.dtype == torch.float8_e4m3fn
-        model.weight_zero_point.data = model.weight_zero_point.to(model.weight.dtype)
-    if input_symmetry is False:
+    assert model.weight_zero_point.dtype == torch.float8_e4m3fn
+    model.weight_zero_point.data = model.weight_zero_point.to(model.weight.dtype)
+    if input_symmetry is not None:
         assert model.input_zero_point.dtype == torch.float8_e4m3fn
         model.input_zero_point.data = model.input_zero_point.to(model.weight.dtype)
         assert model.input_zero_point >= min
@@ -130,7 +127,7 @@ def test_fp8(bit_depth, quant_type, input_symmetry, weight_symmetry):
         inputs_fake_quant = quantize(
             inputs,
             model.input_scale,
-            model.input_zero_point if input_symmetry is False else None,
+            model.input_zero_point,
             model.quantization_scheme.input_activations,
         )
         input_max = torch.max(inputs_fake_quant)
@@ -139,14 +136,13 @@ def test_fp8(bit_depth, quant_type, input_symmetry, weight_symmetry):
         diff_from_min = abs(input_min - min)
         assert diff_from_max.item() == 0.0 or diff_from_min.item() == 0.0
 
-    if weight_symmetry is False:
-        assert model.weight_zero_point >= min
-        assert model.weight_zero_point <= max
+    assert model.weight_zero_point >= min
+    assert model.weight_zero_point <= max
 
     weight_fake_quant = quantize(
         model.weight,
         model.weight_scale,
-        model.weight_zero_point if weight_symmetry is False else None,
+        model.weight_zero_point,
         model.quantization_scheme.weights,
     )
     weight_max = torch.max(weight_fake_quant)

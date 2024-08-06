@@ -51,6 +51,7 @@ def test_lifecyle(create_quantization_scheme):
         "input_scale",
         "input_zero_point",
         "weight_scale",
+        "weight_zero_point",
         "weight",
         "bias",
     }
@@ -73,6 +74,7 @@ def test_lifecyle(create_quantization_scheme):
     assert torch.numel(layer.input_zero_point.data) == 1
     assert torch.numel(layer.input_scale) == 1
     assert torch.numel(layer.weight_scale) == 1
+    assert torch.numel(layer.weight_zero_point) == 1
 
     random_input = torch.randn(4, 4)
     random_input[0][0] = 42  # skew distribution to force non-zero zp
@@ -82,6 +84,10 @@ def test_lifecyle(create_quantization_scheme):
     assert torch.numel(layer.input_zero_point.data) > 0
     assert torch.numel(layer.input_scale) > 0
     assert torch.numel(layer.weight_scale) > 0
+    assert torch.numel(layer.weight_zero_point) > 0
+
+    # symmetric zero points should center at 0
+    assert layer.weight_zero_point.data == 0
 
     # check high and low bound of the weights
     assert torch.all(layer.weight.data >= -128) and torch.all(layer.weight.data <= 127)

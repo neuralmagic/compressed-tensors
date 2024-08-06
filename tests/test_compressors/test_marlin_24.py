@@ -77,7 +77,7 @@ def test_marlin24_format(num_bits, strategy, layer_shape):
     _ = model(input)
 
     state_dict = model.state_dict()
-    assert len(state_dict) == 3
+    assert len(state_dict) == 4
     assert f"{NOT_QUANT_NAME}.weight_scale" not in state_dict
     assert f"{QUANT_NAME}.weight_scale" in state_dict
 

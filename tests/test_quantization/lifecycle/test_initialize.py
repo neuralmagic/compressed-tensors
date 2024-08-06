@@ -61,9 +61,11 @@ def test_initialize_module_for_quantization(
     registered_params = {"weight", "bias"}
     if weights is not None:
         registered_params.add("weight_scale")
+        registered_params.add("weight_zero_point")
 
     if input_activations is not None:
         registered_params.add("input_scale")
+        registered_params.add("input_zero_point")
 
     for key in layer.state_dict().keys():
         assert key in registered_params

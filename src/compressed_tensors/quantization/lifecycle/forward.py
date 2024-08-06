@@ -358,11 +358,11 @@ def _dequantize(
     zero_point: torch.Tensor = None,
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
+    dequant_value = x_q.to(scale.dtype)
 
-    dequant_value = x_q
     if zero_point is not None:
         dequant_value = dequant_value - zero_point.to(scale.dtype)
-    dequant_value = dequant_value.to(scale.dtype) * scale
+    dequant_value = dequant_value * scale
 
     if dtype is not None:
         dequant_value = dequant_value.to(dtype)

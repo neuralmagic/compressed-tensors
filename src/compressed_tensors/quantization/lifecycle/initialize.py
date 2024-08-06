@@ -146,10 +146,9 @@ def _initialize_scale_zero_point_observer(
     )
     module.register_parameter(f"{base_name}_scale", init_scale)
 
-    if quantization_args.symmetric is False:
-        zp_dtype = quantization_args.pytorch_dtype()
-        init_zero_point = Parameter(
-            torch.empty(expected_shape, device=device, dtype=zp_dtype),
-            requires_grad=False,
-        )
-        module.register_parameter(f"{base_name}_zero_point", init_zero_point)
+    zp_dtype = quantization_args.pytorch_dtype()
+    init_zero_point = Parameter(
+        torch.empty(expected_shape, device=device, dtype=zp_dtype),
+        requires_grad=False,
+    )
+    module.register_parameter(f"{base_name}_zero_point", init_zero_point)
