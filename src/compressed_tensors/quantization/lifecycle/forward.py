@@ -25,6 +25,7 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.utils import update_parameter_data
 from torch.nn import Module
 
 
@@ -237,6 +238,11 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 
     @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
     def wrapped_forward(self, *args, **kwargs):
+        if not getattr(module, "quantization_enabled", True):
+            # quantization is disabled on forward passes, return baseline
+            # forward call
+            return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
+
         input_ = args[0]
 
         if scheme.input_activations is not None:
@@ -285,6 +291,11 @@ def maybe_calibrate_or_quantize(
     }:
         return value
 
+    if value.numel() == 0:
+        # if the tensor is empty,
+        # skip quantization
+        return value
+
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
         observer = getattr(module, f"{base_name}_observer")
@@ -294,17 +305,21 @@ def maybe_calibrate_or_quantize(
         scale = getattr(module, f"{base_name}_scale")
         zero_point = getattr(module, f"{base_name}_zero_point", None)
 
-        if module.quantization_status == QuantizationStatus.CALIBRATION:
+        if (
+            module.quantization_status == QuantizationStatus.CALIBRATION
+            and base_name != "weight"
+        ):
             # calibration mode - get new quant params from observer
             observer = getattr(module, f"{base_name}_observer")
 
             updated_scale, updated_zero_point = observer(value)
 
             # update scale and zero point
-            device = next(module.parameters()).device
-            scale.data = updated_scale.to(device)
+            update_parameter_data(module, updated_scale, f"{base_name}_scale")
             if zero_point is not None:
-                zero_point.data = updated_zero_point.to(device)
+                update_parameter_data(
+                    module, updated_zero_point, f"{base_name}_zero_point"
+                )
 
     return fake_quantize(value, scale, zero_point, args)
 
