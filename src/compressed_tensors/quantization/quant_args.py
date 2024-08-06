@@ -99,7 +99,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         from compressed_tensors.quantization.observers.base import Observer
 
         if self.observer == "minmax" and self.dynamic:
-            # override defualt observer for dynamic, you never want minmax which
+            # override default observer for dynamic, you never want minmax which
             # keeps state across samples for dynamic
             self.observer = "memoryless"
 
