@@ -56,7 +56,9 @@ class CompressedLinear(Module):
             )
 
         # this will initialize all the scales and zero points
-        initialize_module_for_quantization(self, quantization_scheme)
+        initialize_module_for_quantization(
+            self, quantization_scheme, force_zero_point=False
+        )
         delattr(self, "weight")
 
         compression_params = self.compressor.compression_param_info(

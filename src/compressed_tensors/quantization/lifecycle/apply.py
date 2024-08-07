@@ -216,10 +216,20 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     current_status = infer_quantization_status(model)
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
-        model.apply(initialize_module_for_quantization)
+        force_zero_point_init = status != QuantizationStatus.COMPRESSED
+        model.apply(
+            lambda module: initialize_module_for_quantization(
+                module, force_zero_point=force_zero_point_init
+            )
+        )
 
     if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
-        model.apply(set_module_for_calibration)
+        calibrate_weights = status == QuantizationStatus.CALIBRATION
+        model.apply(
+            lambda module: set_module_for_calibration(
+                module, calibrate_weights=calibrate_weights
+            )
+        )
     if current_status < status >= QuantizationStatus.FROZEN > current_status:
         model.apply(freeze_module_quantization)
 

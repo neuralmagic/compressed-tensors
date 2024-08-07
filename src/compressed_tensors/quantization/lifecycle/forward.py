@@ -316,10 +316,7 @@ def maybe_calibrate_or_quantize(
 
             # update scale and zero point
             update_parameter_data(module, updated_scale, f"{base_name}_scale")
-            if zero_point is not None:
-                update_parameter_data(
-                    module, updated_zero_point, f"{base_name}_zero_point"
-                )
+            update_parameter_data(module, updated_zero_point, f"{base_name}_zero_point")
 
     return fake_quantize(value, scale, zero_point, args)
 

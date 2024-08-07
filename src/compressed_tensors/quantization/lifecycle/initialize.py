@@ -43,6 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 def initialize_module_for_quantization(
     module: Module,
     scheme: Optional[QuantizationScheme] = None,
+    force_zero_point: bool = True,
 ):
     """
     attaches appropriate scales, zero points, and observers to a layer
@@ -61,12 +62,18 @@ def initialize_module_for_quantization(
         return
 
     if scheme.input_activations is not None:
-        _initialize_scale_zero_point_observer(module, "input", scheme.input_activations)
+        _initialize_scale_zero_point_observer(
+            module, "input", scheme.input_activations, force_zero_point=force_zero_point
+        )
     if scheme.weights is not None:
         if hasattr(module, "weight"):
             weight_shape = module.weight.shape
             _initialize_scale_zero_point_observer(
-                module, "weight", scheme.weights, weight_shape=weight_shape
+                module,
+                "weight",
+                scheme.weights,
+                weight_shape=weight_shape,
+                force_zero_point=force_zero_point,
             )
         else:
             _LOGGER.warning(
@@ -76,7 +83,10 @@ def initialize_module_for_quantization(
             )
     if scheme.output_activations is not None:
         _initialize_scale_zero_point_observer(
-            module, "output", scheme.output_activations
+            module,
+            "output",
+            scheme.output_activations,
+            force_zero_point=force_zero_point,
         )
 
     module.quantization_scheme = scheme
@@ -114,6 +124,7 @@ def _initialize_scale_zero_point_observer(
     base_name: str,
     quantization_args: QuantizationArgs,
     weight_shape: Optional[torch.Size] = None,
+    force_zero_point: bool = True,
 ):
     # initialize observer module and attach as submodule
     observer = quantization_args.get_observer()
@@ -140,15 +151,19 @@ def _initialize_scale_zero_point_observer(
             )
 
     # initializes empty scale and zero point parameters for the module
+    scale_dtype = module.weight.dtype
+    if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
+        scale_dtype = torch.float16
     init_scale = Parameter(
-        torch.empty(expected_shape, dtype=module.weight.dtype, device=device),
+        torch.empty(expected_shape, dtype=scale_dtype, device=device),
         requires_grad=False,
     )
     module.register_parameter(f"{base_name}_scale", init_scale)
 
-    zp_dtype = quantization_args.pytorch_dtype()
-    init_zero_point = Parameter(
-        torch.empty(expected_shape, device=device, dtype=zp_dtype),
-        requires_grad=False,
-    )
-    module.register_parameter(f"{base_name}_zero_point", init_zero_point)
+    if force_zero_point or not quantization_args.symmetric:
+        zp_dtype = quantization_args.pytorch_dtype()
+        init_zero_point = Parameter(
+            torch.zeros(expected_shape, device=device, dtype=zp_dtype),
+            requires_grad=False,
+        )
+        module.register_parameter(f"{base_name}_zero_point", init_zero_point)
