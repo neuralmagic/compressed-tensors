@@ -288,7 +288,14 @@ def maybe_calibrate_or_quantize(
     if module.quantization_status not in {
         QuantizationStatus.CALIBRATION,
         QuantizationStatus.FROZEN,
+        QuantizationStatus.COMPRESSED,
     }:
+        return value
+
+    if (
+        module.quantization_status == QuantizationStatus.COMPRESSED
+        and base_name == "weight"
+    ):
         return value
 
     if value.numel() == 0:
