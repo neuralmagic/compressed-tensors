@@ -224,10 +224,12 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         )
 
     if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
-        calibrate_weights = status == QuantizationStatus.CALIBRATION
+        # only quantize weights up front when our end goal state is calibration,
+        # weight quantization parameters are already loaded for frozen/compressed
+        quantize_weights_upfront = status == QuantizationStatus.CALIBRATION
         model.apply(
             lambda module: set_module_for_calibration(
-                module, calibrate_weights=calibrate_weights
+                module, quantize_weights_upfront=quantize_weights_upfront
             )
         )
     if current_status < status >= QuantizationStatus.FROZEN > current_status:
