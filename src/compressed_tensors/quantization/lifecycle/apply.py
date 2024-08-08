@@ -112,6 +112,8 @@ def apply_quantization_config(
 
     :param model: model to apply quantization config to
     :param config: quantization config
+    :param run_compressed: Whether the model will be run in compressed mode or
+        decompressed fully on load
     """
     # remove reference to the original `config`
     # argument. This function can mutate it, and we'd

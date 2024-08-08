@@ -55,6 +55,8 @@ def initialize_module_for_quantization(
     :param scheme: scheme to use for quantization. if None is provided,
         will attempt to use scheme stored in the module under `quantization_scheme`,
         if not provided, the layer will be skipped
+    :param force_zero_point: whether to force initialization of a zero point for
+        symmetric quantization
     """
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:

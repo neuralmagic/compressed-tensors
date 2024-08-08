@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -44,7 +44,15 @@ class PackedQuantizationCompressor(Compressor):
         self,
         weight_shape: torch.Size,
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> Dict[str, Tuple[torch.Size, torch.dtype]]:
+        """
+        Creates a dictionary of expected shapes and dtypes for each compression
+            parameter used by the compressor
+
+        :param weight_shape: uncompressed weight shape
+        :param quantization_args: quantization parameters for the weight
+        :return: dictionary mapping compressed parameter names to shape and dtype
+        """
         pack_factor = 32 // quantization_args.num_bits
         packed_size = math.ceil(weight_shape[1] / pack_factor)
         return {
@@ -58,7 +66,16 @@ class PackedQuantizationCompressor(Compressor):
         scale: Tensor,
         zero_point: Optional[Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compresses a single uncompressed weight
+
+        :param weight: uncompressed weight tensor
+        :param scale: quantization scale for weight
+        :param zero_point: quantization zero point for weight
+        :param quantization_args: quantization parameters for weight
+        :return: dictionary of compressed weight data
+        """
         compressed_dict = {}
         if can_quantize(weight, quantization_args):
             weight = quantize(
@@ -79,7 +96,14 @@ class PackedQuantizationCompressor(Compressor):
         self,
         compressed_data: Dict[str, Tensor],
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> torch.Tensor:
+        """
+        Decompresses a single compressed weight
+
+        :param compressed_data: dictionary of data needed for decompression
+        :param quantization_args: quantization parameters for the weight
+        :return: tensor of the decompressed weight
+        """
         weight = compressed_data["weight_packed"]
         scale = compressed_data["weight_scale"]
         zero_point = compressed_data.get("weight_zero_point", None)

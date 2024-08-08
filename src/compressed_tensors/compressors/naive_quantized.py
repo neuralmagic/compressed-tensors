@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import torch
 from compressed_tensors.compressors import Compressor
@@ -47,7 +47,15 @@ class QuantizationCompressor(Compressor):
         self,
         weight_shape: torch.Size,
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> Dict[str, Tuple[torch.Size, torch.dtype]]:
+        """
+        Creates a dictionary of expected shapes and dtypes for each compression
+            parameter used by the compressor
+
+        :param weight_shape: uncompressed weight shape
+        :param quantization_args: quantization parameters for the weight
+        :return: dictionary mapping compressed parameter names to shape and dtype
+        """
         dtype = quantization_args.pytorch_dtype()
         return {"weight": (weight_shape, dtype)}
 
@@ -57,7 +65,16 @@ class QuantizationCompressor(Compressor):
         scale: Tensor,
         zero_point: Optional[Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compresses a single uncompressed weight
+
+        :param weight: uncompressed weight tensor
+        :param scale: quantization scale for weight
+        :param zero_point: quantization zero point for weight
+        :param quantization_args: quantization parameters for weight
+        :return: dictionary of compressed weight data
+        """
         if can_quantize(weight, quantization_args):
             weight = quantize(
                 x=weight,
@@ -73,7 +90,14 @@ class QuantizationCompressor(Compressor):
         self,
         compressed_data: Dict[str, Tensor],
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> torch.Tensor:
+        """
+        Decompresses a single compressed weight
+
+        :param compressed_data: dictionary of data needed for decompression
+        :param quantization_args: quantization parameters for the weight
+        :return: tensor of the decompressed weight
+        """
         weight = compressed_data["weight"]
         scale = compressed_data["weight_scale"]
         zero_point = compressed_data.get("weight_zero_point", None)

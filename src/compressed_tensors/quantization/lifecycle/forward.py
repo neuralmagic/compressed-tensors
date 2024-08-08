@@ -284,14 +284,12 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 def maybe_calibrate_or_quantize(
     module: Module, value: torch.Tensor, base_name: str, args: "QuantizationArgs"
 ) -> torch.Tensor:
-    # only run quantized for the included stages
-    if module.quantization_status not in {
-        QuantizationStatus.CALIBRATION,
-        QuantizationStatus.FROZEN,
-        QuantizationStatus.COMPRESSED,
-    }:
+    # don't run quantization if we haven't entered calibration mode
+    if module.quantization_status == QuantizationStatus.INITIALIZED:
         return value
 
+    # in compressed mode, the weight is already compressed and quantized so we don't
+    # need to run fake quantization
     if (
         module.quantization_status == QuantizationStatus.COMPRESSED
         and base_name == "weight"

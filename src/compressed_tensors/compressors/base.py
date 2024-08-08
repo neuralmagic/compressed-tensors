@@ -47,7 +47,15 @@ class Compressor(RegistryMixin):
         self,
         weight_shape: torch.Size,
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> Dict[str, Tuple[torch.Size, torch.dtype]]:
+        """
+        Creates a dictionary of expected shapes and dtypes for each compression
+            parameter used by the compressor
+
+        :param weight_shape: uncompressed weight shape
+        :param quantization_args: quantization parameters for the weight
+        :return: dictionary mapping compressed parameter names to shape and dtype
+        """
         raise NotImplementedError()
 
     def compress(
@@ -61,7 +69,7 @@ class Compressor(RegistryMixin):
 
         :param model_state: state dict of uncompressed model
         :param names_to_scheme: quantization args for each quantized weight, needed for
-        quantize function to calculate bit depth
+            quantize function to calculate bit depth
         :return: compressed state dict
         """
         compressed_dict = {}
@@ -108,8 +116,9 @@ class Compressor(RegistryMixin):
         and returns a generator for sequentially decompressing back to a
         dense state dict
 
-        :param model_path: path to compressed safetensors model (directory with
-            one or more safetensors files) or compressed tensors file
+        :param path_to_model_or_tensors: path to compressed safetensors model (directory
+            with one or more safetensors files) or compressed tensors file
+        :param names_to_scheme: quantization args for each quantized weight
         :param device: optional device to load intermediate weights into
         :return: compressed state dict
         """
@@ -136,17 +145,41 @@ class Compressor(RegistryMixin):
         scale: Tensor,
         zero_point: Optional[Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compresses a single uncompressed weight
+
+        :param weight: uncompressed weight tensor
+        :param scale: quantization scale for weight
+        :param zero_point: quantization zero point for weight
+        :param quantization_args: quantization parameters for weight
+        :return: dictionary of compressed weight data
+        """
         raise NotImplementedError()
 
     def decompress_weight(
         self,
         compressed_data: Dict[str, Tensor],
         quantization_args: Optional[QuantizationArgs] = None,
-    ):
+    ) -> torch.Tensor:
+        """
+        Decompresses a single compressed weight
+
+        :param compressed_data: dictionary of data needed for decompression
+        :param quantization_args: quantization parameters for the weight
+        :return: tensor of the decompressed weight
+        """
         raise NotImplementedError()
 
-    def compress_module(self, module: Module):
+    def compress_module(self, module: Module) -> Optional[Dict[str, torch.Tensor]]:
+        """
+        Compresses a single quantized leaf PyTorch module. If the module is not
+        quantized, this function has no effect.
+
+        :param module: PyTorch module to compress
+        :return: dictionary of compressed weight data, or None if module is not
+            quantized
+        """
         if not hasattr(module, "quantization_scheme"):
             return None  # module is not quantized
         quantization_scheme = module.quantization_scheme
@@ -166,6 +199,13 @@ class Compressor(RegistryMixin):
         )
 
     def decompress_module(self, module: Module):
+        """
+        Decompresses a single compressed leaf PyTorch module. If the module is not
+        quantized, this function has no effect.
+
+        :param module: PyTorch module to decompress
+        :return: tensor of the decompressed weight, or None if module is not quantized
+        """
         if not hasattr(module, "quantization_scheme"):
             return None  # module is not quantized
         quantization_scheme = module.quantization_scheme

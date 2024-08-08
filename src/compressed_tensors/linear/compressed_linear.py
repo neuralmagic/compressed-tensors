@@ -28,16 +28,21 @@ from torch.nn.modules import Module
 
 
 class CompressedLinear(Module):
-    # can pass in the shapes instead of the full parameters
-    # then the state_dict can load automatically
-    # could also pass in the kernel directly here
-    # idea: kernel as part of the quantization_scheme, then the compressor is implied
-    # idea: fn that takes in a scheme and spits out a valid kernel
+    """
+    Wrapper module for running a compressed forward pass of a quantized Linear module.
+    The wrapped layer will decompressed on each forward call.
+
+    :param quantization_scheme:
+    :param quantization_format:
+    :param device:
+    :param weight_shape:
+    """
+
     def __init__(
         self,
         quantization_scheme: QuantizationScheme,
         quantization_format: str,
-        device,
+        device: torch.device,
         weight_shape: Optional[torch.Size] = None,
     ):
         super().__init__()
@@ -64,6 +69,7 @@ class CompressedLinear(Module):
         compression_params = self.compressor.compression_param_info(
             weight_shape, quantization_scheme.weights
         )
+
         for name, (shape, dtype) in compression_params.items():
             # todo, fill in dtype
             param = Parameter(
@@ -74,7 +80,8 @@ class CompressedLinear(Module):
         self.quantization_status = QuantizationStatus.COMPRESSED
 
     def forward(self, input: Tensor) -> Tensor:
-        # this decompress call would become its own kernel,
-        # in most use cases instead we would call a specific kernel
+        """
+        Decompresses the weight, then runs the wrapped forward pass
+        """
         uncompressed_weight = self.compressor.decompress_module(self)
         return linear(input, uncompressed_weight, self.bias)
