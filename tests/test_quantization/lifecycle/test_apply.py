@@ -266,9 +266,10 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
     config = QuantizationConfig(**quantization_config_dict)
     config.quantization_status = QuantizationStatus.CALIBRATION
 
-    if should_raise_warning:
-        # mismatch in the ignore key of quantization_config_dict
-        with caplog.at_level(logging.WARNING):
-            apply_quantization_config(model, config)
-    else:
+    # mismatch in the ignore key of quantization_config_dict
+    with caplog.at_level(logging.WARNING):
         apply_quantization_config(model, config)
+        if should_raise_warning:
+            assert "Some layers that were to be ignored were " in caplog.text
+        else:
+            assert "Some layers that were to be ignored were " not in caplog.text
