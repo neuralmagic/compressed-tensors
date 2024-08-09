@@ -74,6 +74,7 @@ def _calculate_meta_reordering_scatter_offsets(m, meta_ncols, meta_dtype, device
 # This function converts dense matrix into sparse semi-structured
 # representation, producing "compressed" matrix, in the layout used by
 # CUTLASS backend, and corresponding metadata matrix.
+# Copied from https://github.com/pytorch/pytorch/blob/78cf8df4a019e919e8eac5f5d048d8842d4fc692/torch/sparse/_semi_structured_conversions.py#L47
 def sparse_semi_structured_from_dense_cutlass(dense):
     if dense.dim() != 2:
         raise RuntimeError(
@@ -212,6 +213,7 @@ def sparse_semi_structured_from_dense_cutlass(dense):
 # reconstructs dense matrix from a pair of "compressed" matrix, given
 # in the layout used by CUTLASS backend, and accompanying metadata
 # matrix.
+# Copied from https://github.com/pytorch/pytorch/blob/78cf8df4a019e919e8eac5f5d048d8842d4fc692/torch/sparse/_semi_structured_conversions.py#L180
 def sparse_semi_structured_to_dense_cutlass(sparse, meta_reordered):
     if sparse.dim() != 2:
         raise RuntimeError(
