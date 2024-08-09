@@ -239,10 +239,9 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
     from transformers import AutoModelForCausalLM
 
     # load a dense, unquantized tiny llama model
-    device = "cuda:0"
     model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
     model = AutoModelForCausalLM.from_pretrained(
-        model_name, device_map=device, torch_dtype="auto"
+        model_name, device_map="cpu", torch_dtype="auto"
     )
 
     quantization_config_dict = {
