@@ -9,7 +9,7 @@ Each method often comes with its own storage format and loading procedures, maki
 `compressed-tensors` addresses this by providing a single, extensible format that can represent a wide variety of compression schemes. 
 
 * **Unified Checkpoint Format**: Supports various compression schemes in a single, consistent format.
-* **Wide Compatibility**: Works with popular quantization methods like GPTQ, AWQ, SmoothQuant, and FP8. See [llm-compressor](https://github.com/vllm-project/llm-compressor)
+* **Wide Compatibility**: Works with popular quantization methods like GPTQ, SmoothQuant, and FP8. See [llm-compressor](https://github.com/vllm-project/llm-compressor)
 * **Flexible Quantization Support**: 
   * Weight-only quantization (e.g., W4A16, W8A16, WnA16)
   * Activation quantization (e.g., W8A8)
