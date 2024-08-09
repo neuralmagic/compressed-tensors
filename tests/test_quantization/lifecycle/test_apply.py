@@ -273,4 +273,3 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
             assert "Some layers that were to be ignored were " in caplog.text
         else:
             assert "Some layers that were to be ignored were " not in caplog.text
-
