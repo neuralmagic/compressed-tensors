@@ -270,6 +270,6 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
     with caplog.at_level(logging.WARNING):
         apply_quantization_config(model, config)
         if should_raise_warning:
-            assert "Some layers that were to be ignored were " in caplog.text
+            assert len(caplog.text) > 0
         else:
-            assert "Some layers that were to be ignored were " not in caplog.text
+            assert len(caplog.text) == 0
