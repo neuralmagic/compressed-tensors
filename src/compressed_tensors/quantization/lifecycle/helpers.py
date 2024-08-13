@@ -23,16 +23,39 @@ from torch.nn import Module
 
 
 __all__ = [
+    "refresh_layer_weight_quant_params",
     "update_layer_weight_quant_params",
     "enable_quantization",
     "disable_quantization",
 ]
 
 
-def update_layer_weight_quant_params(
+def refresh_layer_weight_quant_params(
     layer: Module,
     g_idx: Optional[torch.Tensor] = None
 ):
+    """
+    Refresh quantization parameters to reflect unobserved changes to layer weight 
+
+    :param layer: input layer
+    :param g_idx: optional mapping from column index to group index
+    """
+    observer = getattr(layer, "weight_observer", None)
+    if observer:
+        observer.reset()
+
+    update_layer_weight_quant_params(layer, g_idx=g_idx)
+
+def update_layer_weight_quant_params(
+    layer: Module,
+    g_idx: Optional[torch.Tensor] = None,
+):
+    """
+    Update quantization parameters without resetting observer
+
+    :param layer: input layer
+    :param g_idx: optional mapping from column index to group index
+    """
     weight = getattr(layer, "weight", None)
     scale = getattr(layer, "weight_scale", None)
     zero_point = getattr(layer, "weight_zero_point", None)
@@ -41,7 +64,7 @@ def update_layer_weight_quant_params(
     if weight is None or observer is None or scale is None or zero_point is None:
         # scale, zp, or observer not calibratable or weight not available
         return
-
+    
     updated_scale, updated_zero_point = observer(weight, g_idx=g_idx)
 
     # update scale and zero point
