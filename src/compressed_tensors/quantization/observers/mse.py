@@ -54,7 +54,7 @@ class MovingAverageMSEObserver(Observer):
         reduce_dims: Optional[Tuple[int]] = None,
     ):
         """
-        Computes the mse-clipped min and max values of the observed tensor by 
+        Computes the mse-clipped min and max values of the observed tensor by
         optimizing for quantization error
 
         :param observed: observed tensor to calculate quantization parameters for
@@ -70,9 +70,9 @@ class MovingAverageMSEObserver(Observer):
             absolute_min_val = torch.amin(observed, dim=reduce_dims, keepdims=True)
             absolute_max_val = torch.amax(observed, dim=reduce_dims, keepdims=True)
 
-        best = torch.full_like(absolute_min_val, float("inf"))
-        min_val = torch.ones_like(absolute_min_val)
-        max_val = torch.zeros_like(absolute_max_val)
+        best = torch.full(absolute_min_val.shape, float("inf"))
+        min_val = torch.ones(absolute_min_val.shape)
+        max_val = torch.zeros(absolute_max_val.shape)
         for i in range(int(self.maxshrink * self.grid)):
             p = 1 - i / self.grid
             shrinked_min_val = p * absolute_min_val
@@ -121,13 +121,6 @@ class MovingAverageMSEObserver(Observer):
             passed, useful for sharding tensors by group_size
         :return: tuple of scale and zero point derived from the observed tensor
         """
-        tensor_id = tensor_id or "default"
-        # Hacky: only compute this once. Currently, calibration is called multiple times for weight vector
-        if tensor_id in self.min_val.keys():
-            return calculate_qparams(
-                self.min_val[tensor_id], self.max_val[tensor_id], self.quantization_args
-            )
-
         min_val, max_val = self.calculate_mse_min_max(observed, reduce_dims)
 
         running_min_val = self.min_val.get(tensor_id, None)
@@ -144,6 +137,7 @@ class MovingAverageMSEObserver(Observer):
                 max_val - running_max_val
             )
 
+        tensor_id = tensor_id or "default"
         self.min_val[tensor_id] = updated_min_val
         self.max_val[tensor_id] = updated_max_val
 
