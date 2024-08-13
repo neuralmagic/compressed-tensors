@@ -97,7 +97,7 @@ class MovingAverageMinMaxObserver(Observer):
 
     def reset(self):
         """
-        Reset the min and the max vals
+        Reset the state of the observer, including min and maximum values
         """
         super().reset()
         self.min_val = {}
