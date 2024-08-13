@@ -43,10 +43,8 @@ def update_layer_weight_quant_params(
         return
 
     if perm is not None:
-        weight= weight[:, perm]
+        weight = weight.clone()[:, perm]
 
-    # breakpoint()
-    # updated_scale, updated_zero_point = observer(weight)
     updated_scale, updated_zero_point = observer(weight, g_idx=g_idx)
 
     # update scale and zero point

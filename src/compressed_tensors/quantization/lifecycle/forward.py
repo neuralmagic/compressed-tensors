@@ -43,6 +43,7 @@ def quantize(
     x: torch.Tensor,
     scale: torch.Tensor,
     zero_point: torch.Tensor,
+    g_idx: torch.Tensor,
     args: QuantizationArgs,
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
@@ -72,6 +73,7 @@ def quantize(
         x=x,
         scale=scale,
         zero_point=zero_point,
+        g_idx=g_idx,
         args=args,
         dtype=dtype,
         do_quantize=True,
@@ -84,6 +86,7 @@ def dequantize(
     x_q: torch.Tensor,
     scale: torch.Tensor,
     zero_point: torch.Tensor = None,
+    g_idx: torch.Tensor = None,
     args: QuantizationArgs = None,
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
@@ -122,6 +125,7 @@ def dequantize(
         x=x_q,
         scale=scale,
         zero_point=zero_point,
+        g_idx=g_idx,
         args=args,
         do_quantize=False,
         do_dequantize=True,
@@ -154,10 +158,10 @@ def fake_quantize(
         x=x,
         scale=scale,
         zero_point=zero_point,
+        g_idx=g_idx,
         args=args,
         do_quantize=True,
         do_dequantize=True,
-        g_idx=g_idx,
     )
 
 
@@ -166,11 +170,11 @@ def _process_quantization(
     x: torch.Tensor,
     scale: torch.Tensor,
     zero_point: torch.Tensor,
+    g_idx: Optional[torch.Tensor],
     args: QuantizationArgs,
     dtype: Optional[torch.dtype] = None,
     do_quantize: bool = True,
     do_dequantize: bool = True,
-    g_idx: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
@@ -338,7 +342,7 @@ def maybe_calibrate_or_quantize(
         # dynamic quantization - get scale and zero point directly from observer
         observer = getattr(module, f"{base_name}_observer")
 
-        scale, zero_point = observer(value, g_idx)
+        scale, zero_point = observer(value, g_idx=g_idx)
     else:
         # static quantization - get previous scale and zero point from layer
         scale = getattr(module, f"{base_name}_scale")
@@ -351,13 +355,13 @@ def maybe_calibrate_or_quantize(
             # calibration mode - get new quant params from observer
             observer = getattr(module, f"{base_name}_observer")
 
-            updated_scale, updated_zero_point = observer(value, g_idx)
+            updated_scale, updated_zero_point = observer(value, g_idx=g_idx)
 
             # update scale and zero point
             update_parameter_data(module, updated_scale, f"{base_name}_scale")
             update_parameter_data(module, updated_zero_point, f"{base_name}_zero_point")
 
-    return fake_quantize(value, scale, zero_point, args)
+    return fake_quantize(value, scale, zero_point, args, g_idx=g_idx)
 
 
 @torch.no_grad()
