@@ -244,6 +244,7 @@ def _process_quantization(
                     output[:, start: end] = _dequantize(input, sc, zp)
 
         elif output_dtype not in EXPERIMENTAL_DTYPES:
+            # quantize according to mask
             for group_index in range(ceil(columns / group_size)):
                 # scale.shape should be [nchan, ndim]
                 # sc.shape should be [nchan, 1] after unsqueeze
@@ -266,8 +267,7 @@ def _process_quantization(
                     output[:, group_mask] = _dequantize(input, sc, zp)
 
         else:
-            # for dtypes which do not implement `index_put`, must quantize and
-            # put each channel's data separately (slower)
+            # quantize channels iteratively
             for column_index in range(columns):
                 group_index = g_idx[column_index]
 
