@@ -35,7 +35,7 @@ def update_layer_weight_quant_params(
     reset_obs: bool = False,
 ):
     """
-    Update quantization parameters without resetting observer
+    Update quantization parameters on layer
 
     :param layer: input layer
     :param weight: weight to update quant params with, defaults to None, ie the
