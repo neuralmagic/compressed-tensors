@@ -208,12 +208,12 @@ def _process_quantization(
                 dtype=torch.int
             )
 
-        for group_id in range(ceil(columns / group_size)):
+        for group_index in range(ceil(columns / group_size)):
             # scale.shape should be [nchan, ndim]
             # sc.shape should be [nchan, 1] after unsqueeze
-            sc = scale[:, group_id].view(-1, 1)
-            zp = zero_point[:, group_id].view(-1, 1) if zero_point is not None else None
-            group_mask = g_idx == group_id
+            sc = scale[:, group_index].view(-1, 1)
+            zp = zero_point[:, group_index].view(-1, 1) if zero_point is not None else None
+            group_mask = g_idx == group_index
             if do_quantize:
                 output[:, group_mask] = _quantize(
                     x[:, group_mask],
