@@ -208,15 +208,14 @@ def _process_quantization(
         """
         if there is no out-of-order grouping
             do slicing (fastest)
-            TODO: maybe speedup from vectorization w.r.t. groups
 
-        if the data type supports put_index:
+        if the data type supports _put_index:
             do masking (faster)
-            TODO: maybe speedup from vectorization w.r.t. groups
 
-        if the data type does not support put_index:
+        if the data type does not support _put_index:
             do iteration (slower)
-            cannot be vectorized
+
+        TODO: investigate potential speedup from full vectorization w.r.t. groups
         """
 
         # g_idx is initialized to -1
