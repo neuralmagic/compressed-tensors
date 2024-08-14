@@ -38,10 +38,8 @@ def update_layer_weight_quant_params(
     Update quantization parameters on layer
 
     :param layer: input layer
-    :param weight: weight to update quant params with, defaults to None, ie the
-        layer's weight
-    :param g_idx: optional mapping from column index to group index, defaults to
-        None
+    :param weight: weight to update quant params with, defaults to layer weight
+    :param g_idx: optional mapping from column index to group index
     :param reset_obs: reset the observer before calculating quant params,
         defaults to False
     """
