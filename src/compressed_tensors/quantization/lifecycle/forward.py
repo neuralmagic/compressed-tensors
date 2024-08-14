@@ -188,9 +188,7 @@ def _process_quantization(
         output_dtype = dtype if dtype is not None else x.dtype
         output = torch.zeros_like(x).to(output_dtype)
 
-        # TODO: vectorize the for loop
         # TODO: fix genetric assumption about the tensor size for computing group
-
         # TODO: make validation step for inputs
 
         while scale.ndim < 2:
@@ -209,12 +207,15 @@ def _process_quantization(
         """
         if there is no out-of-order grouping
             do slicing (fastest)
+            TODO: maybe speedup from vectorization w.r.t. groups
 
         if the data type supports put_index:
             do masking (faster)
+            TODO: maybe speedup from vectorization w.r.t. groups
 
         if the data type does not support put_index:
             do iteration (slower)
+            cannot be vectorized
         """
 
         # g_idx is initialized to -1
