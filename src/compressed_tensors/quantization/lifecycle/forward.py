@@ -41,6 +41,7 @@ __all__ = [
 # these datatypes are missing implementations for the `index_put` operation
 EXPERIMENTAL_DTYPES = [torch.float8_e4m3fn]
 
+
 @torch.no_grad()
 def quantize(
     x: torch.Tensor,
@@ -81,7 +82,7 @@ def quantize(
         dtype=dtype,
         do_quantize=True,
         do_dequantize=False,
-        g_idx=g_idx
+        g_idx=g_idx,
     )
 
 
@@ -223,13 +224,17 @@ def _process_quantization(
             # quantize slices
             for group_index in range(ceil(columns / group_size)):
                 sc = scale[:, group_index].view(-1, 1)
-                zp = zero_point[:, group_index].view(-1, 1) if zero_point is not None else None
+                zp = (
+                    zero_point[:, group_index].view(-1, 1)
+                    if zero_point is not None
+                    else None
+                )
 
                 start = group_index * group_size
                 end = start + group_size
                 if do_quantize:
-                    output[:, start: end] = _quantize(
-                        x[:, start: end],
+                    output[:, start:end] = _quantize(
+                        x[:, start:end],
                         sc,
                         zp,
                         q_min,
@@ -238,8 +243,8 @@ def _process_quantization(
                         dtype=dtype,
                     )
                 if do_dequantize:
-                    input = output[:, start: end] if do_quantize else x[:, start: end]
-                    output[:, start: end] = _dequantize(input, sc, zp)
+                    input = output[:, start:end] if do_quantize else x[:, start:end]
+                    output[:, start:end] = _dequantize(input, sc, zp)
 
         elif output_dtype not in EXPERIMENTAL_DTYPES:
             # quantize according to mask
@@ -247,7 +252,11 @@ def _process_quantization(
                 # scale.shape should be [nchan, ndim]
                 # sc.shape should be [nchan, 1] after unsqueeze
                 sc = scale[:, group_index].view(-1, 1)
-                zp = zero_point[:, group_index].view(-1, 1) if zero_point is not None else None
+                zp = (
+                    zero_point[:, group_index].view(-1, 1)
+                    if zero_point is not None
+                    else None
+                )
 
                 group_mask = g_idx == group_index
                 if do_quantize:
@@ -270,7 +279,11 @@ def _process_quantization(
                 group_index = g_idx[column_index]
 
                 sc = scale[:, group_index].squeeze(1)
-                zp = zero_point[:, group_index].squeeze(1) if zero_point is not None else None
+                zp = (
+                    zero_point[:, group_index].squeeze(1)
+                    if zero_point is not None
+                    else None
+                )
 
                 if do_quantize:
                     output[:, column_index] = _quantize(
@@ -283,10 +296,11 @@ def _process_quantization(
                         dtype=dtype,
                     )
                 if do_dequantize:
-                    input = output[:, column_index] if do_quantize else x[:, column_index]
+                    input = (
+                        output[:, column_index] if do_quantize else x[:, column_index]
+                    )
                     output[:, column_index] = _dequantize(input, sc, zp)
 
-    
     else:  # covers channel, token and tensor strategies
         if do_quantize:
             output = _quantize(
