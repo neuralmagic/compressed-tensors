@@ -240,6 +240,26 @@ class ModelCompressor:
                 compressed_state_dict
             )
 
+        # HACK: Post-process step for kv cache scales to take the k/v_proj
+        # module `output_scale` parameters, and store them in the parent
+        # attention module as `k_scale` and `v_scale`
+        #
+        # Example:
+        #  Replace `model.layers.0.self_attn.k_proj.output_scale`
+        #  with    `model.layers.0.self_attn.k_scale`
+        if self.quantization_config.kv_cache_scheme is not None:
+            working_state_dict = {}
+            for key in compressed_state_dict.keys():
+                if key.endswith(".k_proj.output_scale"):
+                    new_key = key.replace(".k_proj.output_scale", ".k_scale")
+                    working_state_dict[new_key] = compressed_state_dict[key]
+                elif key.endswith(".v_proj.output_scale"):
+                    new_key = key.replace(".v_proj.output_scale", ".v_scale")
+                    working_state_dict[new_key] = compressed_state_dict[key]
+                else:
+                    working_state_dict[key] = compressed_state_dict[key]
+            compressed_state_dict = working_state_dict
+
         # HACK: Override the dtype_byte_size function in transformers to
         # support float8 types. Fix is posted upstream
         # https://github.com/huggingface/transformers/pull/30488
