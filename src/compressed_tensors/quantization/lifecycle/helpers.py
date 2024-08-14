@@ -23,48 +23,48 @@ from torch.nn import Module
 
 
 __all__ = [
-    "refresh_layer_weight_quant_params",
     "update_layer_weight_quant_params",
     "enable_quantization",
     "disable_quantization",
 ]
 
-
-def refresh_layer_weight_quant_params(
-    layer: Module,
-    g_idx: Optional[torch.Tensor] = None
-):
-    """
-    Refresh quantization parameters to reflect unobserved changes to layer weight 
-
-    :param layer: input layer
-    :param g_idx: optional mapping from column index to group index
-    """
-    observer = getattr(layer, "weight_observer", None)
-    if observer:
-        observer.reset()
-
-    update_layer_weight_quant_params(layer, g_idx=g_idx)
-
 def update_layer_weight_quant_params(
     layer: Module,
+    weight: Optional[torch.Tensor] = None,
     g_idx: Optional[torch.Tensor] = None,
+    reset_obs: bool = False,
 ):
     """
     Update quantization parameters without resetting observer
 
     :param layer: input layer
-    :param g_idx: optional mapping from column index to group index
+    :param weight: weight to update quant params with, defaults to None, ie the
+        layer's weight
+    :param g_idx: optional mapping from column index to group index, defaults to
+        None
+    :param reset_obs: reset the observer before calculating quant params,
+        defaults to False
     """
-    weight = getattr(layer, "weight", None)
+    attached_weight = getattr(layer, "weight", None)
+
+    if weight is None:
+        weight = attached_weight
     scale = getattr(layer, "weight_scale", None)
     zero_point = getattr(layer, "weight_zero_point", None)
+    if g_idx is None:
+        g_idx = getattr(layer, "weight_g_idx", None)
     observer = getattr(layer, "weight_observer", None)
 
     if weight is None or observer is None or scale is None or zero_point is None:
         # scale, zp, or observer not calibratable or weight not available
         return
     
+    if reset_obs:
+        observer.reset()
+    
+    if attached_weight is not None:
+        weight = weight.to(attached_weight.dtype)
+
     updated_scale, updated_zero_point = observer(weight, g_idx=g_idx)
 
     # update scale and zero point
