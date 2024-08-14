@@ -201,54 +201,33 @@ def _process_quantization(
                     f"by the given group_size {group_size}"
                 )
 
-        # g_idx intialized to -1. If updated will have values > -1
-        is_g_idx_updated = False
-        if g_idx is not None:
-            is_g_idx_updated = -1 not in g_idx
-            g_idx_sort_indices = torch.argsort(g_idx).to(torch.int)
+        # g_idx is intialized to -1
+        if g_idx is None or -1 in g_idx:
+            g_idx = torch.tensor(
+                [i // group_size for i in range(columns)],
+                dtype=torch.int
+            )
 
         for group_id in range(ceil(columns / group_size)):
             # scale.shape should be [nchan, ndim]
             # sc.shape should be [nchan, 1] after unsqueeze
             sc = scale[:, group_id].view(-1, 1)
             zp = zero_point[:, group_id].view(-1, 1) if zero_point is not None else None
-            idx = group_id * group_size
-            if is_g_idx_updated:
-                # grouped_idx = g_idx == group_id
-                grouped_idx = g_idx_sort_indices[idx : (idx + group_size)]
-                if do_quantize:
-                    output[:, grouped_idx] = _quantize(
-                        x[:, grouped_idx],
-                        sc,
-                        zp,
-                        q_min,
-                        q_max,
-                        args,
-                        dtype=dtype,
-                    )
-                if do_dequantize:
-                    input = output[:, grouped_idx] if do_quantize else x[:, grouped_idx]
-                    output[:, grouped_idx] = _dequantize(input, sc, zp)
-            else:
-                
-                if do_quantize:
-                    output[:, idx : (idx + group_size)] = _quantize(
-                        x[:, idx : (idx + group_size)],
-                        sc,
-                        zp,
-                        q_min,
-                        q_max,
-                        args,
-                        dtype=dtype,
-                    )
-                if do_dequantize:
-                    input = (
-                        output[:, idx : (idx + group_size)]
-                        if do_quantize
-                        else x[:, idx : (idx + group_size)]
-                    )
-                    output[:, idx : (idx + group_size)] = _dequantize(input, sc, zp)
-
+            group_mask = g_idx == group_id
+            if do_quantize:
+                output[:, group_mask] = _quantize(
+                    x[:, group_mask],
+                    sc,
+                    zp,
+                    q_min,
+                    q_max,
+                    args,
+                    dtype=dtype,
+                )
+            if do_dequantize:
+                input = output[:, group_mask] if do_quantize else x[:, group_mask]
+                output[:, group_mask] = _dequantize(input, sc, zp)
+    
     else:  # covers channel, token and tensor strategies
         if do_quantize:
             output = _quantize(
