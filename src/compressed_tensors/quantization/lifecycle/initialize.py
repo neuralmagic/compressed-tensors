@@ -86,7 +86,7 @@ def initialize_module_for_quantization(
     if is_module_offloaded(module):
         from accelerate.hooks import add_hook_to_module, remove_hook_from_module
         from accelerate.utils import PrefixedDataset
-        
+
         offloaded = True
         hook = module._hf_hook
         prefix_dict = module._hf_hook.weights_map
