@@ -227,7 +227,6 @@ def _process_quantization(
 
                 start = group_index * group_size
                 end = start + group_size
-
                 if do_quantize:
                     output[:, start: end] = _quantize(
                         x[:, start: end],
@@ -238,7 +237,6 @@ def _process_quantization(
                         args,
                         dtype=dtype,
                     )
-
                 if do_dequantize:
                     input = output[:, start: end] if do_quantize else x[:, start: end]
                     output[:, start: end] = _dequantize(input, sc, zp)
