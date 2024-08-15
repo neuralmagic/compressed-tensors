@@ -90,7 +90,8 @@ def initialize_module_for_quantization(
         except ModuleNotFoundError:
             raise ModuleNotFoundError(
                 "Offloaded model detected. To use CPU offloading with "
-                "compressed-tensors run `pip install compressed-tensors[accelerate]`"
+                "compressed-tensors the `accelerate` package must be installed, "
+                "run `pip install compressed-tensors[accelerate]`"
             )
 
         offloaded = True
