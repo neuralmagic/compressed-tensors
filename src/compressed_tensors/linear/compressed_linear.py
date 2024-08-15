@@ -55,6 +55,8 @@ class CompressedLinear(Module):
 
         if quantization_scheme.weights is not None:
             dtype = quantization_scheme.weights.pytorch_dtype()
+            # need a dummy weight of the correct shape for initialization
+            # TODO: this actually won't work for packed compression, revisit
             self.weight = Parameter(
                 torch.empty(weight_shape, device=device, dtype=dtype),
                 requires_grad=False,
@@ -64,19 +66,23 @@ class CompressedLinear(Module):
         initialize_module_for_quantization(
             self, quantization_scheme, force_zero_point=False
         )
+
+        # no need for this once quantization is initialized
         delattr(self, "weight")
 
+        # get the shape and dtype of compressed parameters
         compression_params = self.compressor.compression_param_info(
             weight_shape, quantization_scheme.weights
         )
 
+        # populate compressed weights and quantization parameters
         for name, (shape, dtype) in compression_params.items():
-            # todo, fill in dtype
             param = Parameter(
                 torch.empty(shape, device=device, dtype=dtype), requires_grad=False
             )
             self.register_parameter(name, param)
 
+        # mark module as compressed
         self.quantization_status = QuantizationStatus.COMPRESSED
 
     def forward(self, input: Tensor) -> Tensor:
