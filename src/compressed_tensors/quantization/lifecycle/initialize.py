@@ -88,7 +88,7 @@ def initialize_module_for_quantization(
             from accelerate.hooks import add_hook_to_module, remove_hook_from_module
             from accelerate.utils import PrefixedDataset
         except ModuleNotFoundError:
-            _LOGGER.error(
+            raise ModuleNotFoundError(
                 "Offloaded model detected. To use CPU offloading with "
                 "compressed-tensors run `pip install compressed-tensors[accelerate]`"
             )
