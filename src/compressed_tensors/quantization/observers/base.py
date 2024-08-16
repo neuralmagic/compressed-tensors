@@ -47,9 +47,7 @@ class Observer(Module, RegistryMixin):
 
     @torch.no_grad()
     def forward(
-        self,
-        observed: Tensor,
-        g_idx: Optional[Tensor] = None
+        self, observed: Tensor, g_idx: Optional[Tensor] = None
     ) -> Tuple[FloatTensor, IntTensor]:
         """
         maps directly to get_qparams
@@ -115,12 +113,14 @@ class Observer(Module, RegistryMixin):
                 if g_idx is not None:
                     is_g_idx_updated = -1 not in g_idx
                     g_idx_sort_indices = torch.argsort(g_idx).to(torch.int)
-                    
+
                 for group_id, group_idx in enumerate(group_idxs):
 
                     if is_g_idx_updated:
-                        grouped_idx = g_idx_sort_indices[group_idx : (group_idx + group_size)]
-                        
+                        grouped_idx = g_idx_sort_indices[
+                            group_idx : (group_idx + group_size)
+                        ]
+
                         scale, zero_point = self.get_qparams_along_dim(
                             observed[:, grouped_idx],
                             0,

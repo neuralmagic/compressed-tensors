@@ -28,6 +28,7 @@ __all__ = [
     "disable_quantization",
 ]
 
+
 def update_layer_weight_quant_params(
     layer: Module,
     weight: Optional[torch.Tensor] = None,
@@ -56,10 +57,10 @@ def update_layer_weight_quant_params(
     if weight is None or observer is None or scale is None or zero_point is None:
         # scale, zp, or observer not calibratable or weight not available
         return
-    
+
     if reset_obs:
         observer.reset()
-    
+
     if attached_weight is not None:
         weight = weight.to(attached_weight.dtype)
 
@@ -69,6 +70,7 @@ def update_layer_weight_quant_params(
     device = next(layer.parameters()).device
     scale.data = updated_scale.to(device)
     zero_point.data = updated_zero_point.to(device)
+
 
 def enable_quantization(module: Module):
     module.quantization_enabled = True

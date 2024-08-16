@@ -283,14 +283,15 @@ def _load_quant_args_from_state_dict(
 
     state_dict_scale = state_dict.get(f"{module_name}.{scale_name}", None)
     state_dict_zp = state_dict.get(
-        f"{module_name}.{zp_name}",
-        torch.zeros_like(state_dict_scale, device="cpu"))
+        f"{module_name}.{zp_name}", torch.zeros_like(state_dict_scale, device="cpu")
+    )
     state_dict_g_idx = state_dict.get(f"{module_name}.{g_idx_name}", None)
 
     if state_dict_scale is not None:
         update_parameter_data(module, state_dict_scale, scale_name)
         update_parameter_data(module, state_dict_zp, zp_name)
         update_parameter_data(module, state_dict_g_idx, g_idx_name)
+
 
 def _scheme_from_targets(
     target_to_scheme: OrderedDictType[str, QuantizationScheme],
