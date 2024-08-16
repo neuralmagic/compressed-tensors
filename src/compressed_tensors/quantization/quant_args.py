@@ -68,6 +68,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         ranges will be observed with every sample. Defaults to False for static
         quantization. Note that enabling dynamic quantization will change the default
         observer to a memoryless one
+    :param actorder: whether to apply group quantization in decreasing order of
+        activation. Defaults to False for arbitrary ordering
     """
 
     num_bits: int = 8
@@ -77,6 +79,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     strategy: Optional[QuantizationStrategy] = None
     block_structure: Optional[str] = None
     dynamic: bool = False
+    actorder: bool = False
     observer: str = Field(
         default="minmax",
         description=(
@@ -91,7 +94,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             "Observers constructor excluding quantization range or symmetry"
         ),
     )
-    actorder: bool = False
 
     def get_observer(self):
         """
@@ -107,16 +109,18 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return Observer.load_from_registry(self.observer, quantization_args=self)
 
     @validator("strategy", pre=True, always=True)
-    def validate_strategy(cls, value, values):
+    def validate_strategy(cls, value, values) -> QuantizationStrategy:
         group_size = values.get("group_size")
+        actorder = values.get("actorder")
+        inferred_value = value
 
         # use group_size to determinine strategy if not given explicity
         if group_size is not None and value is None:
             if group_size > 0:
-                return QuantizationStrategy.GROUP
+                inferred_value = QuantizationStrategy.GROUP
 
             elif group_size == -1:
-                return QuantizationStrategy.CHANNEL
+                inferred_value = QuantizationStrategy.CHANNEL
 
             else:
                 raise ValueError(
@@ -125,14 +129,23 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     "group_size = -1 for 'channel'"
                 )
 
-        if value == QuantizationStrategy.GROUP:
-            if group_size is None:
-                raise ValueError(f"strategy {value} requires group_size to be set.")
+        if (
+            inferred_value == QuantizationStrategy.GROUP
+            and group_size is None
+            or group_size == -1
+        ):
+            raise ValueError(f"strategy {value} requires group_size to be set.")
 
-        if value is None:
-            return QuantizationStrategy.TENSOR
+        if actorder and inferred_value != QuantizationStrategy.GROUP:
+            raise ValueError(
+                "Group quantization must be specified in order to apply "
+                "activation ordering"
+            )
 
-        return value
+        if inferred_value is None:
+            inferred_value = QuantizationStrategy.TENSOR
+
+        return inferred_value
 
     def pytorch_dtype(self) -> torch.dtype:
         if self.type == QuantizationType.FLOAT:
