@@ -285,7 +285,9 @@ def _load_quant_args_from_state_dict(
     state_dict_zp = state_dict.get(
         f"{module_name}.{zp_name}", torch.zeros_like(state_dict_scale, device="cpu")
     )
-    state_dict_g_idx = state_dict.get(f"{module_name}.{g_idx_name}", None)
+    state_dict_g_idx = state_dict.get(
+        f"{module_name}.{g_idx_name}", torch.full_like(state_dict_scale, -1, device="cpu")
+    )
 
     if state_dict_scale is not None:
         update_parameter_data(module, state_dict_scale, scale_name)
