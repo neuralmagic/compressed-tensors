@@ -16,7 +16,7 @@
 Miscelaneous helpers for the quantization lifecycle
 """
 
-from typing import Dict, Tuple
+from typing import Set, Tuple
 
 import torch
 from torch.nn import Module
@@ -56,7 +56,7 @@ def disable_quantization(module: Module):
 
 
 # these datatypes are missing implementations required for standard permutation
-_EXPERIMENTAL_DTYPE: Dict[Tuple[torch.dtype, torch.device], bool] = dict()
+_EXPERIMENTAL_DTYPES: Set[Tuple[torch.dtype, torch.device]] = set()
 
 
 def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch.Tensor:
@@ -69,23 +69,36 @@ def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch
     :param dim: dimension along which to apply permutation
     :return: permuted value
     """
-    preceding_dims = [slice(None)] * dim
     dtype_tuple = (value.dtype, value.device)
-    if dtype_tuple not in _EXPERIMENTAL_DTYPE:
-        try:
-            ret = value[tuple(preceding_dims + [perm])]  # match below
-            _EXPERIMENTAL_DTYPE[dtype_tuple] = False
-            return ret
-        except RuntimeError:
-            _EXPERIMENTAL_DTYPE[dtype_tuple] = True
+    
+    if dtype_tuple in _EXPERIMENTAL_DTYPES:
+        return _fallback_permute(value, perm, dim)
+    
+    try:
+        # Attempt to use advanced indexing
+        return value[tuple(slice(None) * dim + [perm])]
+    except RuntimeError:
+        # Mark dtype as experimental if advanced indexing fails
+        _EXPERIMENTAL_DTYPES.add(dtype_tuple)
+        return _fallback_permute(value, perm, dim)
 
-    if not _EXPERIMENTAL_DTYPE[dtype_tuple]:
-        return value[tuple(preceding_dims + [perm])]  # match above
-    else:
-        value_ret = torch.zeros_like(value, dtype=value.dtype, device=value.device)
-        for index, perm_index in enumerate(perm):
-            value_ret[tuple(preceding_dims + [index])] = value[
-                tuple(preceding_dims + [perm_index])
-            ]
 
-        return value_ret
+def _fallback_permute(value: torch.Tensor, perm: torch.Tensor, dim: int) -> torch.Tensor:
+    """
+    Fallback permutation method for experimental dtypes.
+    
+    :param value: tensor to permute
+    :param perm: permutation map
+    :param dim: dimension along which to apply permutation
+    :return: permuted value
+    """
+    value_ret = torch.zeros_like(value, device=value.device)
+    orig_slices = [slice(None)] * dim
+    perm_slices = [slice(None)] * dim
+
+    for index, perm_index in enumerate(perm):
+        orig_slices[dim] = index
+        perm_slices[dim] = perm_index
+        value_ret[tuple(orig_slices)] = value[tuple(perm_slices)]
+    
+    return value_ret
