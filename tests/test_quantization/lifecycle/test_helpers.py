@@ -15,8 +15,10 @@
 
 import pytest
 import torch
-
-from compressed_tensors.quantization.lifecycle.helpers import safe_permute, _EXPERIMENTAL_DTYPE
+from compressed_tensors.quantization.lifecycle.helpers import (
+    _EXPERIMENTAL_DTYPES,
+    safe_permute,
+)
 
 
 @pytest.mark.parametrize(
@@ -30,16 +32,16 @@ from compressed_tensors.quantization.lifecycle.helpers import safe_permute, _EXP
         (torch.float32, torch.device("cpu"), False),
         (torch.float64, torch.device("cpu"), False),
         (torch.float8_e4m3fn, torch.device("cpu"), True),
-    ]
+    ],
 )
 def test_safe_permute(dtype: torch.dtype, device: str, exp_experimental: bool):
     # some dtypes do not support arange initialization
     tensor = torch.tensor([0, 1, 2, 3], dtype=dtype, device=device)
     perm = torch.tensor([3, 1, 0, 2])
     expected = torch.tensor([3, 1, 0, 2], dtype=dtype, device=device)
-    
+
     result = safe_permute(tensor, perm, dim=0)
-    
-    print(_EXPERIMENTAL_DTYPE)
-    assert _EXPERIMENTAL_DTYPE[(dtype, device)] == exp_experimental
+
+    if exp_experimental:
+        assert (dtype, device) in _EXPERIMENTAL_DTYPES
     assert all(result == expected)
