@@ -75,8 +75,7 @@ def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch
         return _fallback_permute(value, perm, dim)
     
     try:
-        # Attempt to use advanced indexing
-        return value[tuple(slice(None) * dim + [perm])]
+        return value[tuple([slice(None)] * dim + [perm])]
     except RuntimeError:
         # Mark dtype as experimental if advanced indexing fails
         _EXPERIMENTAL_DTYPES.add(dtype_tuple)
@@ -92,9 +91,9 @@ def _fallback_permute(value: torch.Tensor, perm: torch.Tensor, dim: int) -> torc
     :param dim: dimension along which to apply permutation
     :return: permuted value
     """
-    value_ret = torch.zeros_like(value, device=value.device)
-    orig_slices = [slice(None)] * dim
-    perm_slices = [slice(None)] * dim
+    value_ret = value.clone()  # cannot use zeros_like b/c of missing impl.
+    orig_slices = [slice(None)] * (dim + 1)
+    perm_slices = [slice(None)] * (dim + 1)
 
     for index, perm_index in enumerate(perm):
         orig_slices[dim] = index
