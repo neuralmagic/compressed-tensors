@@ -16,8 +16,6 @@
 Miscelaneous helpers for the quantization lifecycle
 """
 
-from typing import Optional
-
 import torch
 from torch.nn import Module
 
@@ -41,7 +39,7 @@ def update_layer_weight_quant_params(layer: Module):
     if weight is None or observer is None or scale is None or zero_point is None:
         # scale, zp, or observer not calibratable or weight not available
         return
-    
+
     updated_scale, updated_zero_point = observer(weight)
 
     # update scale and zero point
