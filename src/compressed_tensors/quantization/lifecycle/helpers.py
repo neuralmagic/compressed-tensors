@@ -57,7 +57,6 @@ def disable_quantization(module: Module):
     module.quantization_enabled = False
 
 
-# these datatypes are missing implementations for the `index_put` operation
 def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch.Tensor:
     """
     Perform out-of-place permutation without using torch.Tensor.index_put_,
