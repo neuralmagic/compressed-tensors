@@ -70,10 +70,10 @@ def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch
     :return: permuted value
     """
     dtype_tuple = (value.dtype, value.device)
-    
+
     if dtype_tuple in _EXPERIMENTAL_DTYPES:
         return _fallback_permute(value, perm, dim)
-    
+
     try:
         return value[tuple([slice(None)] * dim + [perm])]
     except RuntimeError:
@@ -82,10 +82,12 @@ def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch
         return _fallback_permute(value, perm, dim)
 
 
-def _fallback_permute(value: torch.Tensor, perm: torch.Tensor, dim: int) -> torch.Tensor:
+def _fallback_permute(
+    value: torch.Tensor, perm: torch.Tensor, dim: int
+) -> torch.Tensor:
     """
     Fallback permutation method for experimental dtypes.
-    
+
     :param value: tensor to permute
     :param perm: permutation map
     :param dim: dimension along which to apply permutation
@@ -99,5 +101,5 @@ def _fallback_permute(value: torch.Tensor, perm: torch.Tensor, dim: int) -> torc
         orig_slices[dim] = index
         perm_slices[dim] = perm_index
         value_ret[tuple(orig_slices)] = value[tuple(perm_slices)]
-    
+
     return value_ret
