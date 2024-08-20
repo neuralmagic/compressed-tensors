@@ -17,6 +17,7 @@ from math import ceil
 from typing import Optional
 
 import torch
+from compressed_tensors.quantization.lifecycle.helpers import safe_permute
 from compressed_tensors.quantization.observers.helpers import calculate_range
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
@@ -26,7 +27,6 @@ from compressed_tensors.quantization.quant_args import (
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.utils import update_parameter_data
-from compressed_tensors.quantization.lifecycle.helpers import safe_permute
 from torch.nn import Module
 
 
@@ -94,7 +94,7 @@ def dequantize(
     zero_point: torch.Tensor = None,
     args: QuantizationArgs = None,
     dtype: Optional[torch.dtype] = None,
-    g_idx: torch.Tensor = None,
+    g_idx: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
     Dequantize a quantized input tensor x_q based on the strategy specified in args. If
@@ -132,11 +132,11 @@ def dequantize(
         x=x_q,
         scale=scale,
         zero_point=zero_point,
-        g_idx=g_idx,
         args=args,
         do_quantize=False,
         do_dequantize=True,
         dtype=dtype,
+        g_idx=g_idx,
     )
 
 
@@ -166,10 +166,10 @@ def fake_quantize(
         x=x,
         scale=scale,
         zero_point=zero_point,
-        g_idx=g_idx,
         args=args,
         do_quantize=True,
         do_dequantize=True,
+        g_idx=g_idx,
     )
 
 
@@ -190,7 +190,7 @@ def _process_quantization(
     if args.strategy == QuantizationStrategy.GROUP:
         output_dtype = dtype if dtype is not None else x.dtype
         output = torch.zeros_like(x).to(output_dtype)
-        columns = x.shape[1]
+        columns = output.shape[1]
 
         # TODO: make validation step for inputs
 
@@ -209,7 +209,7 @@ def _process_quantization(
         in_order = g_idx is None or -1 in g_idx
         if in_order:
             num_groups = int(ceil(columns / group_size))
-            group_sizes = torch.full((num_groups, ), group_size, dtype=torch.int)
+            group_sizes = torch.full((num_groups,), group_size, dtype=torch.int)
 
         else:
             group_indices, group_sizes = torch.unique(g_idx, return_counts=True)
@@ -222,11 +222,7 @@ def _process_quantization(
         end = 0
         for index, group_count in enumerate(group_sizes):
             sc = scale[:, index].view(-1, 1)
-            zp = (
-                zero_point[:, index].view(-1, 1)
-                if zero_point is not None
-                else None
-            )
+            zp = zero_point[:, index].view(-1, 1) if zero_point is not None else None
 
             start = end
             end = start + group_count
@@ -338,7 +334,6 @@ def maybe_calibrate_or_quantize(
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
         observer = getattr(module, f"{base_name}_observer")
-
         scale, zero_point = observer(value, g_idx=g_idx)
     else:
         # static quantization - get previous scale and zero point from layer

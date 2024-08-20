@@ -16,10 +16,9 @@
 Miscelaneous helpers for the quantization lifecycle
 """
 
-from typing import Optional, Tuple, Iterable
+from typing import Optional
 
 import torch
-import warnings
 from torch.nn import Module
 
 
@@ -28,6 +27,8 @@ __all__ = [
     "enable_quantization",
     "disable_quantization",
 ]
+
+EXPERIMENTAL_DTYPES = [torch.float8_e4m3fn]
 
 
 def update_layer_weight_quant_params(
@@ -82,7 +83,6 @@ def disable_quantization(module: Module):
 
 
 # these datatypes are missing implementations for the `index_put` operation
-EXPERIMENTAL_DTYPES = [torch.float8_e4m3fn]
 def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch.Tensor:
     """
     Perform out-of-place permutation without using torch.Tensor.index_put_,
@@ -96,12 +96,13 @@ def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch
     preceding_dims = [slice(None)] * dim
     if value.dtype not in EXPERIMENTAL_DTYPES:
         return value[tuple(preceding_dims + [perm])]
-    
+
     else:
         value_ret = torch.zeros_like(value)
 
         for index, perm_index in enumerate(perm):
-            value_ret[tuple(preceding_dims + [index])] = (
-                value[tuple(preceding_dims + [perm_index])])
+            value_ret[tuple(preceding_dims + [index])] = value[
+                tuple(preceding_dims + [perm_index])
+            ]
 
         return value_ret
