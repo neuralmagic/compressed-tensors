@@ -16,10 +16,9 @@
 Miscelaneous helpers for the quantization lifecycle
 """
 
-from typing import Optional, Tuple, Iterable
+from typing import Set, Tuple, Optional
 
 import torch
-import warnings
 from torch.nn import Module
 
 
@@ -81,8 +80,10 @@ def disable_quantization(module: Module):
     module.quantization_enabled = False
 
 
-# these datatypes are missing implementations for the `index_put` operation
-EXPERIMENTAL_DTYPES = [torch.float8_e4m3fn]
+# these datatypes are missing implementations required for standard permutation
+_EXPERIMENTAL_DTYPES: Set[Tuple[torch.dtype, torch.device]] = set()
+
+
 def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch.Tensor:
     """
     Perform out-of-place permutation without using torch.Tensor.index_put_,
@@ -93,15 +94,37 @@ def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch
     :param dim: dimension along which to apply permutation
     :return: permuted value
     """
-    preceding_dims = [slice(None)] * dim
-    if value.dtype not in EXPERIMENTAL_DTYPES:
-        return value[tuple(preceding_dims + [perm])]
-    
-    else:
-        value_ret = torch.zeros_like(value)
+    dtype_tuple = (value.dtype, value.device)
 
-        for index, perm_index in enumerate(perm):
-            value_ret[tuple(preceding_dims + [index])] = (
-                value[tuple(preceding_dims + [perm_index])])
+    if dtype_tuple in _EXPERIMENTAL_DTYPES:
+        return _fallback_permute(value, perm, dim)
 
-        return value_ret
+    try:
+        return value[tuple([slice(None)] * dim + [perm])]
+    except RuntimeError:
+        # Mark dtype as experimental if advanced indexing fails
+        _EXPERIMENTAL_DTYPES.add(dtype_tuple)
+        return _fallback_permute(value, perm, dim)
+
+
+def _fallback_permute(
+    value: torch.Tensor, perm: torch.Tensor, dim: int
+) -> torch.Tensor:
+    """
+    Fallback permutation method for experimental dtypes.
+
+    :param value: tensor to permute
+    :param perm: permutation map
+    :param dim: dimension along which to apply permutation
+    :return: permuted value
+    """
+    value_ret = value.clone()  # cannot use zeros_like b/c of missing impl.
+    orig_slices = [slice(None)] * (dim + 1)
+    perm_slices = [slice(None)] * (dim + 1)
+
+    for index, perm_index in enumerate(perm):
+        orig_slices[dim] = index
+        perm_slices[dim] = perm_index
+        value_ret[tuple(orig_slices)] = value[tuple(perm_slices)]
+
+    return value_ret
