@@ -16,6 +16,8 @@
 Miscelaneous helpers for the quantization lifecycle
 """
 
+from typing import Dict, Tuple
+
 import torch
 from torch.nn import Module
 
@@ -25,9 +27,6 @@ __all__ = [
     "enable_quantization",
     "disable_quantization",
 ]
-
-# these datatypes are missing implementations for the `index_put` operation
-EXPERIMENTAL_DTYPES = [torch.float8_e4m3fn]
 
 
 def update_layer_weight_quant_params(layer: Module):
@@ -56,6 +55,10 @@ def disable_quantization(module: Module):
     module.quantization_enabled = False
 
 
+# these datatypes are missing implementations required for standard permutation
+_EXPERIMENTAL_DTYPE: Dict[Tuple[torch.dtype, torch.device], bool] = dict()
+
+
 def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch.Tensor:
     """
     Perform out-of-place permutation without using torch.Tensor.index_put_,
@@ -67,12 +70,19 @@ def safe_permute(value: torch.Tensor, perm: torch.Tensor, dim: int = 0) -> torch
     :return: permuted value
     """
     preceding_dims = [slice(None)] * dim
-    if value.dtype not in EXPERIMENTAL_DTYPES:
-        return value[tuple(preceding_dims + [perm])]
+    dtype_tuple = (value.dtype, value.device)
+    if dtype_tuple not in _EXPERIMENTAL_DTYPE:
+        try:
+            ret = value[tuple(preceding_dims + [perm])]  # match below
+            _EXPERIMENTAL_DTYPE[dtype_tuple] = False
+            return ret
+        except RuntimeError:
+            _EXPERIMENTAL_DTYPE[dtype_tuple] = True
 
+    if not _EXPERIMENTAL_DTYPE[dtype_tuple]:
+        return value[tuple(preceding_dims + [perm])]  # match above
     else:
-        value_ret = torch.zeros_like(value)
-
+        value_ret = torch.zeros_like(value, dtype=value.dtype, device=value.device)
         for index, perm_index in enumerate(perm):
             value_ret[tuple(preceding_dims + [index])] = value[
                 tuple(preceding_dims + [perm_index])
