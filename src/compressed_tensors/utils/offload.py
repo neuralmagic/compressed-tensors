@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import torch
-from torch.nn import Module
+from torch.nn import Module, Parameter
 
 
 __all__ = [
@@ -100,7 +100,19 @@ def update_parameter_data(
 
     parameter = getattr(module, param_name, None)
     dtype = parameter.dtype
-    parameter.data = new_param_data.to(device).to(dtype)
+    try:
+        parameter.data = new_param_data.to(device).to(dtype)
+    except RuntimeError:
+        # exception may occur when trying to overwrite meta device, overriding
+        # parameter directly
+        setattr(
+            module,
+            param_name,
+            Parameter(
+                data=new_param_data.to(device).to(dtype),
+                requires_grad=parameter.requires_grad,
+            ),
+        )
 
     if offloaded:
         prefix_dict = module._hf_hook.weights_map.dataset
