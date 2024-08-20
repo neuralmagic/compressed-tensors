@@ -32,7 +32,6 @@ EXPERIMENTAL_DTYPES = [torch.float8_e4m3fn]
 
 def update_layer_weight_quant_params(layer: Module):
     weight = getattr(layer, "weight", None)
-
     scale = getattr(layer, "weight_scale", None)
     zero_point = getattr(layer, "weight_zero_point", None)
     observer = getattr(layer, "weight_observer", None)
