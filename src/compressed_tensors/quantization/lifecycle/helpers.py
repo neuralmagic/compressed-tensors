@@ -26,6 +26,7 @@ __all__ = [
     "disable_quantization",
 ]
 
+# these datatypes are missing implementations for the `index_put` operation
 EXPERIMENTAL_DTYPES = [torch.float8_e4m3fn]
 
 
