@@ -103,9 +103,9 @@ def test_g_idx():
     weights = QuantizationArgs(num_bits=8, group_size=group_size)
     g_idx = make_dummy_g_idx(tensor.shape[1], group_size)
     
-
     observer = weights.get_observer()
     scale_g_idx, zero_point_g_idx = observer(tensor, g_idx=g_idx)
+
     observer.reset()
     scale, zero_point = observer(tensor[:, torch.argsort(g_idx)])
 
