@@ -57,10 +57,11 @@ def test_infer_strategy():
     assert args.strategy == QuantizationStrategy.CHANNEL
     assert args.actorder == False
 
+def test_actorder():
     args = QuantizationArgs(group_size=128, actorder=True)
     assert args.strategy == QuantizationStrategy.GROUP
     assert args.actorder == True
-
+    
     with pytest.raises(ValueError):
         args = QuantizationArgs(group_size=None, actorder=True)
 
