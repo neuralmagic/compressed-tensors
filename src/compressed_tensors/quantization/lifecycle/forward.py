@@ -203,9 +203,9 @@ def _process_quantization(
                 )
 
         # support column-order (default) quantization as well as other orderings
-        # such as activation ordering
-        column_order = g_idx is None or -1 in g_idx
-        if column_order:
+        # such as activation ordering. Below checks if g_idx has been initialized
+        is_column_order = g_idx is None or -1 in g_idx
+        if is_column_order:
             num_groups = int(ceil(columns / group_size))
             group_sizes = torch.full((num_groups,), group_size, dtype=torch.int)
 
@@ -239,7 +239,7 @@ def _process_quantization(
                 input = output[:, start:end] if do_quantize else x[:, start:end]
                 output[:, start:end] = _dequantize(input, sc, zp)
 
-        if not column_order:
+        if not is_column_order:
             output = safe_permute(output, torch.argsort(perm), dim=1)
 
     else:  # covers channel, token and tensor strategies
