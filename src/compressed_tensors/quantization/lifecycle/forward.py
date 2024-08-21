@@ -38,10 +38,6 @@ __all__ = [
 ]
 
 
-# these datatypes are missing implementations for the `index_put` operation
-EXPERIMENTAL_DTYPES = [torch.float8_e4m3fn]
-
-
 @torch.no_grad()
 def quantize(
     x: torch.Tensor,
