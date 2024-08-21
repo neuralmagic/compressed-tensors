@@ -51,9 +51,24 @@ def test_block():
 def test_infer_strategy():
     args = QuantizationArgs(group_size=128)
     assert args.strategy == QuantizationStrategy.GROUP
+    assert args.actorder == False
 
     args = QuantizationArgs(group_size=-1)
     assert args.strategy == QuantizationStrategy.CHANNEL
+    assert args.actorder == False
+
+    args = QuantizationArgs(group_size=128, actorder=True)
+    assert args.strategy == QuantizationStrategy.GROUP
+    assert args.actorder == True
+
+    with pytest.raises(ValueError):
+        args = QuantizationArgs(group_size=None, actorder=True)
+
+    with pytest.raises(ValueError):
+        args = QuantizationArgs(group_size=-1, actorder=True)
+
+    with pytest.raises(ValueError):
+        args = QuantizationArgs(strategy="tensor", actorder=True)
 
 
 def test_invalid():

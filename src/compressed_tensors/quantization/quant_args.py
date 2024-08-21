@@ -16,7 +16,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 import torch
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 __all__ = [
@@ -108,44 +108,53 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
 
-    @validator("strategy", pre=True, always=True)
+    @field_validator("group_size", mode="before")
     def validate_strategy(cls, value, values) -> QuantizationStrategy:
-        group_size = values.get("group_size")
-        actorder = values.get("actorder")
-        inferred_value = value
+        if value < -1:
+            raise ValueError(
+                f"Invalid group size {value}. Use group_size > 0 for "
+                "strategy='group' and group_size = -1 for 'channel'"
+            )
 
-        # use group_size to determinine strategy if not given explicity
-        if group_size is not None and value is None:
-            if group_size > 0:
-                inferred_value = QuantizationStrategy.GROUP
+    @model_validator(mode='before')
+    def validate_strategy(values) -> Dict[str, Any]:
+        model_fields = QuantizationArgs.model_fields
+        strategy = values.get("strategy", model_fields["strategy"].default)
+        group_size = values.get("group_size", model_fields["group_size"].default)
+        actorder = values.get("actorder", model_fields["actorder"].default)
 
+        if strategy is not None:
+            strategy = QuantizationStrategy(strategy.lower())
+
+        else:
+            # use group_size to determinine strategy if not given explicity
+            if group_size is None:
+                strategy = QuantizationStrategy.TENSOR
+            elif group_size > 0:
+                strategy = QuantizationStrategy.GROUP
             elif group_size == -1:
-                inferred_value = QuantizationStrategy.CHANNEL
-
+                strategy = QuantizationStrategy.CHANNEL
             else:
                 raise ValueError(
-                    f"group_size={group_size} with strategy {value} is invald. "
-                    "group_size > 0 for strategy='group' and "
-                    "group_size = -1 for 'channel'"
+                    f"Invalid group size {group_size}. Use group_size > 0 for "
+                    "strategy='group' and group_size = -1 for 'channel'"
                 )
 
-        if (
-            inferred_value == QuantizationStrategy.GROUP
-            and group_size is None
-            or group_size == -1
-        ):
-            raise ValueError(f"strategy {value} requires group_size to be set.")
+        if strategy == QuantizationStrategy.GROUP:
+            if group_size is None or group_size <= 0:
+                raise ValueError(
+                    f"strategy {strategy} requires group_size to be "
+                    "set to a positive value"
+                )
 
-        if actorder and inferred_value != QuantizationStrategy.GROUP:
+        if actorder and strategy != QuantizationStrategy.GROUP:
             raise ValueError(
                 "Group quantization must be specified in order to apply "
                 "activation ordering"
             )
 
-        if inferred_value is None:
-            inferred_value = QuantizationStrategy.TENSOR
-
-        return inferred_value
+        values["strategy"] = strategy
+        return values
 
     def pytorch_dtype(self) -> torch.dtype:
         if self.type == QuantizationType.FLOAT:
