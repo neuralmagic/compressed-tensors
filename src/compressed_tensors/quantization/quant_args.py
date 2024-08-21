@@ -109,12 +109,14 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return Observer.load_from_registry(self.observer, quantization_args=self)
 
     @field_validator("group_size", mode="before")
-    def validate_strategy(cls, value, values) -> QuantizationStrategy:
+    def validate_group(cls, value) -> int:
         if value < -1:
             raise ValueError(
                 f"Invalid group size {value}. Use group_size > 0 for "
                 "strategy='group' and group_size = -1 for 'channel'"
             )
+
+        return value
 
     @model_validator(mode='before')
     def validate_strategy(values) -> Dict[str, Any]:
