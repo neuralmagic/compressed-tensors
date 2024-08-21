@@ -15,7 +15,7 @@
 
 import pytest
 import torch
-from compressed_tensors.quantization.lifecycle.helpers import (
+from compressed_tensors.utils import (
     _EXPERIMENTAL_DTYPES,
     safe_permute,
 )
