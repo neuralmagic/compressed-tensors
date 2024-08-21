@@ -331,7 +331,6 @@ def maybe_calibrate_or_quantize(
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
         observer = getattr(module, f"{base_name}_observer")
-
         scale, zero_point = observer(value, g_idx=g_idx)
     else:
         # static quantization - get previous scale and zero point from layer
