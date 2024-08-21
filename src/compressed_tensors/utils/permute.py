@@ -16,6 +16,7 @@ from typing import Set, Tuple
 
 import torch
 
+
 __all__ = ["safe_permute"]
 
 

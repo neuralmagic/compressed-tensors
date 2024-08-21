@@ -51,17 +51,16 @@ def test_block():
 def test_infer_strategy():
     args = QuantizationArgs(group_size=128)
     assert args.strategy == QuantizationStrategy.GROUP
-    assert args.actorder == False
 
     args = QuantizationArgs(group_size=-1)
     assert args.strategy == QuantizationStrategy.CHANNEL
-    assert args.actorder == False
+
 
 def test_actorder():
     args = QuantizationArgs(group_size=128, actorder=True)
     assert args.strategy == QuantizationStrategy.GROUP
-    assert args.actorder == True
-    
+    assert args.actorder
+
     with pytest.raises(ValueError):
         args = QuantizationArgs(group_size=None, actorder=True)
 

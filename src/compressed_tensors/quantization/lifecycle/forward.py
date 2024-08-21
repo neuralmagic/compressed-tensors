@@ -25,7 +25,7 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.utils import update_parameter_data, safe_permute
+from compressed_tensors.utils import safe_permute, update_parameter_data
 from torch.nn import Module
 
 

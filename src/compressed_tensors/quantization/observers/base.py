@@ -14,7 +14,7 @@
 
 import logging
 from math import ceil
-from typing import Any, Iterable, Optional, Tuple, Union, Set
+from typing import Any, Iterable, Optional, Tuple, Union
 
 import torch
 from compressed_tensors.quantization.quant_args import (
@@ -108,11 +108,15 @@ class Observer(Module, RegistryMixin):
                 rows = observed.shape[0]
                 columns = observed.shape[1]
                 num_groups = int(ceil(columns / group_size))
-                self._scale = torch.empty((rows, num_groups), dtype=torch.float, device=observed.device)
-                self._zero_point = torch.empty((rows, num_groups), dtype=torch.float, device=observed.device)
+                self._scale = torch.empty(
+                    (rows, num_groups), dtype=torch.float, device=observed.device
+                )
+                self._zero_point = torch.empty(
+                    (rows, num_groups), dtype=torch.float, device=observed.device
+                )
 
                 # support column-order (default) quantization as well as other orderings
-                # such as activation ordering. Below checks if g_idx has been initialized
+                # such as activation ordering. Below checks if g_idx has initialized
                 is_column_order = g_idx is None or -1 in g_idx
                 if is_column_order:
                     group_sizes = torch.full((num_groups,), group_size, dtype=torch.int)
@@ -122,7 +126,7 @@ class Observer(Module, RegistryMixin):
 
                     perm = torch.argsort(g_idx)
                     observed = safe_permute(observed, perm, dim=1)
-                    
+
                 # TODO: experiment with vectorizing for loop for performance
                 end = 0
                 for group_index, group_count in enumerate(group_sizes):

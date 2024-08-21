@@ -118,7 +118,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
 
         return value
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     def validate_strategy(values) -> Dict[str, Any]:
         model_fields = QuantizationArgs.model_fields
         strategy = values.get("strategy", model_fields["strategy"].default)
