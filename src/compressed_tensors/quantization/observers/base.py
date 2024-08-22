@@ -109,10 +109,11 @@ class Observer(Module, RegistryMixin):
                 columns = observed.shape[1]
                 num_groups = int(ceil(columns / group_size))
                 self._scale = torch.empty(
-                    (rows, num_groups), dtype=torch.float, device=observed.device
+                    (rows, num_groups), dtype=observed.dtype, device=observed.device
                 )
+                zp_dtype = self.quantization_args.pytorch_dtype()
                 self._zero_point = torch.empty(
-                    (rows, num_groups), dtype=torch.float, device=observed.device
+                    (rows, num_groups), dtype=zp_dtype, device=observed.device
                 )
 
                 # support column-order (default) quantization as well as other orderings
