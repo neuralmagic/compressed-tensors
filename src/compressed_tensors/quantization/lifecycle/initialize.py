@@ -169,7 +169,7 @@ def _initialize_scale_zero_point_observer(
         g_idx_shape = (weight_shape[1],)
         g_idx_dtype = torch.int
         init_g_idx = Parameter(
-            torch.empty(g_idx_shape, device=device, dtype=g_idx_dtype),
+            torch.full(g_idx_shape, -1, device=device, dtype=g_idx_dtype),
             requires_grad=False,
         )
     else:

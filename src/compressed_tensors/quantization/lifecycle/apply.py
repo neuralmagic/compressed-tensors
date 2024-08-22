@@ -289,7 +289,6 @@ def _load_quant_args_from_state_dict(
 
     if state_dict_scale is not None:
         update_parameter_data(module, state_dict_scale, scale_name)
-        # TODO: initialize zp to None
         update_parameter_data(module, state_dict_zp, zp_name)
 
     if state_dict_g_idx is not None:
