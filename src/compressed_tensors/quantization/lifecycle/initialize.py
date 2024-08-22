@@ -163,7 +163,7 @@ def _initialize_scale_zero_point_observer(
     )
     module.register_parameter(f"{base_name}_zero_point", init_zero_point)
 
-    # initialize with empty for actorder, initialize to None otherwise
+    # initialize with empty for actorder, to be populated by GPTQ or state_dict
     if quantization_args.actorder:
         g_idx_shape = (weight_shape[1],)
         g_idx_dtype = torch.int
@@ -171,6 +171,4 @@ def _initialize_scale_zero_point_observer(
             torch.empty(g_idx_shape, device=device, dtype=g_idx_dtype),
             requires_grad=False,
         )
-    else:
-        init_g_idx = None
-    module.register_parameter(f"{base_name}_g_idx", init_g_idx)
+        module.register_parameter(f"{base_name}_g_idx", init_g_idx)
