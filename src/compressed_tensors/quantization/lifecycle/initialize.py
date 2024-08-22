@@ -149,7 +149,7 @@ def _initialize_scale_zero_point_observer(
                 weight_shape[1] // quantization_args.group_size,
             )
 
-    # initializes empty scale and zero point parameters for the module
+    # initializes empty scale, zero point, and g_idx parameters for the module
     init_scale = Parameter(
         torch.empty(expected_shape, dtype=module.weight.dtype, device=device),
         requires_grad=False,
@@ -163,10 +163,14 @@ def _initialize_scale_zero_point_observer(
     )
     module.register_parameter(f"{base_name}_zero_point", init_zero_point)
 
+    # initialize with empty for actorder, initialize to None otherwise
     if quantization_args.actorder:
-        _, column_size = module.weight.shape
+        g_idx_shape = (weight_shape[1],)
+        g_idx_dtype = torch.int
         init_g_idx = Parameter(
-            torch.full((column_size,), -1, dtype=torch.int32, device=device),
+            torch.empty(g_idx_shape, device=device, dtype=g_idx_dtype),
             requires_grad=False,
         )
-        module.register_parameter(f"{base_name}_g_idx", init_g_idx)
+    else:
+        init_g_idx = None
+    module.register_parameter(f"{base_name}_g_idx", init_g_idx)

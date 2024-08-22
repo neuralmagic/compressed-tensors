@@ -99,11 +99,11 @@ def update_parameter_data(
         offloaded = True
 
     parameter = getattr(module, param_name, None)
-    if parameter is not None:
-        dtype = parameter.dtype
-        parameter.data = new_param_data.to(device).to(dtype)
-    else:
-        setattr(module, param_name, new_param_data.to(device))
+    if parameter is None:
+        raise ValueError("Attempted to update uninitialized parameter")
+    
+    dtype = parameter.dtype
+    parameter.data = new_param_data.to(device).to(dtype)
 
     if offloaded:
         prefix_dict = module._hf_hook.weights_map.dataset
