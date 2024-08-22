@@ -101,7 +101,7 @@ def update_parameter_data(
     parameter = getattr(module, param_name, None)
     if parameter is None:
         raise ValueError("Attempted to update uninitialized parameter")
-    
+
     dtype = parameter.dtype
     parameter.data = new_param_data.to(device).to(dtype)
 
