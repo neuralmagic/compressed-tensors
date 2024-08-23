@@ -282,13 +282,15 @@ def _load_quant_args_from_state_dict(
     g_idx_name = f"{base_name}_g_idx"
 
     state_dict_scale = state_dict.get(f"{module_name}.{scale_name}", None)
-    state_dict_zp = state_dict.get(
-        f"{module_name}.{zp_name}", torch.zeros_like(state_dict_scale, device="cpu")
-    )
+    state_dict_zp = state_dict.get(f"{module_name}.{zp_name}", None)
     state_dict_g_idx = state_dict.get(f"{module_name}.{g_idx_name}", None)
 
     if state_dict_scale is not None:
+        # module is quantized
         update_parameter_data(module, state_dict_scale, scale_name)
+        if state_dict_zp is None:
+            # fill in zero point for symmetric quantization
+            state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
         update_parameter_data(module, state_dict_zp, zp_name)
 
     if state_dict_g_idx is not None:
