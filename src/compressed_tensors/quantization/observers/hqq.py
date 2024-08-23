@@ -38,7 +38,7 @@ class HQQObserver(Observer):
         quantization_args: QuantizationArgs,
     ):
         super().__init__(quantization_args=quantization_args)
-
+        print("HQQObserver initialized")
         self.min_val = {}
         self.max_val = {}
 
@@ -109,8 +109,8 @@ class HQQObserver(Observer):
         torch.cuda.empty_cache()
 
         # Final quantization step
-        quantized = torch.round(observed * scaling_factor + offset).clamp(*value_range)
-        return quantized, scaling_factor, offset
+        quantized_weight = torch.round(observed * scaling_factor + offset).clamp(*value_range)
+        return quantized_weight, scaling_factor, offset
 
 
 
@@ -165,16 +165,23 @@ class HQQObserver(Observer):
 
         _min, _max = self.calculate_observed_min_max(observed, reduce_dims)
 
+        bit_range = 2**self.quantization_args.num_bits
+        bit_max =  torch.tensor(bit_range / 2 - 1, device=observed.device)
+        bit_min =  torch.tensor(-bit_range / 2, device=observed.device)
 
-        max_v = round(2**self.quantization_args.num_bits - 1)
-        min_v = 0
-        min_max = [min_v, max_v]
+        bit_range = bit_max - bit_min
 
-        scale = (max_v / (_max - _min)).clamp(
-            max=2e4
-        )  # clamp to avoid half-precision problems
-        zero = -_min * scale
-        axis = 1 if len(observed.shape) > 1 else 0
+        scale = (_max - _min) / float(bit_range)
+        zero = bit_min - (_min / scale)
+        zero = torch.clamp(zero, bit_min, bit_max)
+
+        min_max = [bit_min, bit_max]
+
+        # scale = (max_v / (_max - _min)).clamp(
+        #     max=2e4
+        # )  # clamp to avoid half-precision problems
+        # zero = -_min * scale
+        axis = 0
         device = observed.device
 
         # print("Computing optimal quantization parameters basically scale and zero")
