@@ -57,8 +57,17 @@ def initialize_module_for_quantization(
     if scheme is None:
         # no scheme passed and layer not targeted for quantization - skip
         return
+    
+    class QuantizedCache:
+        ...
+        def register(**kwargs): ...
 
+    cache = QuantizedCache.register(
+        hex(id(module)) # ideally the layer name
+    )
+    
     if scheme.input_activations is not None:
+        cache.register("observer", )
         _initialize_scale_zero_point_observer(module, "input", scheme.input_activations)
     if scheme.weights is not None:
         if hasattr(module, "weight"):
@@ -127,6 +136,43 @@ def _initialize_scale_zero_point_observer(
 ):
     # initialize observer module and attach as submodule
     observer = quantization_args.get_observer()
+    print()
+    print(hex(id(quantization_args)), hex(id(observer)))
+    print()
+    
+    """
+    cache = Cache.register("layer.0...." or hex(id(module))
+    get the initialized observer,
+    
+    cache.register(f"{basename}_observer", observer,  tag="attention"))
+    cache.register(f"{basename}_scale", scale,  tag="attention"))
+    cache.register(f"{basename}_value", value,  tag="attention"))
+    
+    
+    # downsteam code
+    
+    either - which ever is faster
+    for mod, name in leaf_mod(model):
+        # register scale, zp in attention layer
+        cache = Cache.load_from_reg(name)
+        module.register_parameter("zp", cache.zp)
+        
+    or 
+    
+    Cache.register_attention_parameter(
+        model,
+        targets="re:layer.[0-9].attn... 
+        tag= "attention"
+    )
+    
+    # to load individual
+    cache = Cache.load_from_registry("layer.0....")
+
+    """
+    breakpoint()
+    
+    
+    # breakpoint()
     module.register_module(f"{base_name}_observer", observer)
 
     if quantization_args.dynamic:
