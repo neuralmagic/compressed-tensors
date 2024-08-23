@@ -29,7 +29,6 @@ __all__ = [
 ]
 
 
-# TODO: @kylesayrs depreciate
 def update_layer_weight_quant_params(
     layer: Module,
     weight: Optional[torch.Tensor] = None,

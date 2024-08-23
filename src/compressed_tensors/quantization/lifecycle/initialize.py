@@ -172,6 +172,4 @@ def _initialize_scale_zero_point_observer(
             torch.full(g_idx_shape, -1, device=device, dtype=g_idx_dtype),
             requires_grad=False,
         )
-    else:
-        init_g_idx = None
-    module.register_parameter(f"{base_name}_g_idx", init_g_idx)
+        module.register_parameter(f"{base_name}_g_idx", init_g_idx)
