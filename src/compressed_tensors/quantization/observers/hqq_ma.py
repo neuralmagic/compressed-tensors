@@ -179,15 +179,9 @@ class HQQMAObserver(Observer):
         zero = torch.clamp(zero, bit_min, bit_max)
 
         min_max = [bit_min, bit_max]
-
-        # scale = (max_v / (_max - _min)).clamp(
-        #     max=2e4
-        # )  # clamp to avoid half-precision problems
-        # zero = -_min * scale
         axis = 0
         device = observed.device
 
-        # print("Computing optimal quantization parameters basically scale and zero")
         _, scale, zero = self.optimize_weights_proximal(
                 observed=observed,
                 scaling_factor=scale,
