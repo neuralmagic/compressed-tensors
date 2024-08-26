@@ -19,6 +19,7 @@ Miscelaneous helpers for the quantization lifecycle
 from typing import Optional
 
 import torch
+from compressed_tensors.utils.offload import update_parameter_data
 from torch.nn import Module
 
 
@@ -67,9 +68,8 @@ def update_layer_weight_quant_params(
     updated_scale, updated_zero_point = observer(weight)
 
     # update scale and zero point
-    device = next(layer.parameters()).device
-    scale.data = updated_scale.to(device)
-    zero_point.data = updated_zero_point.to(device)
+    update_parameter_data(layer, updated_scale, "weight_scale")
+    update_parameter_data(layer, updated_zero_point, "weight_zero_point")
 
 
 def enable_quantization(module: Module):
