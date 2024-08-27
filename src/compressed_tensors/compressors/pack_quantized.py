@@ -58,7 +58,7 @@ class PackedQuantizationCompressor(Compressor):
         packed_size = math.ceil(weight_shape[1] / pack_factor)
         return {
             "weight_packed": (packed_size, torch.int32),
-            "weight_shape": (torch.Size(2), torch.int32),
+            "weight_shape": (2, torch.int32),
         }
 
     def compress_weight(
