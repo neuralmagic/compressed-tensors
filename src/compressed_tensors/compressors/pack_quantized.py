@@ -57,8 +57,8 @@ class PackedQuantizationCompressor(Compressor):
         pack_factor = 32 // quantization_args.num_bits
         packed_size = math.ceil(weight_shape[1] / pack_factor)
         return {
-            "weight_packed": (packed_size, torch.int32),
-            "weight_shape": (2, torch.int32),
+            "weight_packed": (torch.Size((weight_shape[0], packed_size)), torch.int32),
+            "weight_shape": (torch.Size((2,)), torch.int32),
         }
 
     def compress_weight(
@@ -178,7 +178,8 @@ def unpack_from_int32(
         raise ValueError("Unpacking is only supported for less than 8 bits")
 
     # convert packed input to unsigned numpy
-    value = value.numpy().view(np.uint32)
+    device = value.device
+    value = value.cpu().numpy().view(np.uint32)
     pack_factor = 32 // num_bits
 
     # unpack
@@ -196,4 +197,4 @@ def unpack_from_int32(
     offset = pow(2, num_bits) // 2
     unpacked = (unpacked.astype(np.int16) - offset).astype(np.int8)
 
-    return torch.from_numpy(unpacked)
+    return torch.from_numpy(unpacked).to(device)

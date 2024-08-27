@@ -266,6 +266,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
 
         input_ = args[0]
+        compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
         if scheme.input_activations is not None:
             # calibrate and (fake) quantize input activations when applicable
@@ -273,7 +274,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
                 module, input_, "input", scheme.input_activations
             )
 
-        if scheme.weights is not None:
+        if scheme.weights is not None and not compressed:
             # calibrate and (fake) quantize weights when applicable
             unquantized_weight = self.weight.data.clone()
             self.weight.data = maybe_calibrate_or_quantize(
@@ -292,7 +293,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             )
 
         # restore back to unquantized_value
-        if scheme.weights is not None:
+        if scheme.weights is not None and not compressed:
             self.weight.data = unquantized_weight
 
         return output

@@ -56,7 +56,6 @@ class CompressedLinear(Module):
         if quantization_scheme.weights is not None:
             dtype = quantization_scheme.weights.pytorch_dtype()
             # need a dummy weight of the correct shape for initialization
-            # TODO: this actually won't work for packed compression, revisit
             self.weight = Parameter(
                 torch.empty(weight_shape, device=device, dtype=dtype),
                 requires_grad=False,
