@@ -14,7 +14,7 @@
 
 import logging
 import re
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Generator
 
 import torch
 from compressed_tensors.quantization.observers.base import Observer
@@ -36,6 +36,7 @@ __all__ = [
     "parse_out_kv_cache_args",
     "KV_CACHE_TARGETS",
     "is_kv_cache_quant_scheme",
+    "extract_submodule_generator",
 ]
 
 KV_CACHE_TARGETS = ["re:.*k_proj", "re:.*v_proj"]
@@ -248,3 +249,10 @@ def parse_out_kv_cache_args(
         kv_cache_args = None
 
     return kv_cache_args, quant_scheme_to_layers
+
+
+def extract_submodule_generator(model: Module, target: str) -> Generator:
+    for name, submodule in model.named_modules():
+        if name.endswith(target):
+            yield name, submodule
+    

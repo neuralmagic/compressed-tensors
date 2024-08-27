@@ -57,17 +57,9 @@ def initialize_module_for_quantization(
     if scheme is None:
         # no scheme passed and layer not targeted for quantization - skip
         return
-    
-    class QuantizedCache:
-        ...
-        def register(**kwargs): ...
 
-    cache = QuantizedCache.register(
-        hex(id(module)) # ideally the layer name
-    )
-    
+
     if scheme.input_activations is not None:
-        cache.register("observer", )
         _initialize_scale_zero_point_observer(module, "input", scheme.input_activations)
     if scheme.weights is not None:
         if hasattr(module, "weight"):
@@ -84,9 +76,21 @@ def initialize_module_for_quantization(
                 f"for {type(module)}"
             )
     if scheme.output_activations is not None:
-        _initialize_scale_zero_point_observer(
-            module, "output", scheme.output_activations
-        )
+        if "self_attn" not in scheme.targets:
+            _initialize_scale_zero_point_observer(
+                module, "output", scheme.output_activations, 
+            )
+            
+           
+        # else:
+        #      from compressed_tensors.cache import AttentionLayerCache
+        #     # get the cache from registry, update the value there
+        #     key = scheme.targets.split("self_attn")[0] + "self_attn"
+        #     cache = AttentionLayerCache.get_value_from_registry(key)
+        #     # 
+        #     breakpoint()
+        #     ...
+            
 
     module.quantization_scheme = scheme
     module.quantization_status = QuantizationStatus.INITIALIZED
@@ -136,43 +140,6 @@ def _initialize_scale_zero_point_observer(
 ):
     # initialize observer module and attach as submodule
     observer = quantization_args.get_observer()
-    print()
-    print(hex(id(quantization_args)), hex(id(observer)))
-    print()
-    
-    """
-    cache = Cache.register("layer.0...." or hex(id(module))
-    get the initialized observer,
-    
-    cache.register(f"{basename}_observer", observer,  tag="attention"))
-    cache.register(f"{basename}_scale", scale,  tag="attention"))
-    cache.register(f"{basename}_value", value,  tag="attention"))
-    
-    
-    # downsteam code
-    
-    either - which ever is faster
-    for mod, name in leaf_mod(model):
-        # register scale, zp in attention layer
-        cache = Cache.load_from_reg(name)
-        module.register_parameter("zp", cache.zp)
-        
-    or 
-    
-    Cache.register_attention_parameter(
-        model,
-        targets="re:layer.[0-9].attn... 
-        tag= "attention"
-    )
-    
-    # to load individual
-    cache = Cache.load_from_registry("layer.0....")
-
-    """
-    breakpoint()
-    
-    
-    # breakpoint()
     module.register_module(f"{base_name}_observer", observer)
 
     if quantization_args.dynamic:
@@ -219,3 +186,19 @@ def _initialize_scale_zero_point_observer(
             requires_grad=False,
         )
         module.register_parameter(f"{base_name}_g_idx", init_g_idx)
+
+
+def initialize_kv_cache(model: Module) -> None:
+    """
+    Register KV Cache in the registry and link k_scale and v_scale of the attetion layer
+    to the kv_cache's k_scale and v_scale
+    """
+    from compressed_tensors.quantization.utils.helpers import extract_submodule_generator
+    from compressed_tensors.cache import AttentionLayerCache
+    
+    registered_names = AttentionLayerCache.registered_names()
+    for name, submodule in extract_submodule_generator(model, "self_attn"):
+        if name not in registered_names:
+            kv_cache = AttentionLayerCache(submodule, name)
+            AttentionLayerCache.register_value(value=kv_cache, name=name)
+    

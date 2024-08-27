@@ -47,6 +47,7 @@ from compressed_tensors.utils.helpers import fix_fsdp_module_name
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
+from compressed_tensors.quantization.lifecycle.initialize import initialize_kv_cache
 
 
 __all__ = [
@@ -152,6 +153,11 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
     # apply current quantization status across all targeted layers
 
     apply_quantization_status(model, config.quantization_status)
+    
+    # Initialize kv-cache, register kv-cache in registry and 
+    # link attention layers to k_scale, v_scale
+    initialize_kv_cache(model)
+
     return names_to_scheme
 
 
@@ -322,7 +328,8 @@ def _merge_schemes(
     kv_cache_quantization_scheme = [
         scheme for scheme in schemes_to_merge if is_kv_cache_quant_scheme(scheme)
     ]
-    if not kv_cache_quantization_scheme:
+    
+    if len(kv_cache_quantization_scheme) == 0:
         # if the schemes_to_merge do not contain any
         # kv cache QuantizationScheme
         # return the first scheme (the prioritized one,
