@@ -76,12 +76,13 @@ def initialize_module_for_quantization(
                 f"for {type(module)}"
             )
     if scheme.output_activations is not None:
-        if "self_attn" not in scheme.targets:
-            _initialize_scale_zero_point_observer(
-                module, "output", scheme.output_activations, 
-            )
-            
-           
+        # attention layer's quantization params are stored in the KVCache
+        # if "self_attn" not in scheme.targets:
+        _initialize_scale_zero_point_observer(
+            module, "output", scheme.output_activations, 
+        )
+        attn_module_name = scheme.targets.split("self_attn")[0] + "self_attn"
+        linker = Linker.get_from_registry()
         # else:
         #      from compressed_tensors.cache import AttentionLayerCache
         #     # get the cache from registry, update the value there

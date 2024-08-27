@@ -56,6 +56,25 @@ class AttentionLayerCache(HFCache, RegistryMixin):
     def v_scale(self, tensor):
         self._v_scale.data = tensor
     
+    def link(self, leaf_module: Module, target: str):
+        """
+        Link the leaf module's scales to the appropiate self_attn module's
+        k_scale or v_scale
+        """
+        basename = target.split(".")[-1] # one of k_proj, v_proj, qkv_proj
+        
+        if basename == "k_proj":
+            self.attn_module.k_scale = leaf_module.out_scale.data
+        elif basename == "v_proj":
+            self.attn_module.v_scale = leaf_module.out_scale.data
+        else:
+            ... 
+            # check how qkv proj is organized
+        
+        
+        
+        
+        
 
     def quantize(self, tensor):
         ...
