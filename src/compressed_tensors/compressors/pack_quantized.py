@@ -116,10 +116,7 @@ class PackedQuantizationCompressor(Compressor):
         num_bits = quantization_args.num_bits
         unpacked = unpack_from_int32(weight, num_bits, original_shape)
         decompressed_weight = dequantize(
-            x_q=unpacked,
-            scale=scale,
-            zero_point=zero_point,
-            g_idx=g_idx
+            x_q=unpacked, scale=scale, zero_point=zero_point, g_idx=g_idx
         )
 
         return decompressed_weight

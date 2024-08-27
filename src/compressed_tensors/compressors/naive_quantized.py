@@ -111,10 +111,7 @@ class QuantizationCompressor(Compressor):
         zero_point = compressed_data.get("weight_zero_point", None)
         g_idx = compressed_data.get("weight_g_idx", None)
         decompressed_weight = dequantize(
-            x_q=weight,
-            scale=scale,
-            zero_point=zero_point,
-            g_idx=g_idx
+            x_q=weight, scale=scale, zero_point=zero_point, g_idx=g_idx
         )
 
         return decompressed_weight

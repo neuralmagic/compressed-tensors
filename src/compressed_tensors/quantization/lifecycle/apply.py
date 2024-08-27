@@ -43,7 +43,7 @@ from compressed_tensors.quantization.utils import (
     is_kv_cache_quant_scheme,
     iter_named_leaf_modules,
 )
-from compressed_tensors.utils.helpers import fix_fsdp_module_name
+from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
@@ -148,13 +148,15 @@ def apply_quantization_config(
                 weight_shape = submodule.weight.shape
                 device = next(submodule.parameters()).device
                 format = config.format
-                compressed_linear = CompressedLinear(
-                    quantization_scheme=scheme,
-                    quantization_format=format,
-                    device=device,
-                    weight_shape=weight_shape,
-                )
-                replace_module(model, name, compressed_linear)
+                if isinstance(submodule, torch.nn.Linear):
+                    # TODO: expand to more module types
+                    compressed_linear = CompressedLinear(
+                        quantization_scheme=scheme,
+                        quantization_format=format,
+                        device=device,
+                        weight_shape=weight_shape,
+                    )
+                    replace_module(model, name, compressed_linear)
 
             # target matched - add layer and scheme to target list
             submodule.quantization_scheme = _scheme_from_targets(
@@ -386,15 +388,3 @@ def _merge_schemes(
         merged_scheme.update(targets=[name])
 
         return QuantizationScheme(**merged_scheme)
-
-
-def replace_module(model: Module, name: str, new_module: torch.nn.Module):
-    if "." in name:
-        parent_name = name.rsplit(".", 1)[0]
-        child_name = name[len(parent_name) + 1 :]
-        parent = model.get_submodule(parent_name)
-    else:
-        parent_name = ""
-        parent = model
-        child_name = name
-    setattr(parent, child_name, new_module)

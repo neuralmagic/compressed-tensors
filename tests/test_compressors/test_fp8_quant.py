@@ -95,9 +95,15 @@ def test_quant_format(strategy, group_size, sc, zp):
 
     # check compressed to int8
     assert compressed_state_dict["dummy.weight_scale"].dtype == torch.float32
-    assert torch.equal(compressed_state_dict["dummy.weight_scale"], dense_state_dict["dummy.weight_scale"])
+    assert torch.equal(
+        compressed_state_dict["dummy.weight_scale"],
+        dense_state_dict["dummy.weight_scale"],
+    )
     if group_size is not None:
-        assert torch.equal(compressed_state_dict["dummy.weight_g_idx"], dense_state_dict["dummy.weight_g_idx"])
+        assert torch.equal(
+            compressed_state_dict["dummy.weight_g_idx"],
+            dense_state_dict["dummy.weight_g_idx"],
+        )
 
 
 @pytest.mark.parametrize(

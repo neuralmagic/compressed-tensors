@@ -33,7 +33,32 @@ __all__ = ["Compressor"]
 
 class Compressor(RegistryMixin):
     """
-    Base class representing a model compression algorithm
+    Base class representing a model compression algorithm. Each child class should
+    implement compression_param_info, compress_weight and decompress_weight.
+
+    Compressors support compressing/decompressing a full module state dict or a single
+    quantized PyTorch leaf module.
+
+    Model Load Lifecycle (run_compressed=False):
+        - ModelCompressor.decompress()
+            - apply_quantization_config()
+            - Compressor.decompress()
+                - Compressor.decompress_weight()
+
+    Model Save Lifecycle:
+        - ModelCompressor.compress()
+            - Compressor.compress()
+                - Compressor.compress_weight()
+
+    Module Lifecycle (run_compressed=True):
+        - apply_quantization_config()
+        - compressed_module = CompressedLinear(module)
+            - initialize_module_for_quantization()
+            - Compressor.compression_param_info()
+            - register_parameters()
+        - compressed_module.forward()
+            -compressed_module.decompress()
+
 
     :param config: config specifying compression parameters
     """
@@ -144,6 +169,7 @@ class Compressor(RegistryMixin):
         weight: Tensor,
         scale: Tensor,
         zero_point: Optional[Tensor] = None,
+        g_idx: Optional[torch.Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -152,6 +178,7 @@ class Compressor(RegistryMixin):
         :param weight: uncompressed weight tensor
         :param scale: quantization scale for weight
         :param zero_point: quantization zero point for weight
+        :param g_idx: optional mapping from column index to group index
         :param quantization_args: quantization parameters for weight
         :return: dictionary of compressed weight data
         """
