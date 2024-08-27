@@ -37,6 +37,7 @@ class PackedQuantizationCompressor(Compressor):
         "weight_packed",
         "weight_scale",
         "weight_zero_point",
+        "weight_g_idx",
         "weight_shape",
     ]
 
@@ -65,6 +66,7 @@ class PackedQuantizationCompressor(Compressor):
         weight: Tensor,
         scale: Tensor,
         zero_point: Optional[Tensor] = None,
+        g_idx: Optional[torch.Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -73,6 +75,7 @@ class PackedQuantizationCompressor(Compressor):
         :param weight: uncompressed weight tensor
         :param scale: quantization scale for weight
         :param zero_point: quantization zero point for weight
+        :param g_idx: optional mapping from column index to group index
         :param quantization_args: quantization parameters for weight
         :return: dictionary of compressed weight data
         """
@@ -82,6 +85,7 @@ class PackedQuantizationCompressor(Compressor):
                 x=weight,
                 scale=scale,
                 zero_point=zero_point,
+                g_idx=g_idx,
                 args=quantization_args,
                 dtype=torch.int8,
             )
@@ -107,6 +111,7 @@ class PackedQuantizationCompressor(Compressor):
         weight = compressed_data["weight_packed"]
         scale = compressed_data["weight_scale"]
         zero_point = compressed_data.get("weight_zero_point", None)
+        g_idx = compressed_data.get("weight_g_idx", None)
         original_shape = torch.Size(compressed_data["weight_shape"])
         num_bits = quantization_args.num_bits
         unpacked = unpack_from_int32(weight, num_bits, original_shape)
@@ -114,6 +119,7 @@ class PackedQuantizationCompressor(Compressor):
             x_q=unpacked,
             scale=scale,
             zero_point=zero_point,
+            g_idx=g_idx
         )
 
         return decompressed_weight

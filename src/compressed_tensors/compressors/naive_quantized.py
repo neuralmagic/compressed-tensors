@@ -41,7 +41,12 @@ class QuantizationCompressor(Compressor):
     type to the type specified by the layer's QuantizationArgs.
     """
 
-    COMPRESSION_PARAM_NAMES = ["weight", "weight_scale", "weight_zero_point"]
+    COMPRESSION_PARAM_NAMES = [
+        "weight",
+        "weight_scale",
+        "weight_zero_point",
+        "weight_g_idx",
+    ]
 
     def compression_param_info(
         self,
@@ -64,6 +69,7 @@ class QuantizationCompressor(Compressor):
         weight: Tensor,
         scale: Tensor,
         zero_point: Optional[Tensor] = None,
+        g_idx: Optional[torch.Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -72,6 +78,7 @@ class QuantizationCompressor(Compressor):
         :param weight: uncompressed weight tensor
         :param scale: quantization scale for weight
         :param zero_point: quantization zero point for weight
+        :param g_idx: optional mapping from column index to group index
         :param quantization_args: quantization parameters for weight
         :return: dictionary of compressed weight data
         """
@@ -80,6 +87,7 @@ class QuantizationCompressor(Compressor):
                 x=weight,
                 scale=scale,
                 zero_point=zero_point,
+                g_idx=g_idx,
                 args=quantization_args,
                 dtype=quantization_args.pytorch_dtype(),
             )
@@ -101,10 +109,12 @@ class QuantizationCompressor(Compressor):
         weight = compressed_data["weight"]
         scale = compressed_data["weight_scale"]
         zero_point = compressed_data.get("weight_zero_point", None)
+        g_idx = compressed_data.get("weight_g_idx", None)
         decompressed_weight = dequantize(
             x_q=weight,
             scale=scale,
             zero_point=zero_point,
+            g_idx=g_idx
         )
 
         return decompressed_weight
