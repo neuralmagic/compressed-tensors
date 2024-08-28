@@ -295,6 +295,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 
         if scheme.output_activations is not None:
             # calibrate and (fake) quantize output activations when applicable
+            # kv here
             output = maybe_calibrate_or_quantize(
                 module, output, "output", scheme.output_activations
             )

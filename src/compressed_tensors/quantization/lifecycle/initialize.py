@@ -75,6 +75,7 @@ def initialize_module_for_quantization(
                 f"for {type(module)}"
             )
     if scheme.output_activations is not None:
+        # for kv cache do sth here, do not attach to the module
         _initialize_scale_zero_point_observer(
             module, "output", scheme.output_activations
         )

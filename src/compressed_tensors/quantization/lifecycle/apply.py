@@ -199,6 +199,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
         model.apply(initialize_module_for_quantization)
+        # add self_attn mapper here
 
     if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
         # only quantize weights up front when our end goal state is calibration,
