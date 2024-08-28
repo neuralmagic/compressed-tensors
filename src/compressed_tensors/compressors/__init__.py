@@ -26,3 +26,4 @@ from .naive_quantized import (
 )
 from .pack_quantized import PackedQuantizationCompressor
 from .sparse_bitmask import BitmaskCompressor, BitmaskTensor
+from .sparse_24 import Sparse24Compressor

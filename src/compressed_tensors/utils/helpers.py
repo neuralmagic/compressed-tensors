@@ -67,7 +67,7 @@ def fix_fsdp_module_name(name: str) -> str:
     )
 
 
-def tensor_follows_mask_structure(tensor, mask: str = "2:4") -> bool:
+def tensor_follows_mask_structure(tensor, mask) -> bool:
     """
     :param tensor: tensor to check
     :param mask: mask structure to check for, in the format "n:m"
@@ -86,7 +86,4 @@ def tensor_follows_mask_structure(tensor, mask: str = "2:4") -> bool:
     # Check if the number of zeros in each chunk atleast n
     # Greater than sign is needed as some weights can incidentally
     # be zero
-    if not torch.all(zero_counts >= n).item():
-        raise ValueError()
-
-    return True
+    return torch.all(zero_counts >= n).item()

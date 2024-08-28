@@ -96,7 +96,7 @@ class Marlin24Compressor(Compressor):
             ValueError otherwise
         """
 
-        if not tensor_follows_mask_structure(weight):
+        if not tensor_follows_mask_structure(weight, mask="2:4"):
             raise ValueError(
                 "Marlin24 Compressor is only compatible with weights that have "
                 f"a 2:4 sparsity structure. Found segments in {name} "
