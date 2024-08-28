@@ -99,6 +99,12 @@ class PackedQuantizationCompressor(Compressor):
                     # compressed state_dict
                     continue
 
+            elif name.endswith("weight_g_idx"):
+                if torch.any(value == -1):
+                    # uninitialized group indicies default to the
+                    # identity permutation
+                    continue
+
             compressed_dict[name] = value.to("cpu")
 
         return compressed_dict
