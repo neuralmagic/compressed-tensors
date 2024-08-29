@@ -196,6 +196,6 @@ def _register_kv_cache_to_registry(args: QuantizationArgs):
     from compressed_tensors.quantization.cache import QuantizedCache
 
     cache = QuantizedCache(args)
-    name = "kv_cache"
+    name = "kv-cache"
     if name not in cache.registered_names():
         QuantizedCache.register_value(value=cache, name=name)

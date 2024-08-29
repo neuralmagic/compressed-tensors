@@ -50,16 +50,19 @@ class QuantizedCache(HFDyanmicCache, RegistryMixin):
 
     def __init__(self, quantization_args: QuantizationArgs):
         super().__init__()
+        
+        self._quantized_key_cache: List[torch.Tensor] = []
+        self._quantized_value_cache: List[torch.Tensor] = []
 
         self.quantization_args = quantization_args
 
-        self.k_observers = List[Observer] = []
-        self.v_observers = List[Observer] = []
+        self.k_observers: List[Observer] = []
+        self.v_observers: List[Observer] = []
 
-        self.k_scales = List[
+        self.k_scales: List[
             Tensor
         ] = []  # each index corresponds to layer_idx of the attention layer
-        self.v_scales = List[Tensor] = []
+        self.v_scales: List[Tensor] = []
 
         self.k_zps: List[Tensor] = []
         self.v_zps: List[Tensor] = []
@@ -76,18 +79,18 @@ class QuantizedCache(HFDyanmicCache, RegistryMixin):
             self._seen_tokens += key_states.shape[-2]
 
         if len(self.key_cache) <= layer_idx:
-            k_observer = self.quantization_args.get_observer()
-            v_observer = self.quantization_args.get_observer()
+            if len(self.k_observers) <= layer_idx:
+                k_observer = self.quantization_args.get_observer()
+                v_observer = self.quantization_args.get_observer()
 
-            self.k_observers.append(k_observer)
-            self.v_observers.append(v_observer)
+                self.k_observers.append(k_observer)
+                self.v_observers.append(v_observer)
 
             self._quantized_key_cache.append(
-                self._quantize(key_states.contiguous(), axis=self.axis_key), layer_idx
+                self._quantize(key_states.contiguous(), "key", layer_idx),
             )
             self._quantized_value_cache.append(
-                self._quantize(value_states.contiguous(), axis=self.axis_value),
-                layer_idx,
+                self._quantize(value_states.contiguous(), "value",layer_idx)
             )
             self.key_cache.append(
                 torch.zeros(0, dtype=key_states.dtype, device=key_states.device)
@@ -98,10 +101,10 @@ class QuantizedCache(HFDyanmicCache, RegistryMixin):
             keys_to_return, values_to_return = key_states, value_states
         else:
             dequant_key = self._dequantize(
-                self._quantized_key_cache[layer_idx], self.axis_key, layer_idx
+                self._quantized_key_cache[layer_idx], "key", layer_idx
             )
             dequant_value = self._dequantize(
-                self._quantized_value_cache[layer_idx], self.axis_value, layer_idx
+                self._quantized_value_cache[layer_idx], "value", layer_idx
             )
             keys_to_return = [dequant_key, self.key_cache[layer_idx], key_states]
             values_to_return = [
@@ -117,10 +120,10 @@ class QuantizedCache(HFDyanmicCache, RegistryMixin):
                 and self.key_cache[layer_idx].shape[-2] + 1 >= self.residual_length
             ):
                 self._quantized_key_cache[layer_idx] = self._quantize(
-                    keys_to_return.contiguous(), axis=self.axis_key
+                    keys_to_return.contiguous(), kv_type="key"
                 )
                 self._quantized_value_cache[layer_idx] = self._quantize(
-                    values_to_return.contiguous(), axis=self.axis_value
+                    values_to_return.contiguous(), kv_type="value"
                 )
                 self.key_cache[layer_idx] = torch.zeros(
                     0, dtype=key_states.dtype, device=key_states.device
@@ -138,11 +141,29 @@ class QuantizedCache(HFDyanmicCache, RegistryMixin):
 
         return keys_to_return, values_to_return
 
-    def _quantize(self, tensor, axis, layer_idx):
+    def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:
+        """Returns the sequence length of the cached states. A layer index can be optionally passed."""
+        if len(self.key_cache) <= layer_idx:
+            return 0
+        # since we cannot get the seq_length of each layer directly and rely on `_seen_tokens` which is
+        # updated every "layer_idx" == 0, this is a hack to get the actual seq_length for the given layer_idx
+        # this part of code otherwise fails when used to verify attn_weight shape in some models
+        return self._seen_tokens if layer_idx == 0 else self._seen_tokens - 1
+    
+    
+    def reset(self):
+        """reset the kv states (used in calibration)"""
+        self.key_cache: List[torch.Tensor] = []
+        self.value_cache: List[torch.Tensor] = []
+        self._seen_tokens = 0  # Used in `generate` to keep tally of how many tokens the cache has seen
+        self._quantized_key_cache: List[torch.Tensor] = []
+        self._quantized_value_cache: List[torch.Tensor] = []
+
+    def _quantize(self, tensor, kv_type, layer_idx):
         """Quantizes a key/value using a defined quantization method."""
         do_quantize = True
         do_dequantize = False
-        if axis == self.axis_key:  # key
+        if kv_type == "key":  # key type
             observer = self.k_observers[layer_idx]
             scales = self.k_scales
             zps = self.k_zps
@@ -152,8 +173,12 @@ class QuantizedCache(HFDyanmicCache, RegistryMixin):
             zps = self.v_zps
 
         scale, zp = observer(tensor)
-        scales.append(scale)
-        zps.append(zp)
+        if len(scales) <= layer_idx:
+            scales.append(scale)
+            zps.append(zp)
+        else:
+            scales[layer_idx] = scale
+            zps[layer_idx] = scale
 
         q_tensor = process_quantization(
             x=tensor,
@@ -165,12 +190,12 @@ class QuantizedCache(HFDyanmicCache, RegistryMixin):
         )
         return q_tensor
 
-    def _dequantize(self, qtensor, axis, layer_idx):
+    def _dequantize(self, qtensor, kv_type, layer_idx):
         """Dequantizes back the tensor that was quantized by `self._quantize()`"""
 
         do_quantize = False
         do_dequantize = True
-        if axis == self.axis_key:
+        if kv_type == "key":
             scale = self.k_scales[layer_idx]
             zp = self.k_zps[layer_idx]
         else:
