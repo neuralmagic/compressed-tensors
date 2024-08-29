@@ -327,6 +327,7 @@ def maybe_calibrate_or_quantize(
         return value
 
     g_idx = getattr(module, "weight_g_idx", None)
+    updated_scale, updated_zero_point = None, None
 
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
@@ -350,7 +351,13 @@ def maybe_calibrate_or_quantize(
             update_parameter_data(module, updated_scale, f"{base_name}_scale")
             update_parameter_data(module, updated_zero_point, f"{base_name}_zero_point")
 
-    return fake_quantize(value, scale, zero_point, args, g_idx=g_idx)
+    return fake_quantize(
+        value,
+        updated_scale or scale,
+        updated_zero_point or zero_point,
+        args,
+        g_idx=g_idx,
+    )
 
 
 @torch.no_grad()
