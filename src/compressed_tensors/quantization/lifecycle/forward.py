@@ -25,6 +25,7 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
 from compressed_tensors.utils import safe_permute, update_parameter_data
 from torch.nn import Module
 
@@ -35,6 +36,7 @@ __all__ = [
     "fake_quantize",
     "wrap_module_forward_quantized",
     "maybe_calibrate_or_quantize",
+    "process_quantization",
 ]
 
 
@@ -70,7 +72,7 @@ def quantize(
     if x.device != zero_point.device:
         zero_point = zero_point.to(x.device)
 
-    return _process_quantization(
+    return process_quantization(
         x=x,
         scale=scale,
         zero_point=zero_point,
@@ -123,7 +125,7 @@ def dequantize(
     if dtype is None:
         dtype = scale.dtype
 
-    return _process_quantization(
+    return process_quantization(
         x=x_q,
         scale=scale,
         zero_point=zero_point,
@@ -157,7 +159,7 @@ def fake_quantize(
     :param g_idx: optional mapping from column index to group index
     :return: fake quantized tensor
     """
-    return _process_quantization(
+    return process_quantization(
         x=x,
         scale=scale,
         zero_point=zero_point,
@@ -169,7 +171,7 @@ def fake_quantize(
 
 
 @torch.no_grad()
-def _process_quantization(
+def process_quantization(
     x: torch.Tensor,
     scale: torch.Tensor,
     zero_point: torch.Tensor,
@@ -295,10 +297,12 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 
         if scheme.output_activations is not None:
             # calibrate and (fake) quantize output activations when applicable
-            # kv here
-            output = maybe_calibrate_or_quantize(
-                module, output, "output", scheme.output_activations
-            )
+
+            # kv_cache observers updated on model's forward call
+            if not is_kv_cache_quant_scheme(scheme):
+                output = maybe_calibrate_or_quantize(
+                    module, output, "output", scheme.output_activations
+                )
 
         # restore back to unquantized_value
         if scheme.weights is not None:

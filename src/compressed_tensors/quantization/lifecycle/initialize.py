@@ -26,6 +26,7 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
 from compressed_tensors.utils import get_execution_device, is_module_offloaded
 from torch.nn import Module, Parameter
 
@@ -75,10 +76,21 @@ def initialize_module_for_quantization(
                 f"for {type(module)}"
             )
     if scheme.output_activations is not None:
-        # for kv cache do sth here, do not attach to the module
-        _initialize_scale_zero_point_observer(
-            module, "output", scheme.output_activations
-        )
+        # george for kv cache do sth here, do not attach to the module
+        if is_kv_cache_quant_scheme(scheme):
+            # kv cache scales not attached to module, but to KVCache
+            # _register_kv_cache_to_registry(
+            #     scheme.output_activations
+            # )
+            ...
+            _initialize_scale_zero_point_observer(
+                module, "output", scheme.output_activations
+            )
+            _register_kv_cache_to_registry(scheme.output_activations)
+        else:
+            _initialize_scale_zero_point_observer(
+                module, "output", scheme.output_activations
+            )
 
     module.quantization_scheme = scheme
     module.quantization_status = QuantizationStatus.INITIALIZED
@@ -174,3 +186,16 @@ def _initialize_scale_zero_point_observer(
             requires_grad=False,
         )
         module.register_parameter(f"{base_name}_g_idx", init_g_idx)
+
+
+def _register_kv_cache_to_registry(args: QuantizationArgs):
+    """
+    Register KV Cache in registry. Should only be called if
+    kv_cache_scheme is defined in the recipe
+    """
+    from compressed_tensors.quantization.cache import QuantizedCache
+
+    cache = QuantizedCache(args)
+    name = "kv_cache"
+    if name not in cache.registered_names():
+        QuantizedCache.register_value(value=cache, name=name)
