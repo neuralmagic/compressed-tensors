@@ -71,6 +71,7 @@ class QuantizationCompressor(Compressor):
         zero_point: Optional[Tensor] = None,
         g_idx: Optional[torch.Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
+        device: Optional[torch.device] = None,
     ) -> Dict[str, torch.Tensor]:
         """
         Compresses a single uncompressed weight
@@ -80,10 +81,11 @@ class QuantizationCompressor(Compressor):
         :param zero_point: quantization zero point for weight
         :param g_idx: optional mapping from column index to group index
         :param quantization_args: quantization parameters for weight
+        :param device: optional device to move compressed output to
         :return: dictionary of compressed weight data
         """
         if can_quantize(weight, quantization_args):
-            weight = quantize(
+            quantized_weight = quantize(
                 x=weight,
                 scale=scale,
                 zero_point=zero_point,
@@ -92,7 +94,10 @@ class QuantizationCompressor(Compressor):
                 dtype=quantization_args.pytorch_dtype(),
             )
 
-        return {"weight": weight}
+            if device is not None:
+                quantized_weight = quantized_weight.to(device)
+
+        return {"weight": quantized_weight}
 
     def decompress_weight(
         self,

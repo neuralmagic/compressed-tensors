@@ -68,6 +68,7 @@ class PackedQuantizationCompressor(Compressor):
         zero_point: Optional[Tensor] = None,
         g_idx: Optional[torch.Tensor] = None,
         quantization_args: Optional[QuantizationArgs] = None,
+        device: Optional[torch.device] = None,
     ) -> Dict[str, torch.Tensor]:
         """
         Compresses a single uncompressed weight
@@ -77,11 +78,12 @@ class PackedQuantizationCompressor(Compressor):
         :param zero_point: quantization zero point for weight
         :param g_idx: optional mapping from column index to group index
         :param quantization_args: quantization parameters for weight
+        :param device: optional device to move compressed output to
         :return: dictionary of compressed weight data
         """
         compressed_dict = {}
         if can_quantize(weight, quantization_args):
-            weight = quantize(
+            quantized_weight = quantize(
                 x=weight,
                 scale=scale,
                 zero_point=zero_point,
@@ -90,8 +92,13 @@ class PackedQuantizationCompressor(Compressor):
                 dtype=torch.int8,
             )
 
-        packed_weight = pack_to_int32(weight.cpu(), quantization_args.num_bits)
-        compressed_dict["weight_shape"] = torch.tensor(weight.shape)
+        packed_weight = pack_to_int32(quantized_weight, quantization_args.num_bits)
+        weight_shape = torch.tensor(weight.shape)
+        if device is not None:
+            packed_weight = packed_weight.to(device)
+            weight_shape = weight_shape.to(device)
+
+        compressed_dict["weight_shape"] = weight_shape
         compressed_dict["weight_packed"] = packed_weight
 
         return compressed_dict

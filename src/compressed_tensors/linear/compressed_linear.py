@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
-
 import torch
 from compressed_tensors.compressors.base import Compressor
 from compressed_tensors.quantization import (
@@ -24,65 +22,62 @@ from compressed_tensors.quantization import (
 from torch import Tensor
 from torch.nn import Parameter
 from torch.nn.functional import linear
-from torch.nn.modules import Module
+from torch.nn.modules import Linear
 
 
-class CompressedLinear(Module):
+class CompressedLinear(Linear):
     """
     Wrapper module for running a compressed forward pass of a quantized Linear module.
     The wrapped layer will decompressed on each forward call.
 
-    :param quantization_scheme:
-    :param quantization_format:
-    :param device:
-    :param weight_shape:
+    :param module: dense linear module to replace
+    :param quantization_scheme: quantization config for the module to wrap
+    :param quantization_format: compression format module is stored as
     """
 
-    def __init__(
-        self,
+    @classmethod
+    @torch.no_grad()
+    def from_linear(
+        cls,
+        module: Linear,
         quantization_scheme: QuantizationScheme,
         quantization_format: str,
-        device: torch.device,
-        weight_shape: Optional[torch.Size] = None,
     ):
-        super().__init__()
-
-        # These will get replaced
-        self.weight = None
-        self.bias = None
-
-        self.compressor = Compressor.load_from_registry(quantization_format)
-
-        if quantization_scheme.weights is not None:
-            dtype = quantization_scheme.weights.pytorch_dtype()
-            # need a dummy weight of the correct shape for initialization
-            self.weight = Parameter(
-                torch.empty(weight_shape, device=device, dtype=dtype),
-                requires_grad=False,
-            )
+        module.__class__ = CompressedLinear
+        module.compressor = Compressor.load_from_registry(quantization_format)
+        device = next(module.parameters()).device
 
         # this will initialize all the scales and zero points
         initialize_module_for_quantization(
-            self, quantization_scheme, force_zero_point=False
+            module, quantization_scheme, force_zero_point=False
         )
-
-        # no need for this once quantization is initialized
-        delattr(self, "weight")
 
         # get the shape and dtype of compressed parameters
-        compression_params = self.compressor.compression_param_info(
-            weight_shape, quantization_scheme.weights
+        compression_params = module.compressor.compression_param_info(
+            module.weight.shape, quantization_scheme.weights
         )
+
+        # no need for this once quantization is initialized, will be replaced
+        # with the compressed parameter
+        delattr(module, "weight")
 
         # populate compressed weights and quantization parameters
         for name, (shape, dtype) in compression_params.items():
             param = Parameter(
                 torch.empty(shape, device=device, dtype=dtype), requires_grad=False
             )
-            self.register_parameter(name, param)
+            module.register_parameter(name, param)
 
         # mark module as compressed
-        self.quantization_status = QuantizationStatus.COMPRESSED
+        module.quantization_status = QuantizationStatus.COMPRESSED
+
+        # handles case where forward is wrapped in new_forward by accelerate hooks
+        if hasattr(module, "_old_forward"):
+            module._old_forward = CompressedLinear.forward.__get__(
+                module, CompressedLinear
+            )
+
+        return module
 
     def forward(self, input: Tensor) -> Tensor:
         """

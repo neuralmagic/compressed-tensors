@@ -145,16 +145,13 @@ def apply_quantization_config(
         if targets:
             scheme = _scheme_from_targets(target_to_scheme, targets, name)
             if run_compressed:
-                weight_shape = submodule.weight.shape
-                device = next(submodule.parameters()).device
                 format = config.format
                 if isinstance(submodule, torch.nn.Linear):
                     # TODO: expand to more module types
-                    compressed_linear = CompressedLinear(
+                    compressed_linear = CompressedLinear.from_linear(
+                        submodule,
                         quantization_scheme=scheme,
                         quantization_format=format,
-                        device=device,
-                        weight_shape=weight_shape,
                     )
                     replace_module(model, name, compressed_linear)
 

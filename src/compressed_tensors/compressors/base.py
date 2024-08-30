@@ -116,6 +116,7 @@ class Compressor(RegistryMixin):
                         scale=scale,
                         zero_point=zp,
                         quantization_args=quant_args,
+                        device="cpu",
                     )
                     for key, value in compressed_data.items():
                         compressed_dict[merge_names(prefix, key)] = value
