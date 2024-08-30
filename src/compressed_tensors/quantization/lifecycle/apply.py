@@ -14,7 +14,8 @@
 
 import logging
 import re
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from copy import deepcopy
 from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
 from typing import Union
@@ -42,7 +43,8 @@ from compressed_tensors.quantization.utils import (
     is_kv_cache_quant_scheme,
     iter_named_leaf_modules,
 )
-from compressed_tensors.utils.helpers import fix_fsdp_module_name
+from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
+from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
 
@@ -102,13 +104,21 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
             )
 
 
-def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict:
+def apply_quantization_config(
+    model: Module, config: QuantizationConfig, run_compressed: bool = False
+) -> Dict:
     """
     Initializes the model for quantization in-place based on the given config
 
     :param model: model to apply quantization config to
     :param config: quantization config
+    :param run_compressed: Whether the model will be run in compressed mode or
+        decompressed fully on load
     """
+    # remove reference to the original `config`
+    # argument. This function can mutate it, and we'd
+    # like to keep the original `config` as it is.
+    config = deepcopy(config)
     # build mapping of targets to schemes for easier matching
     # use ordered dict to preserve target ordering in config
     target_to_scheme = OrderedDict()
@@ -118,21 +128,38 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
+    if run_compressed:
+        from compressed_tensors.linear.compressed_linear import CompressedLinear
+
     # list of submodules to ignore
-    ignored_submodules = []
+    ignored_submodules = defaultdict(list)
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in iter_named_leaf_modules(model):
         # potentially fix module name to remove FSDP wrapper prefix
         name = fix_fsdp_module_name(name)
-        if find_name_or_class_matches(name, submodule, config.ignore):
-            ignored_submodules.append(name)
+        if matches := find_name_or_class_matches(name, submodule, config.ignore):
+            for match in matches:
+                ignored_submodules[match].append(name)
             continue  # layer matches ignore list, continue
         targets = find_name_or_class_matches(name, submodule, target_to_scheme)
         if targets:
+            scheme = _scheme_from_targets(target_to_scheme, targets, name)
+            if run_compressed:
+                format = config.format
+                if isinstance(submodule, torch.nn.Linear):
+                    # TODO: expand to more module types
+                    compressed_linear = CompressedLinear.from_linear(
+                        submodule,
+                        quantization_scheme=scheme,
+                        quantization_format=format,
+                    )
+                    replace_module(model, name, compressed_linear)
+
             # target matched - add layer and scheme to target list
             submodule.quantization_scheme = _scheme_from_targets(
                 target_to_scheme, targets, name
             )
+
             names_to_scheme[name] = submodule.quantization_scheme.weights
 
     if config.ignore is not None and ignored_submodules is not None:
@@ -142,8 +169,8 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
                 "not found in the model: "
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
-    # apply current quantization status across all targeted layers
 
+    # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
     return names_to_scheme
 
@@ -191,10 +218,22 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     current_status = infer_quantization_status(model)
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
-        model.apply(initialize_module_for_quantization)
+        force_zero_point_init = status != QuantizationStatus.COMPRESSED
+        model.apply(
+            lambda module: initialize_module_for_quantization(
+                module, force_zero_point=force_zero_point_init
+            )
+        )
 
     if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
-        model.apply(set_module_for_calibration)
+        # only quantize weights up front when our end goal state is calibration,
+        # weight quantization parameters are already loaded for frozen/compressed
+        quantize_weights_upfront = status == QuantizationStatus.CALIBRATION
+        model.apply(
+            lambda module: set_module_for_calibration(
+                module, quantize_weights_upfront=quantize_weights_upfront
+            )
+        )
     if current_status < status >= QuantizationStatus.FROZEN > current_status:
         model.apply(freeze_module_quantization)
 
@@ -265,19 +304,22 @@ def _load_quant_args_from_state_dict(
     """
     scale_name = f"{base_name}_scale"
     zp_name = f"{base_name}_zero_point"
-    device = next(module.parameters()).device
+    g_idx_name = f"{base_name}_g_idx"
 
-    scale = getattr(module, scale_name, None)
-    zp = getattr(module, zp_name, None)
-    if scale is not None:
-        state_dict_scale = state_dict[f"{module_name}.{scale_name}"]
-        scale.data = state_dict_scale.to(device).to(scale.dtype)
-    if zp is not None:
-        zp_from_state = state_dict.get(f"{module_name}.{zp_name}", None)
-        if zp_from_state is not None:  # load the non-zero zero points
-            zp.data = zp_from_state.to(device).to(zp.dtype)
-        else:  # fill with zeros matching scale shape
-            zp.data = torch.zeros_like(scale, dtype=zp.dtype).to(device)
+    state_dict_scale = state_dict.get(f"{module_name}.{scale_name}", None)
+    state_dict_zp = state_dict.get(f"{module_name}.{zp_name}", None)
+    state_dict_g_idx = state_dict.get(f"{module_name}.{g_idx_name}", None)
+
+    if state_dict_scale is not None:
+        # module is quantized
+        update_parameter_data(module, state_dict_scale, scale_name)
+        if state_dict_zp is None:
+            # fill in zero point for symmetric quantization
+            state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
+        update_parameter_data(module, state_dict_zp, zp_name)
+
+    if state_dict_g_idx is not None:
+        update_parameter_data(module, state_dict_g_idx, g_idx_name)
 
 
 def _scheme_from_targets(

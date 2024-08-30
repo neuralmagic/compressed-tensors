@@ -15,6 +15,7 @@
 import re
 from typing import Optional
 
+import pytest
 import torch
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import (
@@ -35,7 +36,7 @@ def test_target_prioritization():
     # tests that the config_groups are applied in the correct order
     # of priority, where exact layer name > regex > module name
     config = {
-        "quant_method": "compressed_tensors",
+        "quant_method": "compressed-tensors",
         "format": "fakequant",
         "config_groups": {
             "group_1": {
@@ -110,7 +111,7 @@ def test_apply_quantization_config_tinyllama():
     # sanity check correct number of layers targeted
     assert num_linears == 154  # 155 Linear layers - 1 that gets ignored
     assert num_embeddings == 1
-    assert num_rotary_embeddings == 22
+    assert num_rotary_embeddings == 23  # model updated, now has model.rotary_embedding
 
     # test quantization compression
     # sample forward pass to fill scales, zps
@@ -189,7 +190,7 @@ def get_tinyllama_model():
 
 def get_sample_tinyllama_quant_config(status: str = "frozen"):
     config_dict = {
-        "quant_method": "compressed_tensors",
+        "quant_method": "compressed-tensors",
         "format": "fakequant",
         "quantization_status": status,
         "global_compression_ratio": None,
@@ -223,3 +224,51 @@ def get_sample_tinyllama_quant_config(status: str = "frozen"):
         "ignore": ["LlamaRotaryEmbedding", "model.layers.1.mlp.down_proj"],
     }
     return QuantizationConfig.parse_obj(config_dict)
+
+
+@pytest.mark.parametrize(
+    "ignore,should_raise_warning",
+    [
+        [("lm_head", "re:.*gate"), False],
+        [("lm_head", "re:.*foobarbaz"), True],
+    ],
+)
+def test_apply_quantization_status(caplog, ignore, should_raise_warning):
+    import logging
+
+    from transformers import AutoModelForCausalLM
+
+    # load a dense, unquantized tiny llama model
+    model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name, device_map="cpu", torch_dtype="auto"
+    )
+
+    quantization_config_dict = {
+        "quant_method": "sparseml",
+        "format": "pack-quantized",
+        "global_compression_ratio": None,
+        "config_groups": {
+            "group_1": {
+                "weights": {
+                    "num_bits": 4,
+                    "type": "int",
+                    "symmetric": False,
+                    "strategy": "tensor",
+                },
+                "targets": ["Linear"],
+            }
+        },
+    }
+    quantization_config_dict["ignore"] = ignore
+
+    config = QuantizationConfig(**quantization_config_dict)
+    config.quantization_status = QuantizationStatus.CALIBRATION
+
+    # mismatch in the ignore key of quantization_config_dict
+    with caplog.at_level(logging.WARNING):
+        apply_quantization_config(model, config)
+        if should_raise_warning:
+            assert len(caplog.text) > 0
+        else:
+            assert len(caplog.text) == 0

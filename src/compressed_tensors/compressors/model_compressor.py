@@ -39,10 +39,10 @@ from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
 )
-from compressed_tensors.utils import get_safetensors_folder
+from compressed_tensors.utils import get_safetensors_folder, update_parameter_data
 from compressed_tensors.utils.helpers import fix_fsdp_module_name
 from torch import Tensor
-from torch.nn import Module, Parameter
+from torch.nn import Module
 from tqdm import tqdm
 from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
@@ -81,6 +81,7 @@ class ModelCompressor:
     def from_pretrained(
         cls,
         pretrained_model_name_or_path: str,
+        **kwargs,
     ) -> Optional["ModelCompressor"]:
         """
         Given a path to a model config, extract the sparsity and/or quantization
@@ -89,7 +90,7 @@ class ModelCompressor:
         :param pretrained_model_name_or_path: path to model config on disk or HF hub
         :return: compressor for the extracted configs
         """
-        config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+        config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
         compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
         return cls.from_compression_config(compression_config)
 
@@ -175,6 +176,9 @@ class ModelCompressor:
         if hasattr(compression_config, SPARSITY_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, SPARSITY_CONFIG_NAME)
+        if SPARSITY_CONFIG_NAME in compression_config:
+            # for loaded HFQuantizer config from dict
+            return compression_config[SPARSITY_CONFIG_NAME]
 
         # SparseAutoModel format
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
@@ -187,6 +191,10 @@ class ModelCompressor:
         if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
+
+        if QUANTIZATION_CONFIG_NAME in compression_config:
+            # for loaded HFQuantizer config from dict
+            return compression_config[QUANTIZATION_CONFIG_NAME]
 
         # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
@@ -233,11 +241,65 @@ class ModelCompressor:
             compressed_state_dict = self.quantization_compressor.compress(
                 state_dict, names_to_scheme=quantized_modules_to_args
             )
+            self.quantization_config.quantization_status = QuantizationStatus.COMPRESSED
 
         if self.sparsity_compressor is not None:
             compressed_state_dict = self.sparsity_compressor.compress(
                 compressed_state_dict
             )
+
+        # HACK (mgoin): Post-process step for kv cache scales to take the
+        # k/v_proj module `output_scale` parameters, and store them in the
+        # parent attention module as `k_scale` and `v_scale`
+        #
+        # Example:
+        #  Replace `model.layers.0.self_attn.k_proj.output_scale`
+        #  with    `model.layers.0.self_attn.k_scale`
+        if (
+            self.quantization_config is not None
+            and self.quantization_config.kv_cache_scheme is not None
+        ):
+            # HACK (mgoin): We assume the quantized modules in question
+            # will be k_proj and v_proj since those are the default targets.
+            # We check that both of these modules have output activation
+            # quantization, and additionally check that q_proj doesn't.
+            q_proj_has_no_quant_output = 0
+            k_proj_has_quant_output = 0
+            v_proj_has_quant_output = 0
+            for name, module in model.named_modules():
+                if not hasattr(module, "quantization_scheme"):
+                    continue
+                out_act = module.quantization_scheme.output_activations
+                if name.endswith(".q_proj") and out_act is None:
+                    q_proj_has_no_quant_output += 1
+                elif name.endswith(".k_proj") and out_act is not None:
+                    k_proj_has_quant_output += 1
+                elif name.endswith(".v_proj") and out_act is not None:
+                    v_proj_has_quant_output += 1
+
+            assert (
+                q_proj_has_no_quant_output > 0
+                and k_proj_has_quant_output > 0
+                and v_proj_has_quant_output > 0
+            )
+            assert (
+                q_proj_has_no_quant_output
+                == k_proj_has_quant_output
+                == v_proj_has_quant_output
+            )
+
+            # Move all .k/v_proj.output_scale parameters to .k/v_scale
+            working_state_dict = {}
+            for key in compressed_state_dict.keys():
+                if key.endswith(".k_proj.output_scale"):
+                    new_key = key.replace(".k_proj.output_scale", ".k_scale")
+                    working_state_dict[new_key] = compressed_state_dict[key]
+                elif key.endswith(".v_proj.output_scale"):
+                    new_key = key.replace(".v_proj.output_scale", ".v_scale")
+                    working_state_dict[new_key] = compressed_state_dict[key]
+                else:
+                    working_state_dict[key] = compressed_state_dict[key]
+            compressed_state_dict = working_state_dict
 
         # HACK: Override the dtype_byte_size function in transformers to
         # support float8 types. Fix is posted upstream
@@ -306,12 +368,10 @@ class ModelCompressor:
 
     def _replace_weights(self, dense_weight_generator, model):
         for name, data in tqdm(dense_weight_generator, desc="Decompressing model"):
-            # loading the decompressed weights into the model
-            model_device = operator.attrgetter(name)(model).device
-            data_old = operator.attrgetter(name)(model)
-            data_dtype = data_old.dtype
-            data_new = Parameter(data.to(model_device).to(data_dtype))
-            data_old.data = data_new.data
+            split_name = name.split(".")
+            prefix, param_name = ".".join(split_name[:-1]), split_name[-1]
+            module = operator.attrgetter(prefix)(model)
+            update_parameter_data(module, data, param_name)
 
 
 def map_modules_to_quant_args(model: Module) -> Dict:
