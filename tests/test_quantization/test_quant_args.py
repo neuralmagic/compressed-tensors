@@ -14,6 +14,7 @@
 
 import pytest
 from compressed_tensors.quantization import (
+    ActivationOrderingStrategy,
     QuantizationArgs,
     QuantizationStrategy,
     QuantizationType,
@@ -39,6 +40,9 @@ def test_group():
     assert group.strategy == QuantizationStrategy.GROUP
     assert group.group_size == kwargs["group_size"]
 
+    with pytest.raises(ValueError):
+        _ = QuantizationArgs(strategy=QuantizationStrategy.GROUP, group_size=-1)
+
 
 def test_block():
     kwargs = {"strategy": "block", "block_structure": "2x4"}
@@ -56,19 +60,38 @@ def test_infer_strategy():
     assert args.strategy == QuantizationStrategy.CHANNEL
 
 
+def test_enums():
+    assert QuantizationArgs(
+        type=QuantizationType.INT,
+        strategy=QuantizationStrategy.GROUP,
+        actorder=ActivationOrderingStrategy.WEIGHT,
+        group_size=1,
+    ) == QuantizationArgs(type="InT", strategy="GROUP", actorder="weight", group_size=1)
+
+
 def test_actorder():
+    # test group inference with actorder
     args = QuantizationArgs(group_size=128, actorder=True)
     assert args.strategy == QuantizationStrategy.GROUP
     assert args.actorder
 
+    # test invalid pairings
     with pytest.raises(ValueError):
-        args = QuantizationArgs(group_size=None, actorder=True)
+        _ = QuantizationArgs(group_size=None, actorder=True)
+    with pytest.raises(ValueError):
+        _ = QuantizationArgs(group_size=-1, actorder=True)
+    with pytest.raises(ValueError):
+        _ = QuantizationArgs(strategy="tensor", actorder=True)
 
-    with pytest.raises(ValueError):
-        args = QuantizationArgs(group_size=-1, actorder=True)
-
-    with pytest.raises(ValueError):
-        args = QuantizationArgs(strategy="tensor", actorder=True)
+    # test defaulting
+    assert (
+        QuantizationArgs(group_size=1, actorder=True).actorder
+        == ActivationOrderingStrategy.WEIGHT
+    )
+    assert (
+        QuantizationArgs(group_size=1, actorder=ActivationOrderingStrategy.ON).actorder
+        == ActivationOrderingStrategy.WEIGHT
+    )
 
 
 def test_invalid():
