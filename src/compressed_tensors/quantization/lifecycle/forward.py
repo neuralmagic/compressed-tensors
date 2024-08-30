@@ -351,10 +351,13 @@ def maybe_calibrate_or_quantize(
             update_parameter_data(module, updated_scale, f"{base_name}_scale")
             update_parameter_data(module, updated_zero_point, f"{base_name}_zero_point")
 
+            scale = updated_scale
+            zero_point = updated_zero_point
+
     return fake_quantize(
         value,
-        updated_scale or scale,
-        updated_zero_point or zero_point,
+        scale,
+        zero_point,
         args,
         g_idx=g_idx,
     )
