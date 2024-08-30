@@ -56,14 +56,13 @@ class ActivationOrderingStrategy(str, Enum):
     """
     Enum storing strategies for activation ordering
 
-    On := defaults to weight
+    Weight := only reorder weight, not groups (default)
     Grouped := reorder groups
-    Weight := only reorder weight, not groups
     Off := do not reorder by activations
     """
 
-    GROUP = "group"
     WEIGHT = "weight"
+    GROUP = "group"
     OFF = "off"
 
 
