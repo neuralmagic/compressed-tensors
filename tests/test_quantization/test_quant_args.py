@@ -41,7 +41,7 @@ def test_group():
     assert group.group_size == kwargs["group_size"]
 
     with pytest.raises(ValueError):
-        _ = QuantizationArgs(strategy=QuantizationStrategy.GROUP, group_size=-1)
+        QuantizationArgs(strategy=QuantizationStrategy.GROUP, group_size=-1)
 
 
 def test_block():
@@ -77,11 +77,11 @@ def test_actorder():
 
     # test invalid pairings
     with pytest.raises(ValueError):
-        _ = QuantizationArgs(group_size=None, actorder=True)
+        QuantizationArgs(group_size=None, actorder=True)
     with pytest.raises(ValueError):
-        _ = QuantizationArgs(group_size=-1, actorder=True)
+        QuantizationArgs(group_size=-1, actorder=True)
     with pytest.raises(ValueError):
-        _ = QuantizationArgs(strategy="tensor", actorder=True)
+        QuantizationArgs(strategy="tensor", actorder=True)
 
     # test boolean defaulting
     assert (
@@ -96,8 +96,8 @@ def test_actorder():
 
 def test_invalid():
     with pytest.raises(ValidationError):
-        _ = QuantizationArgs(type="invalid")
+        QuantizationArgs(type="invalid")
     with pytest.raises(ValidationError):
-        _ = QuantizationArgs(strategy="invalid")
+        QuantizationArgs(strategy="invalid")
     with pytest.raises(ValidationError):
-        _ = QuantizationArgs(strategy=QuantizationStrategy.GROUP)
+        QuantizationArgs(strategy=QuantizationStrategy.GROUP)
