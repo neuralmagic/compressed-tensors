@@ -62,10 +62,9 @@ class ActivationOrderingStrategy(str, Enum):
     Off := do not reorder by activations
     """
 
-    ON = "true"
     GROUP = "group"
     WEIGHT = "weight"
-    OFF = "false"
+    OFF = "off"
 
 
 class QuantizationArgs(BaseModel, use_enum_values=True):
@@ -155,14 +154,15 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     @field_validator("actorder", mode="before")
     def validate_actorder(cls, value) -> ActivationOrderingStrategy:
         if isinstance(value, bool):
-            value = str(value)
+            # default to weight if True
+            return (
+                ActivationOrderingStrategy.WEIGHT
+                if value
+                else cls.model_fields["actorder"].default
+            )
 
         if isinstance(value, str):
-            value = ActivationOrderingStrategy(value.lower())
-
-        # default to weight
-        if value == ActivationOrderingStrategy.ON:
-            value = ActivationOrderingStrategy.WEIGHT
+            return ActivationOrderingStrategy(value.lower())
 
         return value
 
@@ -201,7 +201,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             and strategy != QuantizationStrategy.GROUP
         ):
             raise ValueError(
-                "Group quantization strategy must be specified in order to apply "
+                "Must use group quantization strategy in order to apply "
                 "activation ordering"
             )
 
