@@ -188,7 +188,11 @@ def unpack_from_int32(
 
     # unpack
     mask = pow(2, num_bits) - 1
-    unpacked = torch.zeros((value.shape[0], value.shape[1] * pack_factor), device = value.device, dtype=torch.int32)
+    unpacked = torch.zeros(
+        (value.shape[0], value.shape[1] * pack_factor),
+        device=value.device,
+        dtype=torch.int32,
+    )
     for i in range(pack_factor):
         unpacked[:, i::pack_factor] = (value >> (num_bits * i)) & mask
 
