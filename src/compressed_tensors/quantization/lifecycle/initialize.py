@@ -180,8 +180,8 @@ def _initialize_scale_zero_point_observer(
         )
         module.register_parameter(f"{base_name}_zero_point", init_zero_point)
 
-    # initialize with empty for actorder, to be populated by GPTQ or state_dict
-    if quantization_args.actorder != ActivationOrderingStrategy.OFF:
+    # only grouped activation ordering has g_idx
+    if quantization_args.actorder == ActivationOrderingStrategy.GROUP:
         g_idx_shape = (weight_shape[1],)
         g_idx_dtype = torch.int
         init_g_idx = Parameter(
