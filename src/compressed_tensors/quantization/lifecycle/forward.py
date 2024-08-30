@@ -327,7 +327,6 @@ def maybe_calibrate_or_quantize(
         return value
 
     g_idx = getattr(module, "weight_g_idx", None)
-    updated_scale, updated_zero_point = None, None
 
     if args.dynamic:
         # dynamic quantization - get scale and zero point directly from observer
