@@ -197,13 +197,15 @@ def unpack_from_int32(
     if num_bits > 8:
         raise ValueError("Unpacking is only supported for less than 8 bits")
 
-    # convert packed input to unsigned numpy
-    value = value.numpy().view(np.uint32)
     pack_factor = 32 // num_bits
 
     # unpack
     mask = pow(2, num_bits) - 1
-    unpacked = np.zeros((value.shape[0], value.shape[1] * pack_factor))
+    unpacked = torch.zeros(
+        (value.shape[0], value.shape[1] * pack_factor),
+        device=value.device,
+        dtype=torch.int32,
+    )
     for i in range(pack_factor):
         unpacked[:, i::pack_factor] = (value >> (num_bits * i)) & mask
 
@@ -214,6 +216,6 @@ def unpack_from_int32(
     # bits are packed in unsigned format, reformat to signed
     # update the value range from unsigned to signed
     offset = pow(2, num_bits) // 2
-    unpacked = (unpacked.astype(np.int16) - offset).astype(np.int8)
+    unpacked = (unpacked - offset).to(torch.int8)
 
-    return torch.from_numpy(unpacked)
+    return unpacked
