@@ -354,10 +354,10 @@ def maybe_calibrate_or_quantize(
             zero_point = updated_zero_point
 
     return fake_quantize(
-        value,
-        scale,
-        zero_point,
-        args,
+        x=value,
+        scale=scale,
+        zero_point=zero_point,
+        args=args,
         g_idx=g_idx,
     )
 
