@@ -156,7 +156,9 @@ def apply_quantization_config(
             scheme = _scheme_from_targets(target_to_scheme, targets, name)
             if run_compressed:
                 format = config.format
-                if format != CompressionFormat.dense.value and isinstance(submodule, torch.nn.Linear):
+                if format != CompressionFormat.dense.value and isinstance(
+                    submodule, torch.nn.Linear
+                ):
                     # TODO: expand to more module types
                     compressed_linear = CompressedLinear.from_linear(
                         submodule,
