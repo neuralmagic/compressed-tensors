@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 import torch
+from compressed_tensors.quantization.cache import QuantizedCache
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -94,6 +95,13 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             "Observers constructor excluding quantization range or symmetry"
         ),
     )
+    # kv_cache: Optional[
+    #     QuantizedCache
+    # ] = None  # Singleton, only relevant for output_activations
+
+    # model_config = {
+    #     "arbitrary_types_allowed": True
+    # }
 
     def get_observer(self):
         """
@@ -107,6 +115,16 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             self.observer = "memoryless"
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
+
+    def get_kv_cache(self) -> QuantizedCache:
+        # """Lazy initialization of kv_cache. Singleton instantiation"""
+        return QuantizedCache(self)
+        # if self.kv_cache is None:
+        # self.kv_cache = QuantizedCache(self)
+
+    # @kv_cache.setter
+    # def kv_cache(self, value: QuantizedCache):
+    #     self.kv_cache = value
 
     @field_validator("group_size", mode="before")
     def validate_group(cls, value) -> int:

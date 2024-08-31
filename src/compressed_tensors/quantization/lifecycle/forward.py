@@ -316,6 +316,40 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
     setattr(module, "forward", bound_wrapped_forward)
 
 
+def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationScheme):
+    # expects a module already initialized and injected with the parameters in
+    # initialize_module_for_quantization
+    if hasattr(module.forward, "__func__"):
+        forward_func_orig = module.forward.__func__
+    else:
+        forward_func_orig = module.forward.func
+
+    @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
+    def wrapped_forward(self, *args, **kwargs):
+
+        past_key_value = scheme.output_activations.get_kv_cache()
+        # print(hex(id(past_key_value))) # 0x7f74669e6500
+        # breakpoint()
+        kwargs["past_key_value"] = past_key_value
+        kwargs["use_cache"] = past_key_value is not None
+
+        attn_module = forward_func_orig.__get__(module, module.__class__)
+
+        past_key_value.reset()
+
+        rtn = attn_module(*args, **kwargs)
+
+        self.k_scale = past_key_value.k_scales[module.layer_idx]
+        self.v_scale = past_key_value.v_scales[module.layer_idx]
+
+        return rtn
+
+    # bind wrapped forward to module class so reference to `self` is correct
+    bound_wrapped_forward = wrapped_forward.__get__(module, module.__class__)
+    # set forward to wrapped forward
+    setattr(module, "forward", bound_wrapped_forward)
+
+
 def maybe_calibrate_or_quantize(
     module: Module, value: torch.Tensor, base_name: str, args: "QuantizationArgs"
 ) -> torch.Tensor:

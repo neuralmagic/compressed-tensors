@@ -14,7 +14,7 @@
 
 import logging
 import re
-from typing import List, Optional, Tuple
+from typing import Generator, List, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.observers.base import Observer
@@ -36,9 +36,10 @@ __all__ = [
     "parse_out_kv_cache_args",
     "KV_CACHE_TARGETS",
     "is_kv_cache_quant_scheme",
+    "iter_named_modules",
 ]
 
-KV_CACHE_TARGETS = ["re:.*k_proj", "re:.*v_proj"]
+KV_CACHE_TARGETS = ["re:.*k_proj", "re:.*v_proj", "re:.*self_attn$"]
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
@@ -106,7 +107,7 @@ def module_type(module: Module) -> str:
     return type(module).__name__
 
 
-def iter_named_leaf_modules(model: Module) -> Tuple[str, Module]:
+def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None, None]:
     """
     Yields modules that do not have any submodules except observers. The observers
     themselves are not yielded
@@ -126,6 +127,29 @@ def iter_named_leaf_modules(model: Module) -> Tuple[str, Module]:
 
             if not has_non_observer_children:
                 yield name, submodule
+
+
+def iter_named_modules(
+    model: Module, include_children: bool = True, include_attn: bool = False
+) -> Generator[Tuple[str, Module], None, None]:
+    for name, submodule in model.named_modules():
+        if include_children:
+            children = list(submodule.children())
+            if len(children) == 0 and not isinstance(submodule, Observer):
+                yield name, submodule
+            else:
+                has_non_observer_children = False
+                for child in children:
+                    if not isinstance(child, Observer):
+                        has_non_observer_children = True
+
+                if not has_non_observer_children:
+                    yield name, submodule
+        if include_attn:
+            if name.endswith("self_attn"):
+                yield name, submodule
+
+    ...
 
 
 def get_torch_bit_depth(value: torch.Tensor) -> int:

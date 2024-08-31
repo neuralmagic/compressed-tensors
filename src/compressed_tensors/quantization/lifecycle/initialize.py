@@ -19,6 +19,7 @@ from typing import Optional
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
+    wrap_module_forward_quantized_attn,
 )
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
@@ -59,77 +60,74 @@ def initialize_module_for_quantization(
         # no scheme passed and layer not targeted for quantization - skip
         return
 
-    if scheme.input_activations is not None:
-        _initialize_scale_zero_point_observer(module, "input", scheme.input_activations)
-    if scheme.weights is not None:
-        if hasattr(module, "weight"):
-            weight_shape = None
-            if isinstance(module, torch.nn.Linear):
-                weight_shape = module.weight.shape
+    if is_attention_module(module):
+        # wrap forward call of module to perform quantized actions based on calltime status
+        wrap_module_forward_quantized_attn(module, scheme)
+    else:
+
+        if scheme.input_activations is not None:
             _initialize_scale_zero_point_observer(
-                module, "weight", scheme.weights, weight_shape=weight_shape
+                module, "input", scheme.input_activations
             )
-        else:
-            _LOGGER.warning(
-                f"module type {type(module)} targeted for weight quantization but "
-                "has no attribute weight, skipping weight quantization "
-                f"for {type(module)}"
-            )
-    if scheme.output_activations is not None:
-        # george for kv cache do sth here, do not attach to the module
-        if is_kv_cache_quant_scheme(scheme):
-            # kv cache scales not attached to module, but to KVCache
-            # _register_kv_cache_to_registry(
-            #     scheme.output_activations
-            # )
-            ...
-            _initialize_scale_zero_point_observer(
-                module, "output", scheme.output_activations
-            )
-            _register_kv_cache_to_registry(scheme.output_activations)
-        else:
-            _initialize_scale_zero_point_observer(
-                module, "output", scheme.output_activations
-            )
-
-    module.quantization_scheme = scheme
-    module.quantization_status = QuantizationStatus.INITIALIZED
-
-    offloaded = False
-    if is_module_offloaded(module):
-        try:
-            from accelerate.hooks import add_hook_to_module, remove_hook_from_module
-            from accelerate.utils import PrefixedDataset
-        except ModuleNotFoundError:
-            raise ModuleNotFoundError(
-                "Offloaded model detected. To use CPU offloading with "
-                "compressed-tensors the `accelerate` package must be installed, "
-                "run `pip install compressed-tensors[accelerate]`"
-            )
-
-        offloaded = True
-        hook = module._hf_hook
-        prefix_dict = module._hf_hook.weights_map
-        new_prefix = {}
-
-        # recreate the prefix dict (since it is immutable)
-        # and add quantization parameters
-        for key, data in module.named_parameters():
-            if key not in prefix_dict:
-                new_prefix[f"{prefix_dict.prefix}{key}"] = data
+        if scheme.weights is not None:
+            if hasattr(module, "weight"):
+                weight_shape = None
+                if isinstance(module, torch.nn.Linear):
+                    weight_shape = module.weight.shape
+                _initialize_scale_zero_point_observer(
+                    module, "weight", scheme.weights, weight_shape=weight_shape
+                )
             else:
-                new_prefix[f"{prefix_dict.prefix}{key}"] = prefix_dict[key]
-        new_prefix_dict = PrefixedDataset(new_prefix, prefix_dict.prefix)
-        remove_hook_from_module(module)
+                _LOGGER.warning(
+                    f"module type {type(module)} targeted for weight quantization but "
+                    "has no attribute weight, skipping weight quantization "
+                    f"for {type(module)}"
+                )
 
-    # wrap forward call of module to perform quantized actions based on calltime status
-    wrap_module_forward_quantized(module, scheme)
+        if scheme.output_activations is not None:
+            if not is_kv_cache_quant_scheme(scheme):
+                _initialize_scale_zero_point_observer(
+                    module, "output", scheme.output_activations
+                )
 
-    if offloaded:
-        # we need to re-add the hook for offloading now that we've wrapped forward
-        add_hook_to_module(module, hook)
-        if prefix_dict is not None:
-            module._hf_hook.weights_map = new_prefix_dict
+        module.quantization_scheme = scheme
+        module.quantization_status = QuantizationStatus.INITIALIZED
+
+        offloaded = False
+        if is_module_offloaded(module):
+            try:
+                from accelerate.hooks import add_hook_to_module, remove_hook_from_module
+                from accelerate.utils import PrefixedDataset
+            except ModuleNotFoundError:
+                raise ModuleNotFoundError(
+                    "Offloaded model detected. To use CPU offloading with "
+                    "compressed-tensors the `accelerate` package must be installed, "
+                    "run `pip install compressed-tensors[accelerate]`"
+                )
+
+            offloaded = True
+            hook = module._hf_hook
+            prefix_dict = module._hf_hook.weights_map
+            new_prefix = {}
+
+            # recreate the prefix dict (since it is immutable)
+            # and add quantization parameters
+            for key, data in module.named_parameters():
+                if key not in prefix_dict:
+                    new_prefix[f"{prefix_dict.prefix}{key}"] = data
+                else:
+                    new_prefix[f"{prefix_dict.prefix}{key}"] = prefix_dict[key]
+            new_prefix_dict = PrefixedDataset(new_prefix, prefix_dict.prefix)
+            remove_hook_from_module(module)
+
+        # wrap forward call of module to perform quantized actions based on calltime status
+        wrap_module_forward_quantized(module, scheme)
+
+        if offloaded:
+            # we need to re-add the hook for offloading now that we've wrapped forward
+            add_hook_to_module(module, hook)
+            if prefix_dict is not None:
+                module._hf_hook.weights_map = new_prefix_dict
 
 
 def _initialize_scale_zero_point_observer(
@@ -199,3 +197,11 @@ def _register_kv_cache_to_registry(args: QuantizationArgs):
     name = "kv-cache"
     if name not in cache.registered_names():
         QuantizedCache.register_value(value=cache, name=name)
+
+
+def is_attention_module(module: Module):
+    return "attention" in module.__class__.__name__.lower() and (
+        hasattr(module, "k_proj")
+        or hasattr(module, "v_proj")
+        or hasattr(module, "qkv_proj")
+    )
