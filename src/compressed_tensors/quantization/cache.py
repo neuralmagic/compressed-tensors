@@ -13,15 +13,13 @@
 # limitations under the License.
 
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+from compressed_tensors.quantization.observers import Observer
+from compressed_tensors.quantization.quant_args import QuantizationArgs
 from torch import Tensor
 from transformers import DynamicCache as HFDyanmicCache
-
-
-# from compressed_tensors.quantization.observers import Observer
-# from compressed_tensors.quantization.quant_args import QuantizationArgs
 
 
 class QuantizedCache(HFDyanmicCache):
@@ -49,6 +47,7 @@ class QuantizedCache(HFDyanmicCache):
     """
 
     _instance = None
+    _initialized = False
 
     def __new__(cls, *args, **kwargs):
         """Singleton"""
@@ -56,23 +55,17 @@ class QuantizedCache(HFDyanmicCache):
             cls._instance = super(QuantizedCache, cls).__new__(cls)
         return cls._instance
 
-    # def __init__(self, quantization_args: QuantizationArgs):
-    def __init__(self, quantization_args):
-        if not hasattr(
-            self, "_initialized"
-        ):  # Ensure attributes are initialized only once
+    def __init__(self, quantization_args: QuantizationArgs):
+        if not self._initialized:
             super().__init__()
 
-            self._quantized_key_cache: List[torch.Tensor] = []
-            self._quantized_value_cache: List[torch.Tensor] = []
+            self._quantized_key_cache: List[Tensor] = []
+            self._quantized_value_cache: List[Tensor] = []
 
             self.quantization_args = quantization_args
 
-            # self.k_observers: List[Observer] = []
-            # self.v_observers: List[Observer] = []
-
-            self.k_observers: List = []
-            self.v_observers: List = []
+            self.k_observers: List[Observer] = []
+            self.v_observers: List[Observer] = []
 
             self.k_scales: List[
                 Tensor
@@ -82,15 +75,15 @@ class QuantizedCache(HFDyanmicCache):
             self.k_zps: List[Tensor] = []
             self.v_zps: List[Tensor] = []
 
-            self._initialized = True  # Mark the instance as initialized
+            self._initialized = True
 
     def update(
         self,
-        key_states: torch.Tensor,
-        value_states: torch.Tensor,
+        key_states: Tensor,
+        value_states: Tensor,
         layer_idx: int,
         cache_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[Tensor, Tensor]:
         # Update the number of seen tokens
         if layer_idx == 0:
             self._seen_tokens += key_states.shape[-2]
@@ -159,23 +152,28 @@ class QuantizedCache(HFDyanmicCache):
         return keys_to_return, values_to_return
 
     def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:
-        """Returns the sequence length of the cached states. A layer index can be optionally passed."""
+        """
+        Returns the sequence length of the cached states.
+        A layer index can be optionally passed.
+        """
         if len(self.key_cache) <= layer_idx:
             return 0
-        # since we cannot get the seq_length of each layer directly and rely on `_seen_tokens` which is
-        # updated every "layer_idx" == 0, this is a hack to get the actual seq_length for the given layer_idx
-        # this part of code otherwise fails when used to verify attn_weight shape in some models
+        # since we cannot get the seq_length of each layer directly and
+        # rely on `_seen_tokens` which is updated every "layer_idx" == 0,
+        # this is a hack to get the actual seq_length for the given layer_idx
+        # this part of code otherwise fails when used to
+        # verify attn_weight shape in some models
         return self._seen_tokens if layer_idx == 0 else self._seen_tokens - 1
 
-    def reset(self):
+    def reset_states(self):
         """reset the kv states (used in calibration)"""
-        self.key_cache: List[torch.Tensor] = []
-        self.value_cache: List[torch.Tensor] = []
+        self.key_cache: List[Tensor] = []
+        self.value_cache: List[Tensor] = []
         self._seen_tokens = (
             0  # Used in `generate` to keep tally of how many tokens the cache has seen
         )
-        self._quantized_key_cache: List[torch.Tensor] = []
-        self._quantized_value_cache: List[torch.Tensor] = []
+        self._quantized_key_cache: List[Tensor] = []
+        self._quantized_value_cache: List[Tensor] = []
 
     def _quantize(self, tensor, kv_type, layer_idx):
         """Quantizes a key/value using a defined quantization method."""

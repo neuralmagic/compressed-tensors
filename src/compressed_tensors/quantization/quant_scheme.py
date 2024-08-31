@@ -67,14 +67,12 @@ class QuantizationScheme(BaseModel):
         # Do not quantize the output activations
         # by default
         output_activations = None
-        kv_cache = None
 
         return cls(
             targets=targets,
             weights=weights,
             input_activations=input_activations,
             output_activations=output_activations,
-            kv_cache=kv_cache,
         )
 
 

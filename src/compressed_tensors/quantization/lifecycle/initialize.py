@@ -61,7 +61,8 @@ def initialize_module_for_quantization(
         return
 
     if is_attention_module(module):
-        # wrap forward call of module to perform quantized actions based on calltime status
+        # wrap forward call of module to perform
+        # quantized actions based on calltime status
         wrap_module_forward_quantized_attn(module, scheme)
     else:
 
@@ -120,7 +121,8 @@ def initialize_module_for_quantization(
             new_prefix_dict = PrefixedDataset(new_prefix, prefix_dict.prefix)
             remove_hook_from_module(module)
 
-        # wrap forward call of module to perform quantized actions based on calltime status
+        # wrap forward call of module to perform
+        # quantized actions based on calltime status
         wrap_module_forward_quantized(module, scheme)
 
         if offloaded:
@@ -184,19 +186,6 @@ def _initialize_scale_zero_point_observer(
             requires_grad=False,
         )
         module.register_parameter(f"{base_name}_g_idx", init_g_idx)
-
-
-def _register_kv_cache_to_registry(args: QuantizationArgs):
-    """
-    Register KV Cache in registry. Should only be called if
-    kv_cache_scheme is defined in the recipe
-    """
-    from compressed_tensors.quantization.cache import QuantizedCache
-
-    cache = QuantizedCache(args)
-    name = "kv-cache"
-    if name not in cache.registered_names():
-        QuantizedCache.register_value(value=cache, name=name)
 
 
 def is_attention_module(module: Module):

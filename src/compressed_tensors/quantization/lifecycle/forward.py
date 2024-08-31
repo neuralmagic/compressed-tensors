@@ -14,7 +14,7 @@
 
 from functools import wraps
 from math import ceil
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 from compressed_tensors.quantization.observers.helpers import calculate_range
@@ -295,14 +295,15 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             input_, *args[1:], **kwargs
         )
 
-        if scheme.output_activations is not None:
+        if scheme.output_activations is not None and not is_kv_cache_quant_scheme(
+            scheme
+        ):
             # calibrate and (fake) quantize output activations when applicable
-
-            # kv_cache observers updated on model's forward call
-            if not is_kv_cache_quant_scheme(scheme):
-                output = maybe_calibrate_or_quantize(
-                    module, output, "output", scheme.output_activations
-                )
+            # kv_cache scales updated on model self_attn forward call in
+            # wrap_module_forward_quantized_attn
+            output = maybe_calibrate_or_quantize(
+                module, output, "output", scheme.output_activations
+            )
 
         # restore back to unquantized_value
         if scheme.weights is not None:
@@ -328,16 +329,14 @@ def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationSchem
     def wrapped_forward(self, *args, **kwargs):
 
         past_key_value = scheme.output_activations.get_kv_cache()
-        # print(hex(id(past_key_value))) # 0x7f74669e6500
-        # breakpoint()
         kwargs["past_key_value"] = past_key_value
         kwargs["use_cache"] = past_key_value is not None
 
-        attn_module = forward_func_orig.__get__(module, module.__class__)
+        attn_forward: Callable = forward_func_orig.__get__(module, module.__class__)
 
-        past_key_value.reset()
+        past_key_value.reset_states()
 
-        rtn = attn_module(*args, **kwargs)
+        rtn = attn_forward(*args, **kwargs)
 
         self.k_scale = past_key_value.k_scales[module.layer_idx]
         self.v_scale = past_key_value.v_scales[module.layer_idx]

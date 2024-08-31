@@ -128,12 +128,11 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
     # list of submodules to ignore
     ignored_submodules = defaultdict(list)
     # mark appropriate layers for quantization by setting their quantization schemes
-    # for name, submodule in iter_named_leaf_modules(model):
     for name, submodule in iter_named_modules(
         model,
         include_children=True,
         include_attn=True,
-    ):  # all the modules, self_attn + leaf
+    ):  # child modules and attention modules
         # potentially fix module name to remove FSDP wrapper prefix
         name = fix_fsdp_module_name(name)
         if matches := find_name_or_class_matches(name, submodule, config.ignore):
@@ -143,8 +142,9 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
 
         targets = find_name_or_class_matches(name, submodule, target_to_scheme)
 
-        if targets:  # if targets and leaf
-            # target matched - add layer and scheme to target list
+        if targets:
+            # mark modules to be quantized by adding
+            # quant scheme to the matching layers
             submodule.quantization_scheme = _scheme_from_targets(
                 target_to_scheme, targets, name
             )
@@ -157,8 +157,8 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
                 "not found in the model: "
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
-    # apply current quantization status across all targeted layers
 
+    # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
     return names_to_scheme
 
@@ -207,8 +207,6 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
         model.apply(initialize_module_for_quantization)
-        # add self_attn mapper here
-        # model.apply(initialize_module_for_attn_quantization)
 
     if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
         # only quantize weights up front when our end goal state is calibration,
@@ -316,10 +314,6 @@ def _scheme_from_targets(
         # if `targets` iterable contains a single element
         # use it as the key
 
-        # if name.endswith("self_attn"):
-        #     scheme = target_to_scheme[targets[0]]
-        #     args = scheme.output_activations
-        # args.set_kv_cache()
         return target_to_scheme[targets[0]]
 
     # otherwise, we need to merge QuantizationSchemes corresponding
