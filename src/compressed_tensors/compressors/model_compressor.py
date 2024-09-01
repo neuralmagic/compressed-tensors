@@ -37,7 +37,7 @@ from compressed_tensors.quantization import (
 )
 from compressed_tensors.quantization.utils import (
     is_module_quantized,
-    iter_named_leaf_modules,
+    iter_named_modules,
 )
 from compressed_tensors.utils import get_safetensors_folder, update_parameter_data
 from compressed_tensors.utils.helpers import fix_fsdp_module_name
@@ -326,7 +326,7 @@ class ModelCompressor:
 
 def map_modules_to_quant_args(model: Module) -> Dict:
     quantized_modules_to_args = {}
-    for name, submodule in iter_named_leaf_modules(model):
+    for name, submodule in iter_named_modules(model):
         if is_module_quantized(submodule):
             if submodule.quantization_scheme.weights is not None:
                 name = fix_fsdp_module_name(name)

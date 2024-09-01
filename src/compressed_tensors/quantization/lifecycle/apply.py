@@ -42,7 +42,6 @@ from compressed_tensors.quantization.utils import (
     KV_CACHE_TARGETS,
     infer_quantization_status,
     is_kv_cache_quant_scheme,
-    iter_named_leaf_modules,
     iter_named_modules,
 )
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
@@ -77,7 +76,7 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
     model_path = get_safetensors_folder(model_name_or_path)
     state_dict = get_quantization_state_dict(model_path)
 
-    for name, submodule in iter_named_leaf_modules(model):
+    for name, submodule in iter_named_modules(model):
         if not is_module_quantized(submodule):
             continue
         if submodule.quantization_scheme.weights is not None:

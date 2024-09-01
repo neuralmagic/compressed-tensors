@@ -25,8 +25,9 @@ from transformers import DynamicCache as HFDyanmicCache
 class QuantizedCache(HFDyanmicCache):
     """
     Quantized KV cache used in the forward call based on HF's dynamic cache.
+    Singleton, so that the same cache gets reused in all forward call of self_attn.
     Each time forward is called, .update() is called, and ._quantize(), ._dequantize()
-    gets called appropriately
+     gets called appropriately.
     Triggered by adding kv_cache_scheme in the recipe.
 
     Example:
@@ -174,6 +175,13 @@ class QuantizedCache(HFDyanmicCache):
         )
         self._quantized_key_cache: List[Tensor] = []
         self._quantized_value_cache: List[Tensor] = []
+
+    def reset(self):
+        """
+        Reset the instantiation, create new instance on init
+        """
+        self._instance = None
+        self._initialized = False
 
     def _quantize(self, tensor, kv_type, layer_idx):
         """Quantizes a key/value using a defined quantization method."""

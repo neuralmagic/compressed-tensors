@@ -28,7 +28,6 @@ __all__ = [
     "infer_quantization_status",
     "is_module_quantized",
     "is_model_quantized",
-    "iter_named_leaf_modules",
     "module_type",
     "calculate_compression_ratio",
     "get_torch_bit_depth",
@@ -90,7 +89,7 @@ def is_model_quantized(model: Module) -> bool:
     :return: True if model is quantized, False otherwise
     """
 
-    for _, submodule in iter_named_leaf_modules(model):
+    for _, submodule in iter_named_modules(model):
         if is_module_quantized(submodule):
             return True
 
@@ -105,28 +104,6 @@ def module_type(module: Module) -> str:
     :return: module type as a string
     """
     return type(module).__name__
-
-
-def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None, None]:
-    """
-    Yields modules that do not have any submodules except observers. The observers
-    themselves are not yielded
-
-    :param model: model to get leaf modules of
-    :returns: generator tuple of (name, leaf_submodule)
-    """
-    for name, submodule in model.named_modules():
-        children = list(submodule.children())
-        if len(children) == 0 and not isinstance(submodule, Observer):
-            yield name, submodule
-        else:
-            has_non_observer_children = False
-            for child in children:
-                if not isinstance(child, Observer):
-                    has_non_observer_children = True
-
-            if not has_non_observer_children:
-                yield name, submodule
 
 
 def iter_named_modules(
@@ -148,8 +125,6 @@ def iter_named_modules(
         if include_attn:
             if name.endswith("self_attn"):
                 yield name, submodule
-
-    ...
 
 
 def get_torch_bit_depth(value: torch.Tensor) -> int:
@@ -199,7 +174,7 @@ def calculate_compression_ratio(model: Module) -> float:
     total_compressed = 0.0
     total_uncompressed = 0.0
     for name, submodule in tqdm(
-        iter_named_leaf_modules(model),
+        iter_named_modules(model),
         desc="Calculating quantization compression ratio",
     ):
         for parameter in model.parameters():
