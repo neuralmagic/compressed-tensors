@@ -43,7 +43,7 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     is_kv_cache_quant_scheme,
     iter_named_leaf_modules,
-    iter_named_quantizatable_modules,
+    iter_named_quantizable_modules,
 )
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
@@ -136,7 +136,7 @@ def apply_quantization_config(
     # list of submodules to ignore
     ignored_submodules = defaultdict(list)
     # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in iter_named_quantizatable_modules(
+    for name, submodule in iter_named_quantizable_modules(
         model,
         include_children=True,
         include_attn=True,

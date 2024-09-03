@@ -35,7 +35,7 @@ __all__ = [
     "KV_CACHE_TARGETS",
     "is_kv_cache_quant_scheme",
     "iter_named_leaf_modules",
-    "iter_named_quantizatable_modules",
+    "iter_named_quantizable_modules",
 ]
 
 # target the self_attn layer
@@ -130,7 +130,7 @@ def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None
                 yield name, submodule
 
 
-def iter_named_quantizatable_modules(
+def iter_named_quantizable_modules(
     model: Module, include_children: bool = True, include_attn: bool = False
 ) -> Generator[Tuple[str, Module], None, None]:
     for name, submodule in model.named_modules():
