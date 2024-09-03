@@ -110,7 +110,6 @@ def is_preset_scheme(name: str) -> bool:
     """
     return name.upper() in PRESET_SCHEMES
 
-
 UNQUANTIZED = dict()
 
 # 8 bit integer weights and 8 bit activations quantization
