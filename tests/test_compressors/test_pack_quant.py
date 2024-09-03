@@ -33,12 +33,12 @@ from compressed_tensors.quantization import (
     apply_quantization_status,
 )
 from compressed_tensors.quantization.lifecycle.forward import fake_quantize
-from compressed_tensors.quantization.quant_args import ActivationOrderingStrategy
+from compressed_tensors.quantization.quant_args import ActivationOrdering
 from safetensors.torch import save_file
 from torch.nn.modules import Linear, Sequential
 
 
-def get_dummy_quant_config(num_bits=4, strategy=None, group_size=None, actorder=False):
+def get_dummy_quant_config(num_bits=4, strategy=None, group_size=None, actorder=None):
     config_groups = {
         "group_1": QuantizationScheme(
             targets=["Linear"],
@@ -200,9 +200,9 @@ def test_reload_match(tmp_path, num_bits):
 @pytest.mark.parametrize(
     "actorder",
     [
-        ActivationOrderingStrategy.GROUP,
-        ActivationOrderingStrategy.WEIGHT,
-        ActivationOrderingStrategy.OFF,
+        ActivationOrdering.GROUP,
+        ActivationOrdering.WEIGHT,
+        None,
     ],
 )
 def test_actorder_reload_match(actorder, tmp_path):
@@ -221,7 +221,7 @@ def test_actorder_reload_match(actorder, tmp_path):
     apply_quantization_status(model, QuantizationStatus.FROZEN)
 
     # apply gptq
-    if actorder == ActivationOrderingStrategy.GROUP:
+    if actorder == ActivationOrdering.GROUP:
         init_g_idx = make_dummy_g_idx(512, group_size)
         model.dummy.register_parameter("weight_g_idx", init_g_idx)
 

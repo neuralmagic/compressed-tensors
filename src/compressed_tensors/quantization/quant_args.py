@@ -25,7 +25,7 @@ __all__ = [
     "QuantizationStrategy",
     "QuantizationArgs",
     "round_to_quantized_type",
-    "ActivationOrderingStrategy",
+    "ActivationOrdering",
 ]
 
 FP8_DTYPE = torch.float8_e4m3fn
@@ -52,18 +52,17 @@ class QuantizationStrategy(str, Enum):
     TOKEN = "token"
 
 
-class ActivationOrderingStrategy(str, Enum):
+class ActivationOrdering(str, Enum):
     """
     Enum storing strategies for activation ordering
 
-    Weight := only reorder weight, not groups (default)
-    Grouped := reorder groups and weight
-    Off := do not reorder by activations
+    Group: reorder groups and weight\n
+    Weight: only reorder weight, not groups. Slightly lower latency and
+    accuracy compared to group actorder\n
     """
 
-    WEIGHT = "weight"
     GROUP = "group"
-    OFF = "off"
+    WEIGHT = "weight"
 
 
 class QuantizationArgs(BaseModel, use_enum_values=True):
@@ -84,7 +83,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         quantization. Note that enabling dynamic quantization will change the default
         observer to a memoryless one
     :param actorder: whether to apply group quantization in decreasing order of
-        activation. Defaults to False for arbitrary ordering
+        activation. Defaults to None for arbitrary ordering
     """
 
     num_bits: int = 8
@@ -94,7 +93,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     strategy: Optional[QuantizationStrategy] = None
     block_structure: Optional[str] = None
     dynamic: bool = False
-    actorder: Union[ActivationOrderingStrategy, bool] = ActivationOrderingStrategy.OFF
+    actorder: Optional[ActivationOrdering] = None
     observer: str = Field(
         default="minmax",
         description=(
@@ -151,17 +150,9 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return value
 
     @field_validator("actorder", mode="before")
-    def validate_actorder(cls, value) -> ActivationOrderingStrategy:
-        if isinstance(value, bool):
-            # default to weight if True
-            return (
-                ActivationOrderingStrategy.WEIGHT
-                if value
-                else cls.model_fields["actorder"].default
-            )
-
+    def validate_actorder(cls, value) -> Optional[ActivationOrdering]:
         if isinstance(value, str):
-            return ActivationOrderingStrategy(value.lower())
+            return ActivationOrdering(value.lower())
 
         return value
 
@@ -195,10 +186,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 )
 
         # validate activation ordering and strategy
-        if (
-            actorder != ActivationOrderingStrategy.OFF
-            and strategy != QuantizationStrategy.GROUP
-        ):
+        if actorder is not None and strategy != QuantizationStrategy.GROUP:
             raise ValueError(
                 "Must use group quantization strategy in order to apply "
                 "activation ordering"

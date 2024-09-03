@@ -14,7 +14,7 @@
 
 import pytest
 from compressed_tensors.quantization import (
-    ActivationOrderingStrategy,
+    ActivationOrdering,
     QuantizationArgs,
     QuantizationStrategy,
     QuantizationType,
@@ -64,16 +64,15 @@ def test_enums():
     assert QuantizationArgs(
         type=QuantizationType.INT,
         strategy=QuantizationStrategy.GROUP,
-        actorder=ActivationOrderingStrategy.WEIGHT,
+        actorder=ActivationOrdering.WEIGHT,
         group_size=1,
     ) == QuantizationArgs(type="InT", strategy="GROUP", actorder="weight", group_size=1)
 
 
 def test_actorder():
     # test group inference with actorder
-    args = QuantizationArgs(group_size=128, actorder=True)
+    args = QuantizationArgs(group_size=128, actorder=ActivationOrdering.GROUP)
     assert args.strategy == QuantizationStrategy.GROUP
-    assert args.actorder
 
     # test invalid pairings
     with pytest.raises(ValueError):
@@ -86,12 +85,9 @@ def test_actorder():
     # test boolean defaulting
     assert (
         QuantizationArgs(group_size=1, actorder=True).actorder
-        == ActivationOrderingStrategy.WEIGHT
+        == ActivationOrdering.WEIGHT
     )
-    assert (
-        QuantizationArgs(group_size=1, actorder=False).actorder
-        == ActivationOrderingStrategy.OFF
-    )
+    assert QuantizationArgs(group_size=1, actorder=False).actorder is None
 
 
 def test_invalid():
