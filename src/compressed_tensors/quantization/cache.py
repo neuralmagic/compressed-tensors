@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -22,12 +23,22 @@ from torch import Tensor
 from transformers import DynamicCache as HFDyanmicCache
 
 
+class KVCacheScaleType(Enum):
+    KEY = "k_scale"
+    VALUE = "v_scale"
+
+
 class QuantizedCache(HFDyanmicCache):
     """
     Quantized KV cache used in the forward call based on HF's dynamic cache.
+    Quantization strategy (tensor, group, channel) set from Quantization arg's strategy
     Singleton, so that the same cache gets reused in all forward call of self_attn.
     Each time forward is called, .update() is called, and ._quantize(), ._dequantize()
      gets called appropriately.
+    The size of tensor is
+     `[batch_size, num_heads, seq_len - residual_length, head_dim]`.
+
+
     Triggered by adding kv_cache_scheme in the recipe.
 
     Example:
@@ -56,9 +67,11 @@ class QuantizedCache(HFDyanmicCache):
             cls._instance = super(QuantizedCache, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, quantization_args: QuantizationArgs):
+    def __init__(self, quantization_args: QuantizationArgs, residual_length: int = 128):
         if not self._initialized:
             super().__init__()
+
+            self.residual_length = 128
 
             self._quantized_key_cache: List[Tensor] = []
             self._quantized_value_cache: List[Tensor] = []
@@ -98,10 +111,14 @@ class QuantizedCache(HFDyanmicCache):
                 self.v_observers.append(v_observer)
 
             self._quantized_key_cache.append(
-                self._quantize(key_states.contiguous(), "key", layer_idx),
+                self._quantize(
+                    key_states.contiguous(), KVCacheScaleType.KEY, layer_idx
+                ),
             )
             self._quantized_value_cache.append(
-                self._quantize(value_states.contiguous(), "value", layer_idx)
+                self._quantize(
+                    value_states.contiguous(), KVCacheScaleType.VALUE, layer_idx
+                )
             )
             self.key_cache.append(
                 torch.zeros(0, dtype=key_states.dtype, device=key_states.device)
@@ -112,10 +129,12 @@ class QuantizedCache(HFDyanmicCache):
             keys_to_return, values_to_return = key_states, value_states
         else:
             dequant_key = self._dequantize(
-                self._quantized_key_cache[layer_idx], "key", layer_idx
+                self._quantized_key_cache[layer_idx], KVCacheScaleType.KEY, layer_idx
             )
             dequant_value = self._dequantize(
-                self._quantized_value_cache[layer_idx], "value", layer_idx
+                self._quantized_value_cache[layer_idx],
+                KVCacheScaleType.VALUE,
+                layer_idx,
             )
             keys_to_return = [dequant_key, self.key_cache[layer_idx], key_states]
             values_to_return = [
@@ -126,15 +145,18 @@ class QuantizedCache(HFDyanmicCache):
 
             keys_to_return = torch.cat(keys_to_return, dim=-2)
             values_to_return = torch.cat(values_to_return, dim=-2)
+
+            # Update/reset the cache's states for next token
+            #  self.key_cache[layer_idx].shape[-2] := seq_len - residual_length
             if (
                 self.key_cache[layer_idx].dim() == 4
                 and self.key_cache[layer_idx].shape[-2] + 1 >= self.residual_length
             ):
                 self._quantized_key_cache[layer_idx] = self._quantize(
-                    keys_to_return.contiguous(), kv_type="key"
+                    keys_to_return.contiguous(), kv_type=KVCacheScaleType.KEY
                 )
                 self._quantized_value_cache[layer_idx] = self._quantize(
-                    values_to_return.contiguous(), kv_type="value"
+                    values_to_return.contiguous(), kv_type=KVCacheScaleType.VALUE
                 )
                 self.key_cache[layer_idx] = torch.zeros(
                     0, dtype=key_states.dtype, device=key_states.device
@@ -180,18 +202,14 @@ class QuantizedCache(HFDyanmicCache):
         """
         Reset the instantiation, create new instance on init
         """
-        self._instance = None
-        self._initialized = False
+        QuantizedCache._instance = None
+        QuantizedCache._initialized = False
 
     def _quantize(self, tensor, kv_type, layer_idx):
         """Quantizes a key/value using a defined quantization method."""
-        from compressed_tensors.quantization.lifecycle.forward import (
-            process_quantization,
-        )
+        from compressed_tensors.quantization.lifecycle.forward import quantize
 
-        do_quantize = True
-        do_dequantize = False
-        if kv_type == "key":  # key type
+        if kv_type == KVCacheScaleType.KEY:  # key type
             observer = self.k_observers[layer_idx]
             scales = self.k_scales
             zps = self.k_zps
@@ -208,37 +226,29 @@ class QuantizedCache(HFDyanmicCache):
             scales[layer_idx] = scale
             zps[layer_idx] = scale
 
-        q_tensor = process_quantization(
+        q_tensor = quantize(
             x=tensor,
             scale=scale,
             zero_point=zp,
             args=self.quantization_args,
-            do_quantize=do_quantize,
-            do_dequantize=do_dequantize,
         )
         return q_tensor
 
     def _dequantize(self, qtensor, kv_type, layer_idx):
         """Dequantizes back the tensor that was quantized by `self._quantize()`"""
-        from compressed_tensors.quantization.lifecycle.forward import (
-            process_quantization,
-        )
+        from compressed_tensors.quantization.lifecycle.forward import dequantize
 
-        do_quantize = False
-        do_dequantize = True
-        if kv_type == "key":
+        if kv_type == KVCacheScaleType.KEY:
             scale = self.k_scales[layer_idx]
             zp = self.k_zps[layer_idx]
         else:
             scale = self.v_scales[layer_idx]
             zp = self.v_zps[layer_idx]
 
-        qdq_tensor = process_quantization(
+        qdq_tensor = dequantize(
             x=qtensor,
             scale=scale,
             zero_point=zp,
             args=self.quantization_args,
-            do_quantize=do_quantize,
-            do_dequantize=do_dequantize,
         )
         return qdq_tensor

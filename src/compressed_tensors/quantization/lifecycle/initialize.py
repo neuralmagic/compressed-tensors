@@ -17,6 +17,7 @@ import logging
 from typing import Optional
 
 import torch
+from compressed_tensors.quantization.cache import KVCacheScaleType
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
     wrap_module_forward_quantized_attn,
@@ -67,6 +68,8 @@ def initialize_module_for_quantization(
         # wrap forward call of module to perform
         # quantized actions based on calltime status
         wrap_module_forward_quantized_attn(module, scheme)
+        _initialize_attn_scales(module)
+
     else:
 
         if scheme.input_activations is not None:
@@ -202,3 +205,26 @@ def is_attention_module(module: Module):
         or hasattr(module, "v_proj")
         or hasattr(module, "qkv_proj")
     )
+
+
+def _initialize_attn_scales(module: Module) -> None:
+    """Initlaize k_scale, v_scale for  self_attn"""
+
+    expected_shape = 1  # per tensor
+
+    param = next(module.parameters())
+    scale_dtype = param.dtype
+    device = param.device
+
+    init_scale = Parameter(
+        torch.empty(expected_shape, dtype=scale_dtype, device=device),
+        requires_grad=False,
+    )
+
+    module.register_parameter(KVCacheScaleType.KEY.VALUE, init_scale)
+
+    init_scale = Parameter(
+        torch.empty(expected_shape, dtype=scale_dtype, device=device),
+        requires_grad=False,
+    )
+    module.register_parameter(KVCacheScaleType.VALUE.VALUE, init_scale)

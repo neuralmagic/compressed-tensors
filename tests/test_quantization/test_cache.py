@@ -78,3 +78,39 @@ def test_update():
     assert len(cache.v_observers) == 2
 
     cache.reset()
+
+
+def test_cache_reset():
+    nbits = 8
+    args = QuantizationArgs(nbits=nbits, symmetric=True)
+    cache: QuantizedCache = args.get_kv_cache()
+
+    max_key_states_val = 1.0
+    max_value_states_val = 2.0
+    key_states = torch.cat(
+        (max_key_states_val * torch.ones(1, 2, 2), torch.ones(1, 2, 2)), dim=0
+    )
+    value_states = torch.cat(
+        (max_value_states_val * torch.ones(1, 2, 2), torch.ones(1, 2, 2)), dim=0
+    )
+    layer_idx = 0
+
+    cache.update(key_states, value_states, layer_idx)
+    assert len(cache.k_scales) == 1
+    assert len(cache.v_scales) == 1
+
+    assert len(cache.k_observers) == 1
+    assert len(cache.v_observers) == 1
+
+    cache.reset()
+
+    # new instance, different memory addr
+    different_cache: QuantizedCache = args.get_kv_cache()
+
+    assert len(different_cache.k_scales) == 0
+    assert len(different_cache.v_scales) == 0
+
+    assert len(different_cache.k_observers) == 0
+    assert len(different_cache.v_observers) == 0
+
+    assert hex(id(cache)) != hex(id(different_cache))

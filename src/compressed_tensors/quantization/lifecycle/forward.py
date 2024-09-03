@@ -25,7 +25,6 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
 from compressed_tensors.utils import safe_permute, update_parameter_data
 from torch.nn import Module
 
@@ -36,7 +35,6 @@ __all__ = [
     "fake_quantize",
     "wrap_module_forward_quantized",
     "maybe_calibrate_or_quantize",
-    "process_quantization",
 ]
 
 
@@ -65,7 +63,7 @@ def quantize(
     :return: fake quantized tensor
     """
 
-    return process_quantization(
+    return _process_quantization(
         x=x,
         scale=scale,
         zero_point=zero_point,
@@ -118,7 +116,7 @@ def dequantize(
     if dtype is None:
         dtype = scale.dtype
 
-    return process_quantization(
+    return _process_quantization(
         x=x_q,
         scale=scale,
         zero_point=zero_point,
@@ -152,7 +150,7 @@ def fake_quantize(
     :param g_idx: optional mapping from column index to group index
     :return: fake quantized tensor
     """
-    return process_quantization(
+    return _process_quantization(
         x=x,
         scale=scale,
         zero_point=zero_point,
@@ -164,7 +162,7 @@ def fake_quantize(
 
 
 @torch.no_grad()
-def process_quantization(
+def _process_quantization(
     x: torch.Tensor,
     scale: torch.Tensor,
     zero_point: torch.Tensor,
@@ -289,9 +287,8 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             input_, *args[1:], **kwargs
         )
 
-        if scheme.output_activations is not None and not is_kv_cache_quant_scheme(
-            scheme
-        ):
+        if scheme.output_activations is not None:
+
             # calibrate and (fake) quantize output activations when applicable
             # kv_cache scales updated on model self_attn forward call in
             # wrap_module_forward_quantized_attn
@@ -332,8 +329,12 @@ def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationSchem
 
         rtn = attn_forward(*args, **kwargs)
 
-        self.k_scale = past_key_value.k_scales[module.layer_idx]
-        self.v_scale = past_key_value.v_scales[module.layer_idx]
+        update_parameter_data(
+            module, past_key_value.k_scales[module.layer_idx], "k_scale"
+        )
+        update_parameter_data(
+            module, past_key_value.v_scales[module.layer_idx], "v_scale"
+        )
 
         return rtn
 
