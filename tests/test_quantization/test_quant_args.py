@@ -76,18 +76,18 @@ def test_actorder():
 
     # test invalid pairings
     with pytest.raises(ValueError):
-        QuantizationArgs(group_size=None, actorder=True)
+        QuantizationArgs(group_size=None, actorder="weight")
     with pytest.raises(ValueError):
-        QuantizationArgs(group_size=-1, actorder=True)
+        QuantizationArgs(group_size=-1, actorder="weight")
     with pytest.raises(ValueError):
-        QuantizationArgs(strategy="tensor", actorder=True)
+        QuantizationArgs(strategy="tensor", actorder="weight")
 
     # test boolean defaulting
     assert (
-        QuantizationArgs(group_size=1, actorder=True).actorder
+        QuantizationArgs(group_size=1, actorder="weight").actorder
         == ActivationOrdering.WEIGHT
     )
-    assert QuantizationArgs(group_size=1, actorder=False).actorder is None
+    assert QuantizationArgs(group_size=1, actorder=None).actorder is None
 
 
 def test_invalid():
