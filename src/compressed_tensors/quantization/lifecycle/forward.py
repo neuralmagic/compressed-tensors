@@ -17,6 +17,7 @@ from math import ceil
 from typing import Callable, Optional
 
 import torch
+from compressed_tensors.quantization.cache import QuantizedCache
 from compressed_tensors.quantization.observers.helpers import calculate_range
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
@@ -319,7 +320,9 @@ def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationSchem
     @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
     def wrapped_forward(self, *args, **kwargs):
 
-        past_key_value = scheme.output_activations.get_kv_cache()
+        # kv cache stored under weights
+        quantization_args: QuantizationArgs = scheme.output_activations
+        past_key_value: QuantizedCache = quantization_args.get_kv_cache()
         kwargs["past_key_value"] = past_key_value
         kwargs["use_cache"] = past_key_value is not None
 

@@ -48,6 +48,7 @@ from compressed_tensors.quantization.utils import (
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
+from loguru import logger
 from torch.nn import Module
 
 
@@ -167,7 +168,6 @@ def apply_quantization_config(
                         replace_module(model, name, compressed_linear)
 
             # target matched - add layer and scheme to target list
-
             submodule.quantization_scheme = _scheme_from_targets(
                 target_to_scheme, targets, name
             )
@@ -210,6 +210,9 @@ def process_kv_cache_config(
     :param config: the QuantizationConfig
     :return: the QuantizationConfig with additional "kv_cache" group
     """
+    if targets == KV_CACHE_TARGETS:
+        logger.info(f"KV cache targets set to default value of: {KV_CACHE_TARGETS}")
+
     kv_cache_dict = config.kv_cache_scheme.model_dump()
     kv_cache_scheme = QuantizationScheme(
         output_activations=QuantizationArgs(**kv_cache_dict),
@@ -342,7 +345,6 @@ def _scheme_from_targets(
     if len(targets) == 1:
         # if `targets` iterable contains a single element
         # use it as the key
-
         return target_to_scheme[targets[0]]
 
     # otherwise, we need to merge QuantizationSchemes corresponding

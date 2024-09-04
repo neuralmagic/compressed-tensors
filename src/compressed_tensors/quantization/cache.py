@@ -81,9 +81,8 @@ class QuantizedCache(HFDyanmicCache):
             self.k_observers: List[Observer] = []
             self.v_observers: List[Observer] = []
 
-            self.k_scales: List[
-                Tensor
-            ] = []  # each index corresponds to layer_idx of the attention layer
+            # each index corresponds to layer_idx of the attention layer
+            self.k_scales: List[Tensor] = []
             self.v_scales: List[Tensor] = []
 
             self.k_zps: List[Tensor] = []
@@ -192,9 +191,8 @@ class QuantizedCache(HFDyanmicCache):
         """reset the kv states (used in calibration)"""
         self.key_cache: List[Tensor] = []
         self.value_cache: List[Tensor] = []
-        self._seen_tokens = (
-            0  # Used in `generate` to keep tally of how many tokens the cache has seen
-        )
+        # Used in `generate` to keep tally of how many tokens the cache has seen
+        self._seen_tokens = 0
         self._quantized_key_cache: List[Tensor] = []
         self._quantized_value_cache: List[Tensor] = []
 

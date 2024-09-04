@@ -133,6 +133,16 @@ def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None
 def iter_named_quantizable_modules(
     model: Module, include_children: bool = True, include_attn: bool = False
 ) -> Generator[Tuple[str, Module], None, None]:
+    """
+    Yield name and submodule of
+    - leaf modules, set by include_children
+    - attention modyles, set by include_attn
+
+    :param model: model to get leaf modules of
+    :param include_children: flag to get the leaf modules
+    :param inlcude_attn: flag to get the attention modules
+    :returns: generator tuple of (name, submodule)
+    """
     for name, submodule in model.named_modules():
         if include_children:
             children = list(submodule.children())
@@ -230,8 +240,7 @@ def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
     for target in scheme.targets:
         if target in KV_CACHE_TARGETS:
             return True
-        # if re.match(target[3:], KV_CACHE_TARGETS[0]):
-        #     return True
+
     return False
 
 
