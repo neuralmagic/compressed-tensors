@@ -28,7 +28,7 @@ from compressed_tensors.base import (
     SPARSITY_CONFIG_NAME,
 )
 from compressed_tensors.compressors import Compressor
-from compressed_tensors.config import SparsityCompressionConfig
+from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationStatus,
@@ -176,6 +176,9 @@ class ModelCompressor:
         if hasattr(compression_config, SPARSITY_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, SPARSITY_CONFIG_NAME)
+        if SPARSITY_CONFIG_NAME in compression_config:
+            # for loaded HFQuantizer config from dict
+            return compression_config[SPARSITY_CONFIG_NAME]
 
         # SparseAutoModel format
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
@@ -188,6 +191,10 @@ class ModelCompressor:
         if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
+
+        if QUANTIZATION_CONFIG_NAME in compression_config:
+            # for loaded HFQuantizer config from dict
+            return compression_config[QUANTIZATION_CONFIG_NAME]
 
         # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
@@ -234,6 +241,10 @@ class ModelCompressor:
             compressed_state_dict = self.quantization_compressor.compress(
                 state_dict, names_to_scheme=quantized_modules_to_args
             )
+            if self.quantization_config.format != CompressionFormat.dense.value:
+                self.quantization_config.quantization_status = (
+                    QuantizationStatus.COMPRESSED
+                )
 
         if self.sparsity_compressor is not None:
             compressed_state_dict = self.sparsity_compressor.compress(
@@ -247,7 +258,10 @@ class ModelCompressor:
         # Example:
         #  Replace `model.layers.0.self_attn.k_proj.output_scale`
         #  with    `model.layers.0.self_attn.k_scale`
-        if self.quantization_config.kv_cache_scheme is not None:
+        if (
+            self.quantization_config is not None
+            and self.quantization_config.kv_cache_scheme is not None
+        ):
             # HACK (mgoin): We assume the quantized modules in question
             # will be k_proj and v_proj since those are the default targets.
             # We check that both of these modules have output activation
@@ -257,6 +271,9 @@ class ModelCompressor:
             v_proj_has_quant_output = 0
             for name, module in model.named_modules():
                 if not hasattr(module, "quantization_scheme"):
+                    # We still want to count non-quantized q_proj
+                    if name.endswith(".q_proj"):
+                        q_proj_has_no_quant_output += 1
                     continue
                 out_act = module.quantization_scheme.output_activations
                 if name.endswith(".q_proj") and out_act is None:

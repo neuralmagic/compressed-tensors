@@ -51,7 +51,7 @@ def compress_quantized_weights(module: Module):
     zero_point = getattr(module, "weight_zero_point", None)
     g_idx = getattr(module, "weight_g_idx", None)
 
-    if weight is None or scale is None or zero_point is None:
+    if weight is None or scale is None:
         # no weight, scale, or ZP, nothing to do
 
         # mark as compressed here to maintain consistent status throughout the model
