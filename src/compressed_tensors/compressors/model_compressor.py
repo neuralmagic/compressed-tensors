@@ -341,12 +341,13 @@ class ModelCompressor:
             model.apply(update_status)
             setattr(model, QUANTIZATION_CONFIG_NAME, self.quantization_config)
 
-    def update_config(self, save_directory: str):
+    def update_config(self, save_directory: str, remove_defaults: bool = True):
         """
         Update the model config located at save_directory with compression configs
         for sparsity and/or quantization
 
         :param save_directory: path to a folder containing a HF model config
+        :param remove_defaults: bool to remove the default, null values from the config
         """
         config_file_path = os.path.join(save_directory, CONFIG_NAME)
         if not os.path.exists(config_file_path):
@@ -368,6 +369,15 @@ class ModelCompressor:
             config_data[COMPRESSION_CONFIG_NAME][
                 SPARSITY_CONFIG_NAME
             ] = sparsity_config_data
+
+        # remove default and null values
+        if remove_defaults:
+            compression_config = config_data.get("compression_config", None)
+            if compression_config is not None:
+                quantization_config = QuantizationConfig(**compression_config)
+                trimmed_quantization_config = quantization_config.remove_defaults()
+
+                config_data["compression_config"] = trimmed_quantization_config
 
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)

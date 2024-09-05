@@ -75,6 +75,22 @@ class QuantizationScheme(BaseModel):
             output_activations=output_activations,
         )
 
+    def remove_defaults(self):
+        result = {}
+        for field, value in dict(self).items():
+            if field == "targets" and len(value) == 0:
+                continue
+            if value == None:
+                continue
+
+            if isinstance(value, BaseModel):
+                value = value.remove_defaults()
+
+            # Include non-default or non-empty values
+            if value not in [None, []]:
+                result[field] = value
+        return result
+
 
 """
 Pre-Set Quantization Scheme Args
@@ -109,6 +125,7 @@ def is_preset_scheme(name: str) -> bool:
     :return: True if the name is a preset scheme name
     """
     return name.upper() in PRESET_SCHEMES
+
 
 UNQUANTIZED = dict()
 

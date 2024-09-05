@@ -212,6 +212,17 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         else:
             raise ValueError(f"Invalid quantization type {self.type}")
 
+    def remove_defaults(self):
+        defaults = self.__fields__
+        result = {}
+        for field, value in dict(self).items():
+            if field == "observer_kwargs" and len(value) == 0:
+                continue
+            default = defaults[field].default
+            if value != default and value is not None:
+                result[field] = value
+        return result
+
 
 def round_to_quantized_type(
     tensor: torch.Tensor, args: QuantizationArgs

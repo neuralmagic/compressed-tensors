@@ -250,3 +250,28 @@ class QuantizationConfig(BaseModel):
                     return True
 
         return False
+
+    def remove_defaults(self):
+        defaults = self.__fields__
+        result = {}
+        for field, value in dict(self).items():
+            if value is None:
+                continue
+            if field == "config_groups":
+                outer_value = value
+                value = {}
+                for config_key, config_value in outer_value.items():
+                    config_value = config_value.remove_defaults()
+                    value[config_key] = config_value
+
+            if field == "ignore" and len(value) == 0:
+                continue
+            # Handle nested Pydantic models
+            if isinstance(value, BaseModel):
+                value = value.remove_defaults()
+
+            # # Compare the value with the default value
+            # default = defaults[field].default
+            # if value != default and value is not None:
+            result[field] = value
+        return result
