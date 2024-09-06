@@ -94,6 +94,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     block_structure: Optional[str] = None
     dynamic: bool = False
     actorder: Union[ActivationOrdering, bool, None] = None
+    contiguous_groups: Optional[bool] = None
     observer: str = Field(
         default="minmax",
         description=(
@@ -161,10 +162,11 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
 
     @model_validator(mode="after")
     def validate_model_after(model: "QuantizationArgs") -> Dict[str, Any]:
-        # extract user-passed values from dictionary
+        # extract user-passed values
         strategy = model.strategy
         group_size = model.group_size
         actorder = model.actorder
+        contiguous_groups = model.contiguous_groups
 
         # infer strategy
         if strategy is None:
@@ -195,8 +197,22 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 "activation ordering"
             )
 
+        # DO NOT validate actorder and contiguous_groups, since we do not want
+        # to be responsible for maintaining a list of all activation orderings
+        # with continuous groupings
+
+        # only validate group strategy and contiguous_groups
+        if strategy == QuantizationStrategy.GROUP and contiguous_groups is None:
+            contiguous_groups = True  # assume true
+        elif contiguous_groups is not None and strategy != QuantizationStrategy.GROUP:
+            raise ValueError(
+                "contiguous_groups can only be applied if quantization "
+                "strategy is `group`"
+            )
+
         # write back modified values
         model.strategy = strategy
+        model.contiguous_groups = contiguous_groups
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
