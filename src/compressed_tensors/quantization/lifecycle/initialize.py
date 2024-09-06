@@ -23,6 +23,7 @@ from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized_attn,
 )
 from compressed_tensors.quantization.quant_args import (
+    ActivationOrdering,
     QuantizationArgs,
     QuantizationStrategy,
 )
@@ -188,8 +189,8 @@ def _initialize_scale_zero_point_observer(
         )
         module.register_parameter(f"{base_name}_zero_point", init_zero_point)
 
-    # initialize with empty for actorder, to be populated by GPTQ or state_dict
-    if quantization_args.actorder:
+    # only grouped activation ordering has g_idx
+    if quantization_args.actorder == ActivationOrdering.GROUP:
         g_idx_shape = (weight_shape[1],)
         g_idx_dtype = torch.int
         init_g_idx = Parameter(
