@@ -20,9 +20,6 @@ on:
                 description: "push asset to public pypi."
                 type: boolean
                 default: false
-            testmo_run_id:
-                description: "testmo run id"
-                type: string
 
     workflow_dispatch:
         inputs:
@@ -42,9 +39,6 @@ on:
                 description: "push asset to public pypi."
                 type: boolean
                 default: false
-            testmo_run_id:
-                description: "testmo run id"
-                type: string
 
 jobs:
 
@@ -82,7 +76,7 @@ jobs:
                   version: '>= 473.0.0'
 
             - name: download assets
-              uses: neuralmagic/nm-actions/actions/gcp-download-assets@v1.1.0
+              uses: neuralmagic/nm-actions/actions/gcp-download-assets@newadd
               with:
                 bucket_source: ${{ secrets.GCP_BUILD_ML_ASSETS2 }}
                 run_id: ${{ inputs.run_id }}
