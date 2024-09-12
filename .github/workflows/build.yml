@@ -58,7 +58,6 @@ jobs:
             id-token: 'write'
 
         outputs:
-            assets_location: ${{ secrets.GCP_BUILD_ML_ASSETS2 }}/assets/${{ github.run_id }}
             run_id: ${{ github.run_id }}
             whl: ${{ steps.build.outputs.whl }}
             tarfile: ${{ steps.build.outputs.tarfile }}
@@ -114,8 +113,8 @@ jobs:
 
             - name: copy whl and source distribution
               run: |
-                  gcloud storage cp dist/${{ steps.build.outputs.whlname }} ${{ secrets.GCP_BUILD_ML_ASSETS2 }}/assets/${{ github.run_id }}/${{ steps.build.outputs.whlname }}
-                  gcloud storage cp dist/${{ steps.build.outputs.tarname }} ${{ secrets.GCP_BUILD_ML_ASSETS2 }}/assets/${{ github.run_id }}/${{ steps.build.outputs.tarname }}
+                  gcloud storage cp dist/${{ steps.build.outputs.whlname }} ${{ secrets.GCP_BUILD_ML_ASSETS2 }}/${{ github.run_id }}/${{ steps.build.outputs.whlname }}
+                  gcloud storage cp dist/${{ steps.build.outputs.tarname }} ${{ secrets.GCP_BUILD_ML_ASSETS2 }}/${{ github.run_id }}/${{ steps.build.outputs.tarname }}
 
             - name: upload whl
               uses: actions/upload-artifact@v4
