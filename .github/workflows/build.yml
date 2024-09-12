@@ -69,10 +69,9 @@ jobs:
         steps:
 
             - name: set python
-              id: set_python
               uses: actions/setup-python@v4
               with:
-              python-version: '3.10'
+                  python-version: '3.10'
 
             - name: checkout code
               id: checkout
@@ -116,49 +115,49 @@ jobs:
 
             - name: copy whl and source distribution
               run: |
-                gcloud storage cp dist/${{ steps.build.outputs.whlname }} gs://llm-compressor/assets/${{ github.run_id }}/${{ steps.build.outputs.whlname }}
-                gcloud storage cp dist/${{ steps.build.outputs.tarname }} gs://llm-compressor/assets/${{ github.run_id }}/${{ steps.build.outputs.tarname }}
+                  gcloud storage cp dist/${{ steps.build.outputs.whlname }} gs://llm-compressor/assets/${{ github.run_id }}/${{ steps.build.outputs.whlname }}
+                  gcloud storage cp dist/${{ steps.build.outputs.tarname }} gs://llm-compressor/assets/${{ github.run_id }}/${{ steps.build.outputs.tarname }}
 
             - name: upload whl
               uses: actions/upload-artifact@v4
               if: success() || failure()
               with:
-                name: ${{ steps.build.outputs.whlname }}
-                path: dist/${{ steps.build.outputs.whlname }}
-                retention-days: 5
+                  name: ${{ steps.build.outputs.whlname }}
+                  path: dist/${{ steps.build.outputs.whlname }}
+                  retention-days: 5
 
             - name: upload tar.gz
               uses: actions/upload-artifact@v4
               if: success() || failure()
               with:
-                name: ${{ steps.build.outputs.tarname }}
-                path: dist/${{ steps.build.outputs.tarname }}
-                retention-days: 5
+                  name: ${{ steps.build.outputs.tarname }}
+                  path: dist/${{ steps.build.outputs.tarname }}
+                  retention-days: 5
 
             - name: summary
               uses: neuralmagic/nm-actions/actions/summary-build@newadd
               if: success() || failure()
               with:
-                label: ${{ inputs.build_label }}
-                gitref: ${{ inputs.gitref }}
-                whl_status: ${{ steps.build.outputs.whl_status }}
+                  label: ${{ inputs.build_label }}
+                  gitref: ${{ inputs.gitref }}
+                  whl_status: ${{ steps.build.outputs.whl_status }}
 
             - name: report build status to testmo
               id: report_build
               uses: neuralmagic/nm-actions/actions/testmo-run-submit-thread@newadd
               if: (success() || failure()) && ${{ inputs.testmo_run_id != '' }}
               with:
-                testmo_url: https://neuralmagic.testmo.net
-                testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
-                testmo_run_id: ${{ steps.create_testmo_run.outputs.id }}
-                results: build-results
-                step_status: ${{ steps.build.outputs.whl_status }}
+                  testmo_url: https://neuralmagic.testmo.net
+                  testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
+                  testmo_run_id: ${{ steps.create_testmo_run.outputs.id }}
+                  results: build-results
+                  step_status: ${{ steps.build.outputs.whl_status }}
 
             - name: run status
               id: run_status
               if: success() || failure()
               env:
-                WHL_STATUS: ${{ steps.build.outputs.whl_status }}
+                  WHL_STATUS: ${{ steps.build.outputs.whl_status }}
               run: |
-                echo "build status: ${WHL_STATUS}"
-                if [ -z "${WHL_STATUS}" ] || [ "${WHL_STATUS}" -ne "0" ]; then exit 1; fi
+                  echo "build status: ${WHL_STATUS}"
+                  if [ -z "${WHL_STATUS}" ] || [ "${WHL_STATUS}" -ne "0" ]; then exit 1; fi
