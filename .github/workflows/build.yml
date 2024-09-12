@@ -88,6 +88,7 @@ jobs:
                 testmo_url: https://neuralmagic.testmo.net
                 testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
                 source: 'build-test'
+                project_id: 14
                 run_name: compressedtensors-${{ inputs.wf_category }}-${{ inputs.gitref }}-${GITHUB_ACTOR}
 
             - name: build
