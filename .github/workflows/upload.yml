@@ -1,4 +1,4 @@
-name: upload llmcompressor whl and tar.gz
+name: upload compressed-tensors whl and tar.gz
 run-name: ${{ github.actor }} uploading whl/tar.gz from run ${{ inputs.run_id }}
 on:
 
@@ -92,7 +92,7 @@ jobs:
               uses: neuralmagic/nm-actions/actions/find-asset@v1.1.0
               with:
                 run_id: ${{ inputs.run_id }}
-                asset_identifier: 'llmcompressor*.whl'
+                asset_identifier: 'compressed*.whl'
 
             - name: upload whl to "nm-pypi"
               uses: neuralmagic/nm-actions/actions/gcp-upload-asset@v1.1.0
@@ -105,7 +105,7 @@ jobs:
               uses: neuralmagic/nm-actions/actions/find-asset@v1.1.0
               with:
                 run_id: ${{ inputs.run_id }}
-                asset_identifier: 'llmcompressor*.tar.gz'
+                asset_identifier: 'compressed*.tar.gz'
 
             - name: upload tar.gz to "nm-pypi"
               uses: neuralmagic/nm-actions/actions/gcp-upload-asset@v1.1.0
@@ -143,11 +143,3 @@ jobs:
                 username: ${{ secrets.PYPI_PUBLIC_USER }}
                 password: ${{ secrets.PYPI_PUBLIC_AUTH }}
                 whl: ${{ steps.find-asset-targz.outputs.asset }}
-
-            - name: complete testmo run
-              uses: neuralmagic/nm-actions/actions/testmo-run-complete@v1.0.0
-              if: (success() || failure()) && ${{ inputs.testmo_run_id != '' }}
-              with:
-                  testmo_url: https://neuralmagic.testmo.net
-                  testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
-                  testmo_run_id: ${{ inputs.testmo_run_id }}

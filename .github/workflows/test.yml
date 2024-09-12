@@ -117,6 +117,14 @@ jobs:
                   results: test-results
                   step_status: ${{ steps.test.outputs.status }}
 
+            - name: complete testmo run
+              uses: neuralmagic/nm-actions/actions/testmo-run-complete@newadd
+              if: (success() || failure()) && ${{ inputs.testmo_run_id != '' }}
+              with:
+                  testmo_url: https://neuralmagic.testmo.net
+                  testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
+                  testmo_run_id: ${{ inputs.testmo_run_id }}
+
             - name: summary
               uses: neuralmagic/nm-actions/actions/summary-test@newadd
               if: success() || failure()

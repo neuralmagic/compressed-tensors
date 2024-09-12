@@ -34,7 +34,7 @@ jobs:
         name: ${{ inputs.wf_category || (github.event.schedule == '30 0 * * *' && 'NIGHTLY') }}
         with:
             #wf_category: ${{ inputs.wf_category || (github.event.schedule == '30 0 * * *' && 'NIGHTLY') }}
-            wf_category: ${{ 'RELEASE' || (github.event.schedule == '30 0 * * *' && 'NIGHTLY') }}
+            wf_category: ${{ 'NIGHTLY' || (github.event.schedule == '30 0 * * *' && 'NIGHTLY') }}
             gitref: ${{ inputs.gitref || 'auto' }}
             push_to_pypi: ${{ inputs.push_to_pypi || false }}
 
