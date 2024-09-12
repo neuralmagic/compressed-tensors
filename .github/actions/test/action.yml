@@ -24,7 +24,7 @@ runs:
       # run test
       echo "running tests..."
       rm -rf src
-      make test || SUCCESS=$?
+      pytest tests --junitxml=test-results/report.xml || SUCCESS=$?
       echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
       deactivate
       exit ${SUCCESS}

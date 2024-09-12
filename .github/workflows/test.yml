@@ -114,7 +114,7 @@ jobs:
                   testmo_url: https://neuralmagic.testmo.net
                   testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
                   testmo_run_id: ${{ inputs.testmo_run_id }}
-                  results: llm-compressor/test-results
+                  results: test-results
                   step_status: ${{ steps.test.outputs.status }}
 
             - name: summary
