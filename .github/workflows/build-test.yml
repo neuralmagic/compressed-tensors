@@ -40,13 +40,13 @@ jobs:
             timeout: 20
         secrets: inherit
 
-#    TEST-NIGHTLY:
+#    TEST:
 #        needs: [BUILD]
 #        strategy:
 #            fail-fast: false
 #            matrix:
 #                test_config: ${{ fromJson(inputs.test_configs) }}
-#        uses: ./.github/workflows/test-nightly.yml
+#        uses: ./.github/workflows/test.yml
 #        with:
 #            gitref: ${{ inputs.gitref }}
 #            test_label: ${{ matrix.test_config.label }}
@@ -57,7 +57,7 @@ jobs:
 #        secrets: inherit
 
 #    UPLOAD:
-#        needs: TEST-NIGHTLY
+#        needs: TEST
 #        uses: ./.github/workflows/upload.yml
 #        with:
 #            label: k8s-util
