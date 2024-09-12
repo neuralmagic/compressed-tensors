@@ -53,8 +53,6 @@ jobs:
 
         runs-on: ${{ inputs.build_label }}
         timeout-minutes: ${{ fromJson(inputs.timeout) }}
-        env:
-            HF_TOKEN: ${{ secrets.NM_HF_TOKEN }}
         permissions:
             contents: 'read'
             id-token: 'write'
