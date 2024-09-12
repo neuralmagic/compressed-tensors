@@ -139,7 +139,7 @@ jobs:
               with:
                   label: ${{ inputs.build_label }}
                   gitref: ${{ inputs.gitref }}
-                  whl_status: ${{ steps.build.outputs.whl_status }}
+                  whl_status: ${{ steps.build.outputs.status }}
 
             - name: report build status to testmo
               id: report_build
@@ -150,13 +150,13 @@ jobs:
                   testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
                   testmo_run_id: ${{ steps.create_testmo_run.outputs.id }}
                   results: build-results
-                  step_status: ${{ steps.build.outputs.whl_status }}
+                  step_status: ${{ steps.build.outputs.status }}
 
             - name: run status
               id: run_status
               if: success() || failure()
               env:
-                  WHL_STATUS: ${{ steps.build.outputs.whl_status }}
+                  WHL_STATUS: ${{ steps.build.outputs.status }}
               run: |
                   echo "build status: ${WHL_STATUS}"
                   if [ -z "${WHL_STATUS}" ] || [ "${WHL_STATUS}" -ne "0" ]; then exit 1; fi
