@@ -58,8 +58,8 @@ jobs:
 
         steps:
 
-#            - name: install automation components
-#              uses: neuralmagic/nm-actions/actions/install-automation-components@v1.0.0
+            - name: install automation components
+              uses: neuralmagic/nm-actions/actions/install-automation-components@v1.0.0
 
             - name: set python
               id: set-python
