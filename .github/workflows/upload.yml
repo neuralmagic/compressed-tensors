@@ -63,7 +63,7 @@ jobs:
 
             # GCP
             - name: 'Authenticate to Google Cloud'
-              id: auth
+              id: auth-gcp
               uses: google-github-actions/auth@v2.1.3
               with:
                   project_id: ${{ secrets.GCP_PROJECT }}
@@ -84,7 +84,7 @@ jobs:
 
             # GCP
             - name: 'Authenticate to Google Cloud'
-              id: auth
+              id: auth-pypi
               uses: google-github-actions/auth@v2.1.3
               with:
                   project_id: ${{ secrets.GCP_PROJECT }}
