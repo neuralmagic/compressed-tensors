@@ -122,7 +122,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
 
-
     def get_kv_cache(self):
         """Get the singleton KV Cache"""
         from compressed_tensors.quantization.cache import QuantizedCache
@@ -135,7 +134,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             return QuantizationType(value.lower())
 
         return value
-
 
     @field_validator("group_size", mode="before")
     def validate_group(cls, value) -> Union[int, None]:

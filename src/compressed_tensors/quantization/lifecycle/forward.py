@@ -268,6 +268,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
 
         input_ = args[0]
+
         compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
         if scheme.input_activations is not None:
@@ -287,7 +288,6 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         output = forward_func_orig.__get__(module, module.__class__)(
             input_, *args[1:], **kwargs
         )
-
         if scheme.output_activations is not None:
 
             # calibrate and (fake) quantize output activations when applicable
@@ -321,25 +321,28 @@ def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationSchem
     def wrapped_forward(self, *args, **kwargs):
 
         # kv cache stored under weights
-        quantization_args: QuantizationArgs = scheme.output_activations
-        past_key_value: QuantizedCache = quantization_args.get_kv_cache()
-        kwargs["past_key_value"] = past_key_value
-        kwargs["use_cache"] = past_key_value is not None
+        if module.quantization_status == QuantizationStatus.CALIBRATION:
+            quantization_args: QuantizationArgs = scheme.output_activations
+            past_key_value: QuantizedCache = quantization_args.get_kv_cache()
+            kwargs["past_key_value"] = past_key_value
+            kwargs["use_cache"] = past_key_value is not None
 
-        attn_forward: Callable = forward_func_orig.__get__(module, module.__class__)
+            attn_forward: Callable = forward_func_orig.__get__(module, module.__class__)
 
-        past_key_value.reset_states()
+            past_key_value.reset_states()
 
-        rtn = attn_forward(*args, **kwargs)
+            rtn = attn_forward(*args, **kwargs)
 
-        update_parameter_data(
-            module, past_key_value.k_scales[module.layer_idx], "k_scale"
-        )
-        update_parameter_data(
-            module, past_key_value.v_scales[module.layer_idx], "v_scale"
-        )
+            update_parameter_data(
+                module, past_key_value.k_scales[module.layer_idx], "k_scale"
+            )
+            update_parameter_data(
+                module, past_key_value.v_scales[module.layer_idx], "v_scale"
+            )
 
-        return rtn
+            return rtn
+
+        return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
 
     # bind wrapped forward to module class so reference to `self` is correct
     bound_wrapped_forward = wrapped_forward.__get__(module, module.__class__)
