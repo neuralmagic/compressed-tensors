@@ -40,21 +40,21 @@ jobs:
             timeout: 20
         secrets: inherit
 
-#    TEST:
-#        needs: [BUILD]
-#        strategy:
-#            fail-fast: false
-#            matrix:
-#                test_config: ${{ fromJson(inputs.test_configs) }}
-#        uses: ./.github/workflows/test.yml
-#        with:
-#            gitref: ${{ inputs.gitref }}
-#            test_label: ${{ matrix.test_config.label }}
-#            python: ${{ matrix.test_config.python }}
-#            timeout: ${{ matrix.test_config.timeout }}
-#            whl: ${{ needs.BUILD.outputs.whl }}
-#            testmo_run_id: ${{ needs.BUILD.outputs.testmo_run_id }}
-#        secrets: inherit
+    TEST:
+        needs: [BUILD]
+        strategy:
+            fail-fast: false
+            matrix:
+                test_config: ${{ fromJson(inputs.test_configs) }}
+        uses: ./.github/workflows/test.yml
+        with:
+            gitref: ${{ inputs.gitref }}
+            test_label: ${{ matrix.test_config.label }}
+            python: ${{ matrix.test_config.python }}
+            timeout: ${{ matrix.test_config.timeout }}
+            whl: ${{ needs.BUILD.outputs.whl }}
+            testmo_run_id: ${{ needs.BUILD.outputs.testmo_run_id }}
+        secrets: inherit
 
 #    UPLOAD:
 #        needs: TEST

@@ -1,0 +1,31 @@
+name: test compressed-tensors
+description: 'test compressed-tensors'
+inputs:
+  venv:
+    description: "path of virtualenv"
+    required: true
+outputs:
+  status:
+    description: "final status from test"
+    value: ${{ steps.test.outputs.status }}
+runs:
+  using: composite
+  steps:
+  - id: test
+    run: |
+      # install wheel
+      source ${{ inputs.venv }}/bin/activate
+      python --version
+      WHL=$(find . -type f -iname "compressed*.whl")
+      pip install ${WHL}[dev,accelerate]
+      version=$(pip freeze | grep compressed)
+      echo "installed ${version}"
+      SUCCESS=0
+      # run test
+      echo "running tests..."
+      rm -rf src
+      make test || SUCCESS=$?
+      echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
+      deactivate
+      exit ${SUCCESS}
+    shell: bash
