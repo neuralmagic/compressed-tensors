@@ -13,19 +13,19 @@
 # limitations under the License.
 
 import torch
-from compressed_tensors.quantization.cache import QuantizedCache
+from compressed_tensors.quantization.cache import QuantizedKVParameterCache
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 
 
 def test_is_quantized_cache_singleton():
     """
     Check if quantized_cache is a singleton, used for
-    passing in QuantizedCache to the forward call of
+    passing in QuantizedKVParameterCache to the forward call of
     the model's self_attn
     """
 
     args = QuantizationArgs()
-    cache: QuantizedCache = args.get_kv_cache()
+    cache: QuantizedKVParameterCache = args.get_kv_cache()
     observer = args.get_observer()
 
     tensor = torch.tensor([1, 2, 3])
@@ -47,7 +47,7 @@ def test_update():
 
     nbits = 8
     args = QuantizationArgs(nbits=nbits, symmetric=True)
-    cache: QuantizedCache = args.get_kv_cache()
+    cache: QuantizedKVParameterCache = args.get_kv_cache()
 
     max_key_states_val = 1.0
     max_value_states_val = 2.0
@@ -83,7 +83,7 @@ def test_update():
 def test_cache_reset():
     nbits = 8
     args = QuantizationArgs(nbits=nbits, symmetric=True)
-    cache: QuantizedCache = args.get_kv_cache()
+    cache: QuantizedKVParameterCache = args.get_kv_cache()
 
     max_key_states_val = 1.0
     max_value_states_val = 2.0
@@ -105,7 +105,7 @@ def test_cache_reset():
     cache.reset()
 
     # new instance, different memory addr
-    different_cache: QuantizedCache = args.get_kv_cache()
+    different_cache: QuantizedKVParameterCache = args.get_kv_cache()
 
     assert len(different_cache.k_scales) == 0
     assert len(different_cache.v_scales) == 0

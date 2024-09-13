@@ -39,7 +39,7 @@ __all__ = [
 ]
 
 # target the self_attn layer
-# QuantizedCache is responsible for obtaining the k_scale and v_scale
+# QuantizedKVParameterCache is responsible for obtaining the k_scale and v_scale
 KV_CACHE_TARGETS = ["re:.*self_attn$"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)

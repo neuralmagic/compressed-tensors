@@ -17,7 +17,7 @@ from math import ceil
 from typing import Callable, Optional
 
 import torch
-from compressed_tensors.quantization.cache import QuantizedCache
+from compressed_tensors.quantization.cache import QuantizedKVParameterCache
 from compressed_tensors.quantization.observers.helpers import calculate_range
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
@@ -323,9 +323,12 @@ def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationSchem
         # kv cache stored under weights
         if module.quantization_status == QuantizationStatus.CALIBRATION:
             quantization_args: QuantizationArgs = scheme.output_activations
-            past_key_value: QuantizedCache = quantization_args.get_kv_cache()
+            past_key_value: QuantizedKVParameterCache = quantization_args.get_kv_cache()
             kwargs["past_key_value"] = past_key_value
-            kwargs["use_cache"] = past_key_value is not None
+
+            # QuantizedKVParameterCache used for obtaining k_scale, v_scale only,
+            # does not store quantized_key_states and quantized_value_state
+            kwargs["use_cache"] = False
 
             attn_forward: Callable = forward_func_orig.__get__(module, module.__class__)
 

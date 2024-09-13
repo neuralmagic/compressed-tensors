@@ -124,9 +124,9 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
 
     def get_kv_cache(self):
         """Get the singleton KV Cache"""
-        from compressed_tensors.quantization.cache import QuantizedCache
+        from compressed_tensors.quantization.cache import QuantizedKVParameterCache
 
-        return QuantizedCache(self)
+        return QuantizedKVParameterCache(self)
 
     @field_validator("type", mode="before")
     def validate_type(cls, value) -> QuantizationType:
