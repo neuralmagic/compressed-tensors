@@ -59,8 +59,8 @@ jobs:
 
         outputs:
             run_id: ${{ github.run_id }}
-            whl: ${{ steps.build.outputs.whl }}
-            tarfile: ${{ steps.build.outputs.tarfile }}
+            whl: ${{ steps.build.outputs.whlname }}
+            tarfile: ${{ steps.build.outputs.tarname }}
             testmo_run_id: ${{ steps.create_testmo_run.outputs.id }}
 
         steps:
