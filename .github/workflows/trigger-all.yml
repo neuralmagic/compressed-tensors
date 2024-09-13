@@ -5,10 +5,6 @@ on:
       # * is a special character in YAML so you have to quote this string
       - cron: '30 0 * * *'  # nightly run
 
-    push:
-      branches:
-        - auto
-
     workflow_dispatch:
         inputs:
             wf_category:
@@ -19,9 +15,9 @@ on:
                     - RELEASE
                 default: NIGHTLY
             push_to_pypi:
-                description: "only set it to true for RELEASE; when set and tests pass, then '.whl' & '.tar.gz' will be pushed to public pypi"
+                description: "when set and tests pass, then '.whl' & '.tar.gz' will be pushed to public pypi"
                 type: boolean
-                default: false
+                default: true
             gitref:
                 description: "git commit hash or tag name" 
                 type: string
@@ -31,11 +27,11 @@ jobs:
 
     BUILD-TEST:
         uses: ./.github/workflows/build-test.yml
-        name: ${{ inputs.wf_category || 'RELEASE' }}
+        name: ${{ inputs.wf_category || 'NIGHTLY' }}
         with:
-            wf_category: ${{ inputs.wf_category || 'RELEASE' }}
-            gitref: ${{ inputs.gitref || 'auto' }}
-            push_to_pypi: ${{ inputs.push_to_pypi || false }}
+            wf_category: ${{ inputs.wf_category || 'NIGHTLY' }}
+            gitref: ${{ inputs.gitref || 'main' }}
+            push_to_pypi: ${{ inputs.push_to_pypi || true }}
             test_configs: '[{"python":"3.11.4","label":"ubuntu-22.04","timeout":"40"},
                             {"python":"3.10.12","label":"ubuntu-20.04","timeout":"40"},
                             {"python":"3.9.17","label":"k8s-a100-solo","timeout":"40"},

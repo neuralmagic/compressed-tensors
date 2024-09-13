@@ -81,7 +81,7 @@ jobs:
 
             - name: create testmo run
               id: create_testmo_run
-              uses: neuralmagic/nm-actions/actions/testmo-run-create@newadd
+              uses: neuralmagic/nm-actions/actions/testmo-run-create@v1.2.0
               if: success()
               with:
                 testmo_url: https://neuralmagic.testmo.net
@@ -92,7 +92,7 @@ jobs:
 
             - name: build
               id: build
-              uses: neuralmagic/nm-actions/actions/build-ml-whl@newadd
+              uses: neuralmagic/nm-actions/actions/build-ml-whl@v1.2.0
               with:
                   dev: false
                   release: ${{ inputs.wf_category == 'RELEASE' }}
@@ -133,7 +133,7 @@ jobs:
                   retention-days: 5
 
             - name: summary
-              uses: neuralmagic/nm-actions/actions/summary-build@newadd
+              uses: neuralmagic/nm-actions/actions/summary-build@v1.2.0
               if: success() || failure()
               with:
                   label: ${{ inputs.build_label }}
@@ -142,7 +142,7 @@ jobs:
 
             - name: report build status to testmo
               id: report_build
-              uses: neuralmagic/nm-actions/actions/testmo-run-submit-thread@newadd
+              uses: neuralmagic/nm-actions/actions/testmo-run-submit-thread@v1.2.0
               if: (success() || failure()) && ${{ inputs.testmo_run_id != '' }}
               with:
                   testmo_url: https://neuralmagic.testmo.net

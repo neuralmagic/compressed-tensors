@@ -13,7 +13,7 @@ runs:
   steps:
 
     - name: install wheel
-      uses: neuralmagic/nm-actions/actions/install-whl@newadd
+      uses: neuralmagic/nm-actions/actions/install-whl@v1.2.0
       with:
           venv: ${{ inputs.venv }}
           name: compressed

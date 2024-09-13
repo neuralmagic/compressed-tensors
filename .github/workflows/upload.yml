@@ -65,7 +65,7 @@ jobs:
               uses: neuralmagic/nm-actions/actions/install-testmo@v1.0.0
 
             - name: complete testmo run
-              uses: neuralmagic/nm-actions/actions/testmo-run-complete@newadd
+              uses: neuralmagic/nm-actions/actions/testmo-run-complete@v1.2.0
               if: (success() || failure()) && ${{ inputs.testmo_run_id != '' }}
               with:
                   testmo_url: https://neuralmagic.testmo.net

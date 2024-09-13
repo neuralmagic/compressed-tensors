@@ -74,7 +74,7 @@ jobs:
 
             - name: verify python
               id: verify_python
-              uses: neuralmagic/nm-actions/actions/verify-python@newadd
+              uses: neuralmagic/nm-actions/actions/verify-python@v1.2.0
               with:
                   python-version: ${{ inputs.python }}
 
@@ -86,7 +86,7 @@ jobs:
 
             - name: create virtualenv
               id: create_venv
-              uses: neuralmagic/nm-actions/actions/create-virtualenv@newadd
+              uses: neuralmagic/nm-actions/actions/create-virtualenv@v1.2.0
               with:
                   venv: TEST
 
@@ -108,7 +108,7 @@ jobs:
 
             - name: report test results
               id: report_test
-              uses: neuralmagic/nm-actions/actions/testmo-run-submit-thread@newadd
+              uses: neuralmagic/nm-actions/actions/testmo-run-submit-thread@v1.2.0
               if: (success() || failure()) && ${{ inputs.testmo_run_id != '' }}
               with:
                   testmo_url: https://neuralmagic.testmo.net
@@ -118,7 +118,7 @@ jobs:
                   step_status: ${{ steps.test.outputs.status }}
 
             - name: summary
-              uses: neuralmagic/nm-actions/actions/summary-test@newadd
+              uses: neuralmagic/nm-actions/actions/summary-test@v1.2.0
               if: success() || failure()
               with:
                   test_label: ${{ inputs.test_label }}
