@@ -17,7 +17,8 @@ runs:
       with:
           venv: ${{ inputs.venv }}
           name: compressed
-          extra: "[dev,accelerate]"
+          #extra: "[dev,accelerate]"
+          extra: "[dev]"
 
     - name: test
       id: test
