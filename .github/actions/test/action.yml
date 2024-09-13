@@ -11,21 +11,23 @@ outputs:
 runs:
   using: composite
   steps:
-  - id: test
-    run: |
-      # install wheel
-      source ${{ inputs.venv }}/bin/activate
-      python --version
-      WHL=$(find . -type f -iname "compressed*.whl")
-      pip install ${WHL}[dev,accelerate]
-      version=$(pip freeze | grep compressed)
-      echo "installed ${version}"
-      SUCCESS=0
-      # run test
-      echo "running tests..."
-      rm -rf src
-      pytest tests --junitxml=test-results/report.xml || SUCCESS=$?
-      echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
-      deactivate
-      exit ${SUCCESS}
-    shell: bash
+
+    - name: install wheel
+      uses: neuralmagic/nm-actions/actions/install-whl@newadd
+      with:
+          venv: ${{ inputs.venv }}
+          name: compressed
+          extra: "[dev,accelerate]"
+
+    - name: test
+      id: test
+      run: |
+          source ${{ inputs.venv }}/bin/activate
+          SUCCESS=0
+          echo "running tests..."
+          rm -rf src
+          pytest tests --junitxml=test-results/report.xml || SUCCESS=$?
+          echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
+          deactivate
+          exit ${SUCCESS}
+      shell: bash

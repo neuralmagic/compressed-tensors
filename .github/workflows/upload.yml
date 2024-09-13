@@ -78,7 +78,6 @@ jobs:
             - name: download assets
               uses: neuralmagic/nm-actions/actions/gcp-download-assets@v1.1.0
               with:
-                #bucket_source: "gs://compressed-tensors/assets"
                 bucket_source: ${{ secrets.GCP_BUILD_ML_ASSETS2 }}
                 run_id: ${{ inputs.run_id }}
 
