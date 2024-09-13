@@ -17,15 +17,14 @@ runs:
       with:
           venv: ${{ inputs.venv }}
           name: compressed
-          extra: ${EXTRA}
+          extra: "[dev,accelerate]"
 
     - name: test
       id: test
       run: |
           source ${{ inputs.venv }}/bin/activate
-          SUCCESS=0
-          echo "running tests..."
           rm -rf src
+          SUCCESS=0
           pytest tests --junitxml=test-results/report.xml || SUCCESS=$?
           echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
           deactivate

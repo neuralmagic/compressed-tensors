@@ -100,14 +100,6 @@ jobs:
                   name: ${{ inputs.whl }}
                   path: ${{ inputs.whl }}
 
-            - name: dependency
-              run: |
-                  if [[ "${{ inputs.whl }}" =~ nightly ]]; then
-                      echo "EXTRA=[dev,accelerate]" >> $GITHUB_ENV
-                  else
-                      echo "EXTRA=[dev]" >> $GITHUB_ENV
-                  fi
-
             - name: run tests
               id: test
               uses: ./.github/actions/test/
