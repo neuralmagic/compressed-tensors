@@ -61,6 +61,17 @@ jobs:
               with:
                 python-version: 3.10.12
 
+            - name: install testmo
+              uses: neuralmagic/nm-actions/actions/install-testmo@v1.0.0
+
+            - name: complete testmo run
+              uses: neuralmagic/nm-actions/actions/testmo-run-complete@newadd
+              if: (success() || failure()) && ${{ inputs.testmo_run_id != '' }}
+              with:
+                  testmo_url: https://neuralmagic.testmo.net
+                  testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
+                  testmo_run_id: ${{ inputs.testmo_run_id }}
+
             # GCP
             - name: 'Authenticate to Google Cloud'
               id: auth-gcp
