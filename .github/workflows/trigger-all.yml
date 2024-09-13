@@ -1,5 +1,5 @@
 name: build and test jobs for nightly and release
-run-name: ${{ github.actor }} triggered nightly on ${{ github.ref }}
+run-name: ${{ github.actor }} triggered nightly or release on ${{ github.ref }}
 on:
     schedule:
       # * is a special character in YAML so you have to quote this string
