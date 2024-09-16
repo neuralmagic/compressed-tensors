@@ -23,6 +23,10 @@ on:
                 type: string
                 default: 'main'
 
+    push:
+        branches:
+          - auto
+
 jobs:
 
     BUILD-TEST:
@@ -30,7 +34,7 @@ jobs:
         name: ${{ inputs.wf_category || 'NIGHTLY' }}
         with:
             wf_category: ${{ inputs.wf_category || 'NIGHTLY' }}
-            gitref: ${{ inputs.gitref || 'main' }}
+            gitref: ${{ inputs.gitref || 'auto' }}
             push_to_pypi: ${{ inputs.push_to_pypi || true }}
             test_configs: '[{"python":"3.11.4","label":"ubuntu-22.04","timeout":"40"},
                             {"python":"3.10.12","label":"ubuntu-20.04","timeout":"40"},
