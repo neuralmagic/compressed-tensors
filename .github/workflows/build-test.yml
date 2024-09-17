@@ -64,4 +64,5 @@ jobs:
             timeout: 40
             run_id: ${{ github.run_id }}
             push_to_pypi: ${{ inputs.push_to_pypi }}
+            testmo_run_id: ${{ needs.BUILD.outputs.testmo_run_id }}
         secrets: inherit

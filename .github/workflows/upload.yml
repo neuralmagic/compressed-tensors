@@ -20,6 +20,10 @@ on:
                 description: "push asset to public pypi."
                 type: boolean
                 default: false
+            testmo_run_id:
+                description: "testmo run id"
+                type: string
+                default: ''
 
     workflow_dispatch:
         inputs:
@@ -39,6 +43,10 @@ on:
                 description: "push asset to public pypi."
                 type: boolean
                 default: false
+            testmo_run_id:
+                description: "testmo run id"
+                type: string
+                default: ''
 
 jobs:
 
