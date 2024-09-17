@@ -57,7 +57,7 @@ jobs:
         secrets: inherit
 
     UPLOAD:
-        needs: [TEST]
+        needs: [BUILD, TEST]
         uses: ./.github/workflows/upload.yml
         with:
             label: k8s-util
