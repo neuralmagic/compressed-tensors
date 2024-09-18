@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
 from compressed_tensors.registry import RegistryMixin
 from pydantic import BaseModel
@@ -25,6 +25,7 @@ __all__ = ["SparsityCompressionConfig", "CompressionFormat"]
 class CompressionFormat(Enum):
     dense = "dense"
     sparse_bitmask = "sparse-bitmask"
+    sparse_24 = "sparse-24"
     int_quantized = "int-quantized"
     float_quantized = "float-quantized"
     naive_quantized = "naive-quantized"
@@ -32,16 +33,26 @@ class CompressionFormat(Enum):
     marlin_24 = "marlin-24"
 
 
+# TODO: not sure we need the child classes for dense and sparse bitmask anymore
 class SparsityCompressionConfig(RegistryMixin, BaseModel):
     """
     Base data class for storing sparsity compression parameters
 
     :param format: name of compression format
+    :param targets: list of layer names or layer types that aren't sparse and should
+        be ignored during compression. By default, assume all layers are targeted
+    :param ignore: list of layer names to ignore from targets. Defaults to None
     :param global_sparsity: average sparsity of the entire model
     :param sparsity_structure: structure of the sparsity, such as
     "unstructured", "2:4", "8:16" etc
     """
 
     format: str
+    targets: Optional[
+        List[str]
+    ] = None  # TODO: infer from model based on sparsity, similar to how we do it for quantization. Default to None for backwards compat
+    ignore: Optional[
+        List[str]
+    ] = None  # TODO: infer from model based on sparsity. Default to None for backwards compat
     global_sparsity: Optional[float] = 0.0
     sparsity_structure: Optional[str] = "unstructured"
