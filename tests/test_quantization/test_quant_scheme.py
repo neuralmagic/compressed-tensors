@@ -60,3 +60,4 @@ def test_defaults():
     output = QuantizationScheme.default_scheme(targets=targets)
     assert output.weights is None
     assert output.input_activations is None
+    assert output.output_activations is None

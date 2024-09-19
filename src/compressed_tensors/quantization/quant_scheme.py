@@ -57,12 +57,9 @@ class QuantizationScheme(BaseModel):
             # default to quantizing all Linear layers
             targets = ["Linear"]
 
+        # by default, activations and weights are left unquantized
         weights = None
-
         input_activations = None
-
-        # Do not quantize the output activations
-        # by default
         output_activations = None
 
         return cls(
