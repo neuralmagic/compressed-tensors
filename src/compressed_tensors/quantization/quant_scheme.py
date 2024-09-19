@@ -57,12 +57,9 @@ class QuantizationScheme(BaseModel):
             # default to quantizing all Linear layers
             targets = ["Linear"]
 
-        # default to 8 bit integer symmetric quantization
-        # for weights
-        weights = QuantizationArgs(num_bits=8, symmetric=True)
+        weights = None
 
-        # default to 8 bit integer asymmetric quantization
-        input_activations = QuantizationArgs(num_bits=8, symmetric=True)
+        input_activations = None
 
         # Do not quantize the output activations
         # by default
@@ -109,6 +106,7 @@ def is_preset_scheme(name: str) -> bool:
     :return: True if the name is a preset scheme name
     """
     return name.upper() in PRESET_SCHEMES
+
 
 UNQUANTIZED = dict()
 
