@@ -243,6 +243,9 @@ class QuantizationConfig(BaseModel):
         )
 
     def requires_calibration_data(self):
+        if self.kv_cache_scheme is not None:
+            return True
+
         for _, scheme in self.config_groups.items():
             if scheme.input_activations is not None:
                 if not scheme.input_activations.dynamic:
@@ -250,5 +253,6 @@ class QuantizationConfig(BaseModel):
             if scheme.output_activations is not None:
                 if not scheme.output_activations.dynamic:
                     return True
+        
 
         return False
