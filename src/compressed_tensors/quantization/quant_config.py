@@ -253,6 +253,5 @@ class QuantizationConfig(BaseModel):
             if scheme.output_activations is not None:
                 if not scheme.output_activations.dynamic:
                     return True
-        
 
         return False

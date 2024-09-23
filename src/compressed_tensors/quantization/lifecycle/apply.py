@@ -48,7 +48,6 @@ from compressed_tensors.quantization.utils import (
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
-from loguru import logger
 from torch.nn import Module
 
 
@@ -211,7 +210,7 @@ def process_kv_cache_config(
     :return: the QuantizationConfig with additional "kv_cache" group
     """
     if targets == KV_CACHE_TARGETS:
-        logger.info(f"KV cache targets set to default value of: {KV_CACHE_TARGETS}")
+        _LOGGER.info(f"KV cache targets set to default value of: {KV_CACHE_TARGETS}")
 
     kv_cache_dict = config.kv_cache_scheme.model_dump()
     kv_cache_scheme = QuantizationScheme(
