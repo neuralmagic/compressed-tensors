@@ -57,15 +57,9 @@ class QuantizationScheme(BaseModel):
             # default to quantizing all Linear layers
             targets = ["Linear"]
 
-        # default to 8 bit integer symmetric quantization
-        # for weights
-        weights = QuantizationArgs(num_bits=8, symmetric=True)
-
-        # default to 8 bit integer asymmetric quantization
-        input_activations = QuantizationArgs(num_bits=8, symmetric=True)
-
-        # Do not quantize the output activations
-        # by default
+        # by default, activations and weights are left unquantized
+        weights = None
+        input_activations = None
         output_activations = None
 
         return cls(
@@ -114,7 +108,7 @@ def is_preset_scheme(name: str) -> bool:
 UNQUANTIZED = dict()
 
 # 8 bit integer weights and 8 bit activations quantization
-W8A8 = dict(
+INT8_W8A8 = dict(
     weights=QuantizationArgs(
         num_bits=8,
         type=QuantizationType.INT,
@@ -155,7 +149,7 @@ W4A16 = dict(
 )
 
 # 4 bit integer weights and 8 bit activations quantization
-W4A8 = dict(
+INT8_W4A8 = dict(
     weights=QuantizationArgs(
         num_bits=4,
         type=QuantizationType.INT,
@@ -216,8 +210,9 @@ PRESET_SCHEMES = {
     "W8A16": W8A16,
     "W4A16": W4A16,
     # Integer weight and activation schemes
-    "W8A8": W8A8,
-    "W4A8": W4A8,
+    "W8A8": INT8_W8A8,
+    "INT8": INT8_W8A8, # alias for W8A8
+    "W4A8": INT8_W4A8,
     # Float weight and activation schemes
     "FP8": FP8,
     "FP8_DYNAMIC": FP8_DYNAMIC,
