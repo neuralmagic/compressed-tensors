@@ -15,7 +15,7 @@
 from copy import deepcopy
 
 import pytest
-from compressed_tensors.compressors.model_compressor import ModelCompressor
+from compressed_tensors.compressors.model_compressors import ModelCompressor
 
 
 def sparsity_config():

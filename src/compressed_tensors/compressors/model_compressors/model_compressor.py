@@ -27,7 +27,7 @@ from compressed_tensors.base import (
     QUANTIZATION_CONFIG_NAME,
     SPARSITY_CONFIG_NAME,
 )
-from compressed_tensors.compressors import Compressor
+from compressed_tensors.compressors import BaseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
     QuantizationConfig,
@@ -214,11 +214,11 @@ class ModelCompressor:
         self.quantization_compressor = None
 
         if sparsity_config is not None:
-            self.sparsity_compressor = Compressor.load_from_registry(
+            self.sparsity_compressor = BaseCompressor.load_from_registry(
                 sparsity_config.format, config=sparsity_config
             )
         if quantization_config is not None:
-            self.quantization_compressor = Compressor.load_from_registry(
+            self.quantization_compressor = BaseCompressor.load_from_registry(
                 quantization_config.format, config=quantization_config
             )
 
@@ -229,7 +229,7 @@ class ModelCompressor:
         Compresses a dense state dict or model with sparsity and/or quantization
 
         :param model: uncompressed model to compress
-        :param model_state: optional uncompressed state_dict to insert into model
+        :param state_dict: optional uncompressed state_dict to insert into model
         :return: compressed state dict
         """
         if state_dict is None:
