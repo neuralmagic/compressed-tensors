@@ -20,7 +20,6 @@ import re
 from copy import deepcopy
 from typing import Any, Dict, Optional, Union
 
-import compressed_tensors
 import torch
 import transformers
 from compressed_tensors.base import (
