@@ -20,9 +20,9 @@ import re
 from copy import deepcopy
 from typing import Any, Dict, Optional, Union
 
+import compressed_tensors
 import torch
 import transformers
-import compressed_tensors
 from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
     COMPRESSION_VERSION_NAME,
@@ -93,7 +93,10 @@ class ModelCompressor:
         :return: compressor for the extracted configs
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
+        compression_config = getattr(config, QUANTIZATION_CONFIG_NAME, None)
+        if compression_config is None:
+            # legacy support
+            compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
         return cls.from_compression_config(compression_config)
 
     @classmethod
@@ -306,19 +309,19 @@ class ModelCompressor:
         with open(config_file_path, "r") as config_file:
             config_data = json.load(config_file)
 
-        config_data[COMPRESSION_CONFIG_NAME] = {}
+        config_data[QUANTIZATION_CONFIG_NAME] = {}
         if self.quantization_config is not None:
             quant_config_data = self.quantization_config.model_dump()
-            config_data[COMPRESSION_CONFIG_NAME] = quant_config_data
+            config_data[QUANTIZATION_CONFIG_NAME] = quant_config_data
         if self.sparsity_config is not None:
             sparsity_config_data = self.sparsity_config.model_dump()
-            config_data[COMPRESSION_CONFIG_NAME][
+
+            config_data[QUANTIZATION_CONFIG_NAME][
                 SPARSITY_CONFIG_NAME
             ] = sparsity_config_data
-        config_data[COMPRESSION_CONFIG_NAME][
+        config_data[QUANTIZATION_CONFIG_NAME][
             COMPRESSION_VERSION_NAME
         ] = compressed_tensors.__version__
-
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)
 
