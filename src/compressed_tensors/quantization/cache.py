@@ -116,7 +116,6 @@ class QuantizedKVParameterCache(HFDyanmicCache):
             q_value_states, KVCacheScaleType.VALUE, layer_idx
         )
 
-        # keys_to_return, values_to_return = key_states, value_states
         keys_to_return, values_to_return = qdq_key_states, qdq_value_states
 
         return keys_to_return, values_to_return
@@ -160,6 +159,7 @@ class QuantizedKVParameterCache(HFDyanmicCache):
             scales = self.k_scales
             zps = self.k_zps
         else:
+            assert kv_type == KVCacheScaleType.VALUE
             observer = self.v_observers[layer_idx]
             scales = self.v_scales
             zps = self.v_zps
@@ -188,6 +188,7 @@ class QuantizedKVParameterCache(HFDyanmicCache):
             scale = self.k_scales[layer_idx]
             zp = self.k_zps[layer_idx]
         else:
+            assert kv_type == KVCacheScaleType.VALUE
             scale = self.v_scales[layer_idx]
             zp = self.v_zps[layer_idx]
 
