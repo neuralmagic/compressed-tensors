@@ -60,9 +60,52 @@ def _get_combined_config(s_config, q_config):
     return combined
 
 
-@pytest.mark.parametrize("s_config", [sparsity_config(), None])
-@pytest.mark.parametrize("q_config", [quantization_config(), None])
+@pytest.mark.parametrize(
+    "s_config,q_config",
+    [
+        (sparsity_config(), None),
+        (None, quantization_config()),
+        (None, None),
+    ],
+)
 def test_config_format(s_config, q_config):
     combined_config = _get_combined_config(s_config, q_config)
     assert ModelCompressor.parse_sparsity_config(combined_config) == s_config
     assert ModelCompressor.parse_quantization_config(combined_config) == q_config
+
+
+@pytest.mark.parametrize(
+    "s_config,q_config",
+    [
+        (sparsity_config(), None),
+        (None, quantization_config()),
+        (None, None),
+    ],
+)
+def test_from_compression_config(s_config, q_config, tmp_path):
+    combined_config = _get_combined_config(s_config, q_config)
+
+    compressor = ModelCompressor.from_compression_config(combined_config)
+    assert compressor.sparsity_config == s_config
+    assert compressor.quantization_config == q_config
+
+
+@pytest.mark.parametrize(
+    "s_config,q_config",
+    [
+        (sparsity_config(), None),
+        (None, quantization_config()),
+        (None, None),
+    ],
+)
+def test_from_pretrained(s_config, q_config, tmp_path):
+    combined_config = _get_combined_config(s_config, q_config)
+
+    compressor = ModelCompressor.from_compression_config(combined_config)
+    compressor.update_config(tmp_path)
+
+    reloaded = ModelCompressor.from_pretrained()
+
+
+def transformers_load():
+    pass

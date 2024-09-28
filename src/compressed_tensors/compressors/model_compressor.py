@@ -28,6 +28,8 @@ from compressed_tensors.base import (
     COMPRESSION_VERSION_NAME,
     QUANTIZATION_CONFIG_NAME,
     SPARSITY_CONFIG_NAME,
+    QUANT_METHOD_NAME,
+    QUANT_METHOD,
 )
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
@@ -93,43 +95,55 @@ class ModelCompressor:
         :return: compressor for the extracted configs
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
-        return cls.from_compression_config(compression_config)
+        return cls.from_compression_config(config)
+    
 
     @classmethod
-    def from_compression_config(cls, compression_config: Dict[str, Any]):
+    def from_compression_config(cls, compression_config: Union[Dict[str, Any], AutoConfig, "CompressedTensorsConfig"]):
         """
-        :param compression_config: compression/quantization config dictionary
-            found under key "quantization_config" in HF model config
+        misnomer
+
+        :param compression_config:
+            A compression or quantization config
+
+            The type is one of the following:
+            1. A Dict found under the root config.json
+            2. An AutoConfig found under the root config.json
+            3. A CompressedTensorsConfig found under key "quantization_config" in HF
+                model config
         :return: compressor for the extracted configs
         """
         if compression_config is None:
             return None
 
+        # check for HF Quantizer
         try:
             from transformers.utils.quantization_config import CompressedTensorsConfig
-
             if isinstance(compression_config, CompressedTensorsConfig):
                 compression_config = compression_config.to_dict()
+                return cls(
+                    sparsity_config=compression_config["sparsity_config"],
+                    quantization_config=compression_config["quantization_config"],
+                )
         except ImportError:
             pass
+
+        # potentially unwrap legacy compression config
+        compression_config = get_attr_or_key(compression_config, COMPRESSION_CONFIG_NAME, compression_config)
 
         sparsity_config = cls.parse_sparsity_config(compression_config)
         quantization_config = cls.parse_quantization_config(compression_config)
         if sparsity_config is None and quantization_config is None:
             return None
 
-        if sparsity_config is not None and not isinstance(
-            sparsity_config, SparsityCompressionConfig
-        ):
+        # convert to SparsityCompressionConfig and QuantizationConfig
+        if sparsity_config is not None:
             format = sparsity_config.get("format")
             sparsity_config = SparsityCompressionConfig.load_from_registry(
                 format, **sparsity_config
             )
-        if quantization_config is not None and not isinstance(
-            quantization_config, QuantizationConfig
-        ):
-            quantization_config = QuantizationConfig.parse_obj(quantization_config)
+        if quantization_config is not None:
+            quantization_config = QuantizationConfig.model_validate(quantization_config)
 
         return cls(
             sparsity_config=sparsity_config, quantization_config=quantization_config
@@ -201,9 +215,15 @@ class ModelCompressor:
         # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
-        quantization_config.pop(COMPRESSION_VERSION_NAME, None)
+
+        # some fields are required, even if a qconfig is not present
+        # pop them off and if nothing remains, then there is no qconfig
+        quant_method = 
+
+
         if len(quantization_config) == 0:
-            quantization_config = None
+            return None
+        
         return quantization_config
 
     def __init__(
@@ -300,6 +320,9 @@ class ModelCompressor:
 
         :param save_directory: path to a folder containing a HF model config
         """
+        if self.quantization_config is None and self.sparsity_config is None:
+            return
+        
         config_file_path = os.path.join(save_directory, CONFIG_NAME)
         if not os.path.exists(config_file_path):
             _LOGGER.warning(
@@ -311,7 +334,16 @@ class ModelCompressor:
         with open(config_file_path, "r") as config_file:
             config_data = json.load(config_file)
 
+        # required metadata whenever a quantization or sparsity config is present
+        # overwrite previous config and version if already existing
         config_data[QUANTIZATION_CONFIG_NAME] = {}
+        if self.quantization_config is None:
+            self.quantization_config.version = compressed_tensors.__version__
+            self.quantization_config.quant_method = QUANT_METHOD
+        else:
+            config_data[QUANTIZATION_CONFIG_NAME][COMPRESSION_VERSION_NAME] = compressed_tensors.__version__
+            config_data[QUANTIZATION_CONFIG_NAME][QUANT_METHOD_NAME] = QUANT_METHOD
+
         if self.quantization_config is not None:
             quant_config_data = self.quantization_config.model_dump()
             config_data[QUANTIZATION_CONFIG_NAME] = quant_config_data
@@ -320,9 +352,6 @@ class ModelCompressor:
             config_data[QUANTIZATION_CONFIG_NAME][
                 SPARSITY_CONFIG_NAME
             ] = sparsity_config_data
-        config_data[QUANTIZATION_CONFIG_NAME][
-            COMPRESSION_VERSION_NAME
-        ] = compressed_tensors.__version__
 
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)
@@ -356,3 +385,18 @@ def new_dtype_byte_size(dtype):
         raise ValueError(f"`dtype` is not a valid dtype: {dtype}.")
     bit_size = int(bit_search.groups()[0])
     return bit_size // 8
+
+
+def has_attr_or_key(obj: Any, key: str) -> bool:
+    return hasattr(obj, key) or key in obj
+
+
+def get_attr_or_key(obj: Any, key: str, default = None) -> Any:
+    if hasattr(obj, key):
+        return getattr(obj, key)
+    
+    elif key in obj:
+        return obj[key]
+    
+    else:
+        return default

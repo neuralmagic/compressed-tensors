@@ -15,6 +15,7 @@
 from enum import Enum
 from typing import Dict, List, Optional, Union
 
+from compressed_tensors import QUANT_METHOD
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_scheme import (
@@ -103,7 +104,6 @@ LIFECYCLE_ORDER = [
     QuantizationStatus.COMPRESSED,
 ]
 
-DEFAULT_QUANTIZATION_METHOD = "compressed-tensors"
 DEFAULT_QUANTIZATION_FORMAT = "fakequant"
 
 
@@ -112,6 +112,7 @@ class QuantizationConfig(BaseModel):
     Full configuration specifying how a model is quantized. Each quantized layer is
     mapped to a QuantizationScheme in config_groups.
 
+    :param version: compressed-tensors version used to create this config
     :param config_groups: dict of QuantizationSchemes specifying the quantization
     settings for each quantized layer. A group could also be a reference to
     a predefined scheme name, mapped to a list of its target layers/classes
@@ -137,8 +138,9 @@ class QuantizationConfig(BaseModel):
     are not quantized even if they match up with a target in config_groups
     """
 
+    version: Optional[str] = None
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
-    quant_method: str = DEFAULT_QUANTIZATION_METHOD
+    quant_method: str = QUANT_METHOD
     kv_cache_scheme: Optional[QuantizationArgs] = None
     format: str = DEFAULT_QUANTIZATION_FORMAT
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
