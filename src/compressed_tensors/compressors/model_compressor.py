@@ -106,11 +106,11 @@ class ModelCompressor:
         configs and load a ModelCompressor
 
         :param pretrained_model_name_or_path: path to model config on disk or HF hub
-        :return: compressor for the extracted configs
+        :return: compressor for the configs, or None if model is not compressed
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None) or getattr(
-            config, QUANTIZATION_CONFIG_NAME, None
+        compression_config = getattr(config, QUANTIZATION_CONFIG_NAME, None) or getattr(
+            config, COMPRESSION_CONFIG_NAME, None
         )
         return cls.from_compression_config(compression_config)
 
@@ -127,7 +127,7 @@ class ModelCompressor:
                 keys in the config.json
             2. A CompressedTensorsConfig found under key "quantization_config" in HF
                 model config
-        :return: compressor for the extracted configs
+        :return: compressor for the configs, or None if model is not compressed
         """
         if compression_config is None:
             return None
@@ -176,7 +176,7 @@ class ModelCompressor:
             to a sparsity compression algorithm
         :param quantization_format: string corresponding to a quantization compression
             algorithm
-        :return: compressor for the extracted configs
+        :return: compressor for the configs, or None if model is not compressed
         """
         quantization_config = QuantizationConfig.from_pretrained(
             model, format=quantization_format
@@ -198,6 +198,13 @@ class ModelCompressor:
     def parse_sparsity_config(
         compression_config: Dict[str, Any]
     ) -> Union[Dict[str, Any], None]:
+        """
+        Parse sparsity config from quantization/compression config. Sparsity
+        config is nested inside q/c config
+
+        :param compression_config: quantization/compression config
+        :return: sparsity config
+        """
         if compression_config is None:
             return None
 
@@ -207,6 +214,14 @@ class ModelCompressor:
     def parse_quantization_config(
         compression_config: Dict[str, Any]
     ) -> Union[Dict[str, Any], None]:
+        """
+        Parse quantization config from quantization/compression config. The
+        quantization are all the fields that are not the sparsity config or
+        metadata fields
+
+        :param compression_config: quantization/compression config
+        :return: quantization config without sparsity config or metadata fields
+        """
         if compression_config is None:
             return None
 
