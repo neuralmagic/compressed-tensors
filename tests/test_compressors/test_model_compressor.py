@@ -16,11 +16,25 @@ from copy import deepcopy
 
 import pytest
 from compressed_tensors.compressors.model_compressor import ModelCompressor
+from compressed_tensors.config.base import SparsityCompressionConfig
+from compressed_tensors.quantization.quant_config import QuantizationConfig
+from transformers import AutoModel
+
+
+def ct_config_available():
+    try:
+        from transformers.utils.quantization_config import (  # noqa: F401
+            CompressedTensorsConfig,
+        )
+
+        return True
+    except ImportError:
+        return False
 
 
 def sparsity_config():
     return {
-        "format": "dense",
+        "format": "sparse-bitmask",  # dense format is ignored by ModelCompressor
         "global_sparsity": 19.098103233975568,
         "registry_requires_subclass": False,
         "sparsity_structure": "unstructured",
@@ -63,6 +77,7 @@ def _get_combined_config(s_config, q_config):
 @pytest.mark.parametrize(
     "s_config,q_config",
     [
+        (sparsity_config(), quantization_config()),
         (sparsity_config(), None),
         (None, quantization_config()),
         (None, None),
@@ -77,35 +92,101 @@ def test_config_format(s_config, q_config):
 @pytest.mark.parametrize(
     "s_config,q_config",
     [
+        (sparsity_config(), quantization_config()),
         (sparsity_config(), None),
         (None, quantization_config()),
         (None, None),
     ],
 )
-def test_from_compression_config(s_config, q_config, tmp_path):
+def test_from_compression_config_dict(s_config, q_config, tmp_path):
     combined_config = _get_combined_config(s_config, q_config)
 
     compressor = ModelCompressor.from_compression_config(combined_config)
-    assert compressor.sparsity_config == s_config
-    assert compressor.quantization_config == q_config
+
+    s_config = (
+        SparsityCompressionConfig.load_from_registry(s_config.get("format"), **s_config)
+        if s_config is not None
+        else None
+    )
+    q_config = QuantizationConfig(**q_config) if q_config is not None else None
+
+    if s_config is q_config is None:
+        assert compressor is None
+    else:
+        assert compressor.sparsity_config == s_config
+        assert compressor.quantization_config == q_config
+
+
+pytest.mark.skipif(not ct_config_available())
 
 
 @pytest.mark.parametrize(
     "s_config,q_config",
     [
+        (sparsity_config(), quantization_config()),
         (sparsity_config(), None),
         (None, quantization_config()),
         (None, None),
     ],
 )
-def test_from_pretrained(s_config, q_config, tmp_path):
+def test_from_compression_config_hf(s_config, q_config, tmp_path):
+    from transformers.utils.quantization_config import CompressedTensorsConfig
+
+    combined_config = _get_combined_config(s_config, q_config)
+    compression_config = CompressedTensorsConfig(**combined_config)
+
+    compressor = ModelCompressor.from_compression_config(compression_config)
+
+    s_config = (
+        SparsityCompressionConfig.load_from_registry(s_config.get("format"), **s_config)
+        if s_config is not None
+        else None
+    )
+    q_config = QuantizationConfig(**q_config) if q_config is not None else None
+
+    if s_config is q_config is None:
+        assert compressor is None
+    else:
+        assert compressor.sparsity_config == s_config
+        assert compressor.quantization_config == q_config
+
+
+@pytest.mark.parametrize(
+    "s_config,q_config",
+    [
+        (sparsity_config(), quantization_config()),
+        (sparsity_config(), None),
+        (None, quantization_config()),
+    ],
+)
+def test_from_pretrained_reload(s_config, q_config, tmp_path):
     combined_config = _get_combined_config(s_config, q_config)
 
+    model = AutoModel.from_pretrained("Xenova/llama2.c-stories15M")
     compressor = ModelCompressor.from_compression_config(combined_config)
+    model.save_pretrained(tmp_path)
     compressor.update_config(tmp_path)
 
-    reloaded = ModelCompressor.from_pretrained()
+    reloaded = ModelCompressor.from_pretrained(tmp_path)
+    assert compressor.sparsity_config == reloaded.sparsity_config
+    assert compressor.quantization_config == reloaded.quantization_config
 
 
-def transformers_load():
-    pass
+@pytest.mark.parametrize(
+    "model_path",
+    [
+        "nm-testing/tinyllama-oneshot-w4a16-group128-v3",
+        "nm-testing/tinyllama-w4a16-compressed-hf-quantizer",
+        "nm-testing/TinyLlama-1.1B-Chat-v1.0-actorder-group-e2e",
+    ],
+)
+def test_from_compressed_model_reload(model_path, tmp_path):
+    model = AutoModel.from_pretrained(model_path)
+    compressor = ModelCompressor.from_pretrained(model_path)
+
+    model.save_pretrained(tmp_path)
+    compressor.update_config(tmp_path)
+
+    reloaded = ModelCompressor.from_pretrained(tmp_path)
+    assert compressor.sparsity_config == reloaded.sparsity_config
+    assert compressor.quantization_config == reloaded.quantization_config

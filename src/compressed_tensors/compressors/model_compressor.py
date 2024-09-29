@@ -62,6 +62,15 @@ if TYPE_CHECKING:
     CompressedTensorsConfig = TypeVar("CompressedTensorsConfig")
 
 
+def isCompressedTensorsConfig(compression_config: Any) -> bool:
+    try:
+        from transformers.utils.quantization_config import CompressedTensorsConfig
+
+        return isinstance(compression_config, CompressedTensorsConfig)
+    except ImportError:
+        return False
+
+
 class ModelCompressor:
     """
     Handles compression and decompression of a model with a sparsity config and/or
@@ -123,25 +132,22 @@ class ModelCompressor:
         if compression_config is None:
             return None
 
-        # check for HF Quantizer
-        try:
-            from transformers.utils.quantization_config import CompressedTensorsConfig
+        # check for CompressedTensorsConfig
+        if isCompressedTensorsConfig(compression_config):
+            compression_config = compression_config.to_dict()
+            sparsity_config = compression_config["sparsity_config"]
+            quantization_config = compression_config["quantization_config"]
 
-            if isinstance(compression_config, CompressedTensorsConfig):
-                compression_config = compression_config.to_dict()
-                return cls(
-                    sparsity_config=compression_config["sparsity_config"],
-                    quantization_config=compression_config["quantization_config"],
-                )
-        except ImportError:
-            pass
+        else:
+            # parse from dict
+            sparsity_config = cls.parse_sparsity_config(compression_config)
+            quantization_config = cls.parse_quantization_config(compression_config)
 
-        sparsity_config = cls.parse_sparsity_config(compression_config)
-        quantization_config = cls.parse_quantization_config(compression_config)
+        # skip if None
         if sparsity_config is None and quantization_config is None:
             return None
 
-        # convert to SparsityCompressionConfig and QuantizationConfig
+        # cast dict to config
         if sparsity_config is not None:
             format = sparsity_config.get("format")
             sparsity_config = SparsityCompressionConfig.load_from_registry(
@@ -331,13 +337,12 @@ class ModelCompressor:
         # required metadata whenever a quantization or sparsity config is present
         # overwrite previous config and version if already existing
         config_data[QUANTIZATION_CONFIG_NAME] = {}
-        if self.quantization_config is None:
-            self.quantization_config.version = compressed_tensors.__version__
+        config_data[QUANTIZATION_CONFIG_NAME][
+            COMPRESSION_VERSION_NAME
+        ] = compressed_tensors.__version__
+        if self.quantization_config is not None:
             self.quantization_config.quant_method = QUANT_METHOD
         else:
-            config_data[QUANTIZATION_CONFIG_NAME][
-                COMPRESSION_VERSION_NAME
-            ] = compressed_tensors.__version__
             config_data[QUANTIZATION_CONFIG_NAME][QUANT_METHOD_NAME] = QUANT_METHOD
 
         # quantization and sparsity configs
