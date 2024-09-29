@@ -26,14 +26,14 @@ import transformers
 from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
     COMPRESSION_VERSION_NAME,
-    QUANT_METHOD,
-    QUANT_METHOD_NAME,
     QUANTIZATION_CONFIG_NAME,
+    QUANTIZATION_METHOD_NAME,
     SPARSITY_CONFIG_NAME,
 )
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
+    DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
     QuantizationStatus,
     apply_quantization_config,
@@ -215,7 +215,7 @@ class ModelCompressor:
 
         # some fields are required, even if a qconfig is not present
         # pop them off and if nothing remains, then there is no qconfig
-        quant_method = quantization_config.pop(QUANT_METHOD_NAME, None)
+        quant_method = quantization_config.pop(QUANTIZATION_METHOD_NAME, None)
         _ = quantization_config.pop(COMPRESSION_VERSION_NAME, None)
         if len(quantization_config) == 0:
             return None
@@ -223,7 +223,7 @@ class ModelCompressor:
         # replace popped off values
         # note that version is discarded for now
         if quant_method is not None:
-            quantization_config[QUANT_METHOD_NAME] = quant_method
+            quantization_config[QUANTIZATION_METHOD_NAME] = quant_method
 
         return quantization_config
 
@@ -341,9 +341,11 @@ class ModelCompressor:
             COMPRESSION_VERSION_NAME
         ] = compressed_tensors.__version__
         if self.quantization_config is not None:
-            self.quantization_config.quant_method = QUANT_METHOD
+            self.quantization_config.quant_method = DEFAULT_QUANTIZATION_METHOD
         else:
-            config_data[QUANTIZATION_CONFIG_NAME][QUANT_METHOD_NAME] = QUANT_METHOD
+            config_data[QUANTIZATION_CONFIG_NAME][
+                QUANTIZATION_METHOD_NAME
+            ] = DEFAULT_QUANTIZATION_METHOD
 
         # quantization and sparsity configs
         if self.quantization_config is not None:

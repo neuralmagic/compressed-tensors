@@ -15,7 +15,6 @@
 from enum import Enum
 from typing import Dict, List, Optional, Union
 
-from compressed_tensors import QUANT_METHOD
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_scheme import (
@@ -38,6 +37,7 @@ __all__ = [
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
     "DEFAULT_QUANTIZATION_FORMAT",
+    "DEFAULT_QUANTIZATION_METHOD",
 ]
 
 
@@ -104,6 +104,7 @@ LIFECYCLE_ORDER = [
 ]
 
 DEFAULT_QUANTIZATION_FORMAT = "fakequant"
+DEFAULT_QUANTIZATION_METHOD = "compressed-tensors"
 
 
 class QuantizationConfig(BaseModel):
@@ -137,7 +138,7 @@ class QuantizationConfig(BaseModel):
     """
 
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
-    quant_method: str = QUANT_METHOD
+    quant_method: str = DEFAULT_QUANTIZATION_METHOD
     kv_cache_scheme: Optional[QuantizationArgs] = None
     format: str = DEFAULT_QUANTIZATION_FORMAT
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
