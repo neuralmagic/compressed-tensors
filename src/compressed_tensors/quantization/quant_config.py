@@ -36,8 +36,8 @@ __all__ = [
     "QuantizationStatus",
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
-    "DEFAULT_QUANTIZATION_FORMAT",
     "DEFAULT_QUANTIZATION_METHOD",
+    "DEFAULT_QUANTIZATION_FORMAT",
 ]
 
 
@@ -103,8 +103,8 @@ LIFECYCLE_ORDER = [
     QuantizationStatus.COMPRESSED,
 ]
 
-DEFAULT_QUANTIZATION_FORMAT = "fakequant"
 DEFAULT_QUANTIZATION_METHOD = "compressed-tensors"
+DEFAULT_QUANTIZATION_FORMAT = "fakequant"
 
 
 class QuantizationConfig(BaseModel):
