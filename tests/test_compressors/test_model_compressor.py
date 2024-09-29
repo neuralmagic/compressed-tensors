@@ -134,7 +134,6 @@ def test_from_compression_config_hf(s_config, q_config, tmp_path):
 
     combined_config = _get_combined_config(s_config, q_config)
     compression_config = CompressedTensorsConfig(**combined_config)
-
     compressor = ModelCompressor.from_compression_config(compression_config)
 
     s_config = (
@@ -161,13 +160,15 @@ def test_from_compression_config_hf(s_config, q_config, tmp_path):
 )
 def test_from_pretrained_reload(s_config, q_config, tmp_path):
     combined_config = _get_combined_config(s_config, q_config)
-
     model = AutoModel.from_pretrained("Xenova/llama2.c-stories15M")
     compressor = ModelCompressor.from_compression_config(combined_config)
+    assert compressor is not None
+
     model.save_pretrained(tmp_path)
     compressor.update_config(tmp_path)
 
     reloaded = ModelCompressor.from_pretrained(tmp_path)
+    assert reloaded is not None
     assert compressor.sparsity_config == reloaded.sparsity_config
     assert compressor.quantization_config == reloaded.quantization_config
 
@@ -183,6 +184,7 @@ def test_from_pretrained_reload(s_config, q_config, tmp_path):
 def test_from_compressed_model_reload(model_path, tmp_path):
     model_config = AutoConfig.from_pretrained(model_path)
     compressor = ModelCompressor.from_pretrained(model_path)
+    assert compressor is not None
 
     model_config.save_pretrained(tmp_path)
     compressor.update_config(tmp_path)
@@ -190,3 +192,9 @@ def test_from_compressed_model_reload(model_path, tmp_path):
     reloaded = ModelCompressor.from_pretrained(tmp_path)
     assert compressor.sparsity_config == reloaded.sparsity_config
     assert compressor.quantization_config == reloaded.quantization_config
+
+
+def test_from_uncompressed_model_load(tmp_path):
+    model_path = "Xenova/llama2.c-stories15M"
+    compressor = ModelCompressor.from_pretrained(model_path)
+    assert compressor is None
