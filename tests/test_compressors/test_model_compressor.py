@@ -18,7 +18,7 @@ import pytest
 from compressed_tensors.compressors.model_compressor import ModelCompressor
 from compressed_tensors.config.base import SparsityCompressionConfig
 from compressed_tensors.quantization.quant_config import QuantizationConfig
-from transformers import AutoModel
+from transformers import AutoModel, AutoConfig
 
 
 def ct_config_available():
@@ -172,7 +172,6 @@ def test_from_pretrained_reload(s_config, q_config, tmp_path):
     assert compressor.quantization_config == reloaded.quantization_config
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize(
     "model_path",
     [
@@ -182,10 +181,10 @@ def test_from_pretrained_reload(s_config, q_config, tmp_path):
     ],
 )
 def test_from_compressed_model_reload(model_path, tmp_path):
-    model = AutoModel.from_pretrained(model_path)
+    model_config = AutoConfig.from_pretrained(model_path)
     compressor = ModelCompressor.from_pretrained(model_path)
 
-    model.save_pretrained(tmp_path)
+    model_config.save_pretrained(tmp_path)
     compressor.update_config(tmp_path)
 
     reloaded = ModelCompressor.from_pretrained(tmp_path)
