@@ -154,7 +154,7 @@ class ModelCompressor:
                 format, **sparsity_config
             )
         if quantization_config is not None:
-            quantization_config = QuantizationConfig.model_validate(quantization_config)
+            quantization_config = QuantizationConfig.parse_obj(quantization_config)
 
         return cls(
             sparsity_config=sparsity_config, quantization_config=quantization_config
