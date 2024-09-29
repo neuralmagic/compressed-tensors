@@ -14,9 +14,9 @@
 
 import pytest
 from compressed_tensors.quantization import (
-    QuantizationArgs,	
-    QuantizationConfig,	
-    QuantizationScheme,	
+    QuantizationArgs,
+    QuantizationConfig,
+    QuantizationScheme,
 )
 from pydantic import ValidationError
 
