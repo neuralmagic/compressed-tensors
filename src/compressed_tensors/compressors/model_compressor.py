@@ -18,7 +18,7 @@ import operator
 import os
 import re
 from copy import deepcopy
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, TYPE_CHECKING, TypeVar
 
 import torch
 import transformers
@@ -55,6 +55,11 @@ from transformers.file_utils import CONFIG_NAME
 __all__ = ["ModelCompressor", "map_modules_to_quant_args"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+if TYPE_CHECKING:
+    # dummy type if not available from transformers
+    CompressedTensorsConfig = TypeVar("CompressedTensorsConfig")
 
 
 class ModelCompressor:
@@ -95,21 +100,23 @@ class ModelCompressor:
         :return: compressor for the extracted configs
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        return cls.from_compression_config(config)
+        compression_config = (
+            getattr(config, COMPRESSION_CONFIG_NAME, None) or
+            getattr(config, QUANTIZATION_CONFIG_NAME, None)
+        )
+        return cls.from_compression_config(compression_config)
     
 
     @classmethod
-    def from_compression_config(cls, compression_config: Union[Dict[str, Any], AutoConfig, "CompressedTensorsConfig"]):
+    def from_compression_config(cls, compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]):
         """
-        misnomer
-
         :param compression_config:
             A compression or quantization config
 
             The type is one of the following:
-            1. A Dict found under the root config.json
-            2. An AutoConfig found under the root config.json
-            3. A CompressedTensorsConfig found under key "quantization_config" in HF
+            1. A Dict found under either the "quantization_config" or "compression_config"
+                keys in the config.json
+            2. A CompressedTensorsConfig found under key "quantization_config" in HF
                 model config
         :return: compressor for the extracted configs
         """
@@ -127,9 +134,6 @@ class ModelCompressor:
                 )
         except ImportError:
             pass
-
-        # potentially unwrap legacy compression config
-        compression_config = get_attr_or_key(compression_config, COMPRESSION_CONFIG_NAME, compression_config)
 
         sparsity_config = cls.parse_sparsity_config(compression_config)
         quantization_config = cls.parse_quantization_config(compression_config)
@@ -184,45 +188,32 @@ class ModelCompressor:
         )
 
     @staticmethod
-    def parse_sparsity_config(compression_config: Dict) -> Union[Dict, None]:
+    def parse_sparsity_config(compression_config: Dict[str, Any]) -> Union[Dict[str, Any], None]:
         if compression_config is None:
             return None
-        if SPARSITY_CONFIG_NAME not in compression_config:
-            return None
-        if hasattr(compression_config, SPARSITY_CONFIG_NAME):
-            # for loaded HFQuantizer config
-            return getattr(compression_config, SPARSITY_CONFIG_NAME)
-        if SPARSITY_CONFIG_NAME in compression_config:
-            # for loaded HFQuantizer config from dict
-            return compression_config[SPARSITY_CONFIG_NAME]
-
-        # SparseAutoModel format
+        
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
 
+
     @staticmethod
-    def parse_quantization_config(compression_config: Dict) -> Union[Dict, None]:
+    def parse_quantization_config(compression_config: Dict[str, Any]) -> Union[Dict[str, Any], None]:
         if compression_config is None:
             return None
 
-        if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
-            # for loaded HFQuantizer config
-            return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
-
-        if QUANTIZATION_CONFIG_NAME in compression_config:
-            # for loaded HFQuantizer config from dict
-            return compression_config[QUANTIZATION_CONFIG_NAME]
-
-        # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
 
         # some fields are required, even if a qconfig is not present
         # pop them off and if nothing remains, then there is no qconfig
-        quant_method = 
-
-
+        quant_method = quantization_config.pop(QUANT_METHOD_NAME, None)
+        _version = quantization_config.pop(COMPRESSION_VERSION_NAME, None)
         if len(quantization_config) == 0:
             return None
+        
+        # replace popped off values
+        # note that version is discarded for now
+        if quant_method is not None:
+            quantization_config[QUANT_METHOD_NAME] = quant_method
         
         return quantization_config
 
@@ -344,6 +335,7 @@ class ModelCompressor:
             config_data[QUANTIZATION_CONFIG_NAME][COMPRESSION_VERSION_NAME] = compressed_tensors.__version__
             config_data[QUANTIZATION_CONFIG_NAME][QUANT_METHOD_NAME] = QUANT_METHOD
 
+        # quantization and sparsity configs
         if self.quantization_config is not None:
             quant_config_data = self.quantization_config.model_dump()
             config_data[QUANTIZATION_CONFIG_NAME] = quant_config_data

@@ -37,7 +37,6 @@ __all__ = [
     "QuantizationStatus",
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
-    "DEFAULT_QUANTIZATION_METHOD",
     "DEFAULT_QUANTIZATION_FORMAT",
 ]
 
@@ -112,7 +111,6 @@ class QuantizationConfig(BaseModel):
     Full configuration specifying how a model is quantized. Each quantized layer is
     mapped to a QuantizationScheme in config_groups.
 
-    :param version: compressed-tensors version used to create this config
     :param config_groups: dict of QuantizationSchemes specifying the quantization
     settings for each quantized layer. A group could also be a reference to
     a predefined scheme name, mapped to a list of its target layers/classes
@@ -138,7 +136,6 @@ class QuantizationConfig(BaseModel):
     are not quantized even if they match up with a target in config_groups
     """
 
-    version: Optional[str] = None
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
     quant_method: str = QUANT_METHOD
     kv_cache_scheme: Optional[QuantizationArgs] = None
