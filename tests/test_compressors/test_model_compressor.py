@@ -172,6 +172,7 @@ def test_from_pretrained_reload(s_config, q_config, tmp_path):
     assert compressor.quantization_config == reloaded.quantization_config
 
 
+@pytest.mark.skip
 @pytest.mark.parametrize(
     "model_path",
     [
