@@ -389,18 +389,3 @@ def new_dtype_byte_size(dtype):
         raise ValueError(f"`dtype` is not a valid dtype: {dtype}.")
     bit_size = int(bit_search.groups()[0])
     return bit_size // 8
-
-
-def has_attr_or_key(obj: Any, key: str) -> bool:
-    return hasattr(obj, key) or key in obj
-
-
-def get_attr_or_key(obj: Any, key: str, default=None) -> Any:
-    if hasattr(obj, key):
-        return getattr(obj, key)
-
-    elif key in obj:
-        return obj[key]
-
-    else:
-        return default
