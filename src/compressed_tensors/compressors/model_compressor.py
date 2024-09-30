@@ -185,7 +185,7 @@ class ModelCompressor:
 
     @staticmethod
     def parse_sparsity_config(
-        compression_config: Dict[str, Any]
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
     ) -> Union[Dict[str, Any], None]:
         """
         Parse sparsity config from quantization/compression config. Sparsity
@@ -197,11 +197,15 @@ class ModelCompressor:
         if compression_config is None:
             return None
 
+        if is_compressed_tensors_config(compression_config):
+            s_config = compression_config.sparsity_config
+            return s_config.dict() if s_config is not None else None
+
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
 
     @staticmethod
     def parse_quantization_config(
-        compression_config: Dict[str, Any]
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
     ) -> Union[Dict[str, Any], None]:
         """
         Parse quantization config from quantization/compression config. The
@@ -213,6 +217,10 @@ class ModelCompressor:
         """
         if compression_config is None:
             return None
+
+        if is_compressed_tensors_config(compression_config):
+            q_config = compression_config.quantization_config
+            return q_config.dict() if q_config is not None else None
 
         # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
