@@ -81,7 +81,9 @@ def test_config_format(s_config, q_config):
     assert ModelCompressor.parse_quantization_config(combined_config) == q_config
 
 
-@pytest.mark.skipif(not compressed_tensors_config_available())
+@pytest.mark.skipif(
+    not compressed_tensors_config_available(), reason="requires transformers>=4.45"
+)
 @pytest.mark.parametrize(
     "s_config,q_config",
     [
