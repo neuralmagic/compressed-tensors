@@ -18,7 +18,7 @@ import pytest
 from compressed_tensors.compressors.model_compressor import ModelCompressor
 from compressed_tensors.config.base import SparsityCompressionConfig
 from compressed_tensors.quantization.quant_config import QuantizationConfig
-from transformers import AutoModel, AutoConfig
+from transformers import AutoConfig
 
 
 def ct_config_available():
@@ -118,8 +118,6 @@ def test_from_compression_config_dict(s_config, q_config, tmp_path):
 
 
 pytest.mark.skipif(not ct_config_available())
-
-
 @pytest.mark.parametrize(
     "s_config,q_config",
     [
@@ -160,11 +158,11 @@ def test_from_compression_config_hf(s_config, q_config, tmp_path):
 )
 def test_from_pretrained_reload(s_config, q_config, tmp_path):
     combined_config = _get_combined_config(s_config, q_config)
-    model = AutoModel.from_pretrained("Xenova/llama2.c-stories15M")
+    model_config = AutoConfig.from_pretrained("Xenova/llama2.c-stories15M")
     compressor = ModelCompressor.from_compression_config(combined_config)
     assert compressor is not None
 
-    model.save_pretrained(tmp_path)
+    model_config.save_pretrained(tmp_path)
     compressor.update_config(tmp_path)
 
     reloaded = ModelCompressor.from_pretrained(tmp_path)
