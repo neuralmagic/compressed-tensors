@@ -20,9 +20,9 @@ import re
 from copy import deepcopy
 from typing import Any, Dict, Optional, Union
 
+import compressed_tensors
 import torch
 import transformers
-import compressed_tensors
 from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
     COMPRESSION_VERSION_NAME,
@@ -90,10 +90,12 @@ class ModelCompressor:
         configs and load a ModelCompressor
 
         :param pretrained_model_name_or_path: path to model config on disk or HF hub
-        :return: compressor for the extracted configs
+        :return: compressor for the configs, or None if model is not compressed
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
+        compression_config = getattr(config, QUANTIZATION_CONFIG_NAME, None) or getattr(
+            config, COMPRESSION_CONFIG_NAME, None
+        )
         return cls.from_compression_config(compression_config)
 
     @classmethod
@@ -215,7 +217,6 @@ class ModelCompressor:
         self.quantization_config = quantization_config
         self.sparsity_compressor = None
         self.quantization_compressor = None
-
 
         if sparsity_config and sparsity_config.format == CompressionFormat.dense.value:
             # ignore dense sparsity config
