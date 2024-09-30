@@ -222,7 +222,6 @@ class ModelCompressor:
             q_config = compression_config.quantization_config
             return q_config.dict() if q_config is not None else None
 
-        # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
         quantization_config.pop(COMPRESSION_VERSION_NAME, None)
