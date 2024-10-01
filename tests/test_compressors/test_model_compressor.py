@@ -18,17 +18,7 @@ import pytest
 from compressed_tensors.compressors.model_compressor import ModelCompressor
 from compressed_tensors.config.base import SparsityCompressionConfig
 from compressed_tensors.quantization.quant_config import QuantizationConfig
-
-
-def compressed_tensors_config_available():
-    try:
-        from transformers.utils.quantization_config import (  # noqa: F401
-            CompressedTensorsConfig,
-        )
-
-        return True
-    except ImportError:
-        return False
+from testing_utils import requires_hf_quantizer
 
 
 def sparsity_config():
@@ -81,9 +71,7 @@ def test_config_format(s_config, q_config):
     assert ModelCompressor.parse_quantization_config(combined_config) == q_config
 
 
-@pytest.mark.skipif(
-    not compressed_tensors_config_available(), reason="requires transformers>=4.45"
-)
+@requires_hf_quantizer()
 @pytest.mark.parametrize(
     "s_config,q_config",
     [
