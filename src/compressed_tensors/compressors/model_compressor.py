@@ -27,11 +27,13 @@ from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
     COMPRESSION_VERSION_NAME,
     QUANTIZATION_CONFIG_NAME,
+    QUANTIZATION_METHOD_NAME,
     SPARSITY_CONFIG_NAME,
 )
 from compressed_tensors.compressors import Compressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
+    DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
     QuantizationStatus,
     apply_quantization_config,
@@ -221,9 +223,20 @@ class ModelCompressor:
 
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
-        quantization_config.pop(COMPRESSION_VERSION_NAME, None)
+
+        # some fields are required, even if a qconfig is not present
+        # pop them off and if nothing remains, then there is no qconfig
+        quant_method = quantization_config.pop(QUANTIZATION_METHOD_NAME, None)
+        _ = quantization_config.pop(COMPRESSION_VERSION_NAME, None)
+
         if len(quantization_config) == 0:
-            quantization_config = None
+            return None
+
+        # replace popped off values
+        # note that version is discarded for now
+        if quant_method is not None:
+            quantization_config[QUANTIZATION_METHOD_NAME] = quant_method
+
         return quantization_config
 
     def __init__(
@@ -319,6 +332,9 @@ class ModelCompressor:
 
         :param save_directory: path to a folder containing a HF model config
         """
+        if self.quantization_config is None and self.sparsity_config is None:
+            return
+
         config_file_path = os.path.join(save_directory, CONFIG_NAME)
         if not os.path.exists(config_file_path):
             _LOGGER.warning(
@@ -330,7 +346,20 @@ class ModelCompressor:
         with open(config_file_path, "r") as config_file:
             config_data = json.load(config_file)
 
+        # required metadata whenever a quantization or sparsity config is present
+        # overwrite previous config and version if already existing
         config_data[QUANTIZATION_CONFIG_NAME] = {}
+        config_data[QUANTIZATION_CONFIG_NAME][
+            COMPRESSION_VERSION_NAME
+        ] = compressed_tensors.__version__
+        if self.quantization_config is not None:
+            self.quantization_config.quant_method = DEFAULT_QUANTIZATION_METHOD
+        else:
+            config_data[QUANTIZATION_CONFIG_NAME][
+                QUANTIZATION_METHOD_NAME
+            ] = DEFAULT_QUANTIZATION_METHOD
+
+        # quantization and sparsity configs
         if self.quantization_config is not None:
             quant_config_data = self.quantization_config.model_dump()
             config_data[QUANTIZATION_CONFIG_NAME] = quant_config_data
@@ -339,9 +368,6 @@ class ModelCompressor:
             config_data[QUANTIZATION_CONFIG_NAME][
                 SPARSITY_CONFIG_NAME
             ] = sparsity_config_data
-        config_data[QUANTIZATION_CONFIG_NAME][
-            COMPRESSION_VERSION_NAME
-        ] = compressed_tensors.__version__
 
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)
