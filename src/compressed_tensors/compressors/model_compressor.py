@@ -125,13 +125,10 @@ class ModelCompressor:
         # check for CompressedTensorsConfig
         if is_compressed_tensors_config(compression_config):
             compression_config = compression_config.to_dict()
-            sparsity_config = compression_config["sparsity_config"]
-            quantization_config = compression_config["quantization_config"]
 
-        else:
-            # parse from dict
-            sparsity_config = cls.parse_sparsity_config(compression_config)
-            quantization_config = cls.parse_quantization_config(compression_config)
+        # parse from dict
+        sparsity_config = cls.parse_sparsity_config(compression_config)
+        quantization_config = cls.parse_quantization_config(compression_config)
 
         # skip if no configs are present
         if sparsity_config is None and quantization_config is None:
