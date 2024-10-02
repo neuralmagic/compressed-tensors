@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from abc import ABC, abstractmethod
 from typing import Dict, Generator, Optional, Tuple, Union
 
 import torch
@@ -25,7 +26,7 @@ from torch.nn import Module
 __all__ = ["BaseCompressor"]
 
 
-class BaseCompressor(RegistryMixin):
+class BaseCompressor(RegistryMixin, ABC):
     """
     Base class representing a model compression algorithm. Each child class should
     implement compression_param_info, compress_weight and decompress_weight.
@@ -76,6 +77,7 @@ class BaseCompressor(RegistryMixin):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def compress(
         self,
         model_state: Dict[str, Tensor],
@@ -90,6 +92,7 @@ class BaseCompressor(RegistryMixin):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def decompress(
         self,
         path_to_model_or_tensors: str,
