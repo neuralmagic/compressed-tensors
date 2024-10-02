@@ -50,6 +50,11 @@ def get_dummy_quant_config(strategy, group_size=None):
     return quant_config
 
 
+def make_dummy_g_idx(columns: int, group_size: int) -> torch.Tensor:
+    perm = torch.randperm(columns)
+    return torch.tensor([index // group_size for index in range(columns)])[perm]
+
+
 @pytest.mark.parametrize(
     "strategy,group_size,sc,zp",
     [
@@ -62,7 +67,7 @@ def get_dummy_quant_config(strategy, group_size=None):
         ],
         [
             QuantizationStrategy.CHANNEL,
-            128,
+            None,
             torch.rand((512, 1)) * 0.01,
             torch.zeros((512, 1), dtype=torch.int8),
         ],
@@ -74,6 +79,9 @@ def test_quant_format(strategy, group_size, sc, zp):
         "dummy.weight_scale": torch.tensor(sc, dtype=torch.float32),
         "dummy.weight_zero_point": torch.tensor(zp, dtype=torch.float32),
     }
+    if group_size is not None:
+        dense_state_dict["dummy.weight_g_idx"] = make_dummy_g_idx(512, group_size)
+
     quant_config = get_dummy_quant_config(strategy=strategy, group_size=group_size)
 
     compressor = FloatQuantizationCompressor(config=quant_config)
@@ -86,8 +94,16 @@ def test_quant_format(strategy, group_size, sc, zp):
     assert len(dense_state_dict) == len(compressed_state_dict) + 1
 
     # check compressed to int8
-    assert compressed_state_dict["dummy.weight"].dtype == torch.float8_e4m3fn
     assert compressed_state_dict["dummy.weight_scale"].dtype == torch.float32
+    assert torch.equal(
+        compressed_state_dict["dummy.weight_scale"],
+        dense_state_dict["dummy.weight_scale"],
+    )
+    if group_size is not None:
+        assert torch.equal(
+            compressed_state_dict["dummy.weight_g_idx"],
+            dense_state_dict["dummy.weight_g_idx"],
+        )
 
 
 @pytest.mark.parametrize(
@@ -95,6 +111,7 @@ def test_quant_format(strategy, group_size, sc, zp):
     [
         [QuantizationStrategy.TENSOR, None],
         [QuantizationStrategy.CHANNEL, None],
+        # Note that group quantization is not supported
     ],
 )
 def test_reload_match(strategy, group_size, tmp_path):
@@ -121,7 +138,9 @@ def test_reload_match(strategy, group_size, tmp_path):
         model.state_dict(), names_to_scheme=quantized_modules_to_args
     )
     save_file(compressed_state_dict, tmp_path / "model.safetensors")
-    reconstructed_dense_gen = compressor.decompress(tmp_path)
+    reconstructed_dense_gen = compressor.decompress(
+        tmp_path, names_to_scheme=quantized_modules_to_args
+    )
     reconstructed_dense = {}
     for name, value in reconstructed_dense_gen:
         reconstructed_dense[name] = value

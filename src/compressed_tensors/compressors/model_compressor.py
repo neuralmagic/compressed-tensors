@@ -20,16 +20,20 @@ import re
 from copy import deepcopy
 from typing import Any, Dict, Optional, Union
 
+import compressed_tensors
 import torch
 import transformers
 from compressed_tensors.base import (
     COMPRESSION_CONFIG_NAME,
+    COMPRESSION_VERSION_NAME,
     QUANTIZATION_CONFIG_NAME,
+    QUANTIZATION_METHOD_NAME,
     SPARSITY_CONFIG_NAME,
 )
 from compressed_tensors.compressors import Compressor
-from compressed_tensors.config import SparsityCompressionConfig
+from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
+    DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
     QuantizationStatus,
     apply_quantization_config,
@@ -176,12 +180,25 @@ class ModelCompressor:
         if hasattr(compression_config, SPARSITY_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, SPARSITY_CONFIG_NAME)
+        if SPARSITY_CONFIG_NAME in compression_config:
+            # for loaded HFQuantizer config from dict
+            return compression_config[SPARSITY_CONFIG_NAME]
 
         # SparseAutoModel format
         return compression_config.get(SPARSITY_CONFIG_NAME, None)
 
     @staticmethod
-    def parse_quantization_config(compression_config: Dict) -> Union[Dict, None]:
+    def parse_quantization_config(
+        compression_config: Dict[str, Any]
+    ) -> Union[Dict[str, Any], None]:
+        """
+        Parse quantization config from quantization/compression config. The
+        quantization are all the fields that are not the sparsity config or
+        metadata fields
+
+        :param compression_config: quantization/compression config
+        :return: quantization config without sparsity config or metadata fields
+        """
         if compression_config is None:
             return None
 
@@ -193,11 +210,27 @@ class ModelCompressor:
         ):
             return compression_config[QUANTIZATION_CONFIG_NAME]
 
+        if QUANTIZATION_CONFIG_NAME in compression_config:
+            # for loaded HFQuantizer config from dict
+            return compression_config[QUANTIZATION_CONFIG_NAME]
+
         # SparseAutoModel format
         quantization_config = deepcopy(compression_config)
         quantization_config.pop(SPARSITY_CONFIG_NAME, None)
+
+        # some fields are required, even if a qconfig is not present
+        # pop them off and if nothing remains, then there is no qconfig
+        quant_method = quantization_config.pop(QUANTIZATION_METHOD_NAME, None)
+        _ = quantization_config.pop(COMPRESSION_VERSION_NAME, None)
+
         if len(quantization_config) == 0:
-            quantization_config = None
+            return None
+
+        # replace popped off values
+        # note that version is discarded for now
+        if quant_method is not None:
+            quantization_config[QUANTIZATION_METHOD_NAME] = quant_method
+
         return quantization_config
 
     def __init__(
@@ -209,6 +242,10 @@ class ModelCompressor:
         self.quantization_config = quantization_config
         self.sparsity_compressor = None
         self.quantization_compressor = None
+
+        if sparsity_config and sparsity_config.format == CompressionFormat.dense.value:
+            # ignore dense sparsity config
+            self.sparsity_config = None
 
         if sparsity_config is not None:
             self.sparsity_compressor = Compressor.load_from_registry(
@@ -238,61 +275,15 @@ class ModelCompressor:
             compressed_state_dict = self.quantization_compressor.compress(
                 state_dict, names_to_scheme=quantized_modules_to_args
             )
+            if self.quantization_config.format != CompressionFormat.dense.value:
+                self.quantization_config.quantization_status = (
+                    QuantizationStatus.COMPRESSED
+                )
 
         if self.sparsity_compressor is not None:
             compressed_state_dict = self.sparsity_compressor.compress(
                 compressed_state_dict
             )
-
-        # HACK (mgoin): Post-process step for kv cache scales to take the
-        # k/v_proj module `output_scale` parameters, and store them in the
-        # parent attention module as `k_scale` and `v_scale`
-        #
-        # Example:
-        #  Replace `model.layers.0.self_attn.k_proj.output_scale`
-        #  with    `model.layers.0.self_attn.k_scale`
-        if self.quantization_config.kv_cache_scheme is not None:
-            # HACK (mgoin): We assume the quantized modules in question
-            # will be k_proj and v_proj since those are the default targets.
-            # We check that both of these modules have output activation
-            # quantization, and additionally check that q_proj doesn't.
-            q_proj_has_no_quant_output = 0
-            k_proj_has_quant_output = 0
-            v_proj_has_quant_output = 0
-            for name, module in model.named_modules():
-                if not hasattr(module, "quantization_scheme"):
-                    continue
-                out_act = module.quantization_scheme.output_activations
-                if name.endswith(".q_proj") and out_act is None:
-                    q_proj_has_no_quant_output += 1
-                elif name.endswith(".k_proj") and out_act is not None:
-                    k_proj_has_quant_output += 1
-                elif name.endswith(".v_proj") and out_act is not None:
-                    v_proj_has_quant_output += 1
-
-            assert (
-                q_proj_has_no_quant_output > 0
-                and k_proj_has_quant_output > 0
-                and v_proj_has_quant_output > 0
-            )
-            assert (
-                q_proj_has_no_quant_output
-                == k_proj_has_quant_output
-                == v_proj_has_quant_output
-            )
-
-            # Move all .k/v_proj.output_scale parameters to .k/v_scale
-            working_state_dict = {}
-            for key in compressed_state_dict.keys():
-                if key.endswith(".k_proj.output_scale"):
-                    new_key = key.replace(".k_proj.output_scale", ".k_scale")
-                    working_state_dict[new_key] = compressed_state_dict[key]
-                elif key.endswith(".v_proj.output_scale"):
-                    new_key = key.replace(".v_proj.output_scale", ".v_scale")
-                    working_state_dict[new_key] = compressed_state_dict[key]
-                else:
-                    working_state_dict[key] = compressed_state_dict[key]
-            compressed_state_dict = working_state_dict
 
         # HACK: Override the dtype_byte_size function in transformers to
         # support float8 types. Fix is posted upstream
@@ -335,6 +326,9 @@ class ModelCompressor:
 
         :param save_directory: path to a folder containing a HF model config
         """
+        if self.quantization_config is None and self.sparsity_config is None:
+            return
+
         config_file_path = os.path.join(save_directory, CONFIG_NAME)
         if not os.path.exists(config_file_path):
             _LOGGER.warning(
@@ -346,15 +340,31 @@ class ModelCompressor:
         with open(config_file_path, "r") as config_file:
             config_data = json.load(config_file)
 
-        config_data[COMPRESSION_CONFIG_NAME] = {}
+        # required metadata whenever a quantization or sparsity config is present
+        # overwrite previous config and version if already existing
+        config_data[QUANTIZATION_CONFIG_NAME] = {}
+        config_data[QUANTIZATION_CONFIG_NAME][
+            COMPRESSION_VERSION_NAME
+        ] = compressed_tensors.__version__
+        if self.quantization_config is not None:
+            self.quantization_config.quant_method = DEFAULT_QUANTIZATION_METHOD
+        else:
+            config_data[QUANTIZATION_CONFIG_NAME][
+                QUANTIZATION_METHOD_NAME
+            ] = DEFAULT_QUANTIZATION_METHOD
+
+        # quantization and sparsity configs
         if self.quantization_config is not None:
             quant_config_data = self.quantization_config.model_dump()
-            config_data[COMPRESSION_CONFIG_NAME] = quant_config_data
+            config_data[QUANTIZATION_CONFIG_NAME] = quant_config_data
         if self.sparsity_config is not None:
             sparsity_config_data = self.sparsity_config.model_dump()
-            config_data[COMPRESSION_CONFIG_NAME][
+            config_data[QUANTIZATION_CONFIG_NAME][
                 SPARSITY_CONFIG_NAME
             ] = sparsity_config_data
+        config_data[QUANTIZATION_CONFIG_NAME][
+            COMPRESSION_VERSION_NAME
+        ] = compressed_tensors.__version__
 
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)

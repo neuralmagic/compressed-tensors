@@ -15,6 +15,7 @@
 
 import math
 import shutil
+from collections import OrderedDict
 
 import pytest
 import torch
@@ -27,24 +28,37 @@ from compressed_tensors.quantization import (
     QuantizationArgs,
     QuantizationConfig,
     QuantizationScheme,
+    QuantizationStatus,
+    apply_quantization_config,
+    apply_quantization_status,
 )
 from compressed_tensors.quantization.lifecycle.forward import fake_quantize
+from compressed_tensors.quantization.quant_args import ActivationOrdering
 from safetensors.torch import save_file
+from torch.nn.modules import Linear, Sequential
 
 
-def get_dummy_quant_config(num_bits=4):
+def get_dummy_quant_config(num_bits=4, strategy=None, group_size=None, actorder=None):
     config_groups = {
         "group_1": QuantizationScheme(
-            targets=["Linear"], weights=QuantizationArgs(num_bits=num_bits)
+            targets=["Linear"],
+            weights=QuantizationArgs(
+                num_bits=num_bits,
+                strategy=strategy,
+                group_size=group_size,
+                actorder=actorder,
+            ),
         ),
     }
-    ignore = ["lm_head"]
-    quant_config = QuantizationConfig(
-        config_groups=config_groups,
-        ignore=ignore,
-    )
+    return QuantizationConfig(config_groups=config_groups)
 
-    return quant_config
+
+def make_dummy_g_idx(columns: int, group_size: int) -> torch.Tensor:
+    perm = torch.randperm(columns)
+    return torch.nn.Parameter(
+        (torch.arange(columns, dtype=torch.int) // group_size)[perm],
+        requires_grad=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -179,5 +193,63 @@ def test_reload_match(tmp_path, num_bits):
     assert torch.equal(
         fake_quant_dummy2, reconstructed_dense["dummy2.weight"].to(torch.float32)
     )
+
+    shutil.rmtree(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "actorder",
+    [
+        ActivationOrdering.GROUP,
+        ActivationOrdering.WEIGHT,
+        None,
+    ],
+)
+def test_actorder_reload_match(actorder, tmp_path):
+    model = Sequential(OrderedDict([("dummy", Linear(512, 1024, bias=None))]))
+    group_size = 128
+    quant_config = get_dummy_quant_config(
+        strategy="group", group_size=group_size, actorder=actorder
+    )
+    apply_quantization_config(model, quant_config)
+
+    # run calibration
+    apply_quantization_status(model, QuantizationStatus.CALIBRATION)
+    for _ in range(16):
+        inputs = torch.rand((512, 512))
+        _ = model(inputs)
+    apply_quantization_status(model, QuantizationStatus.FROZEN)
+
+    # apply gptq
+    if actorder == ActivationOrdering.GROUP:
+        init_g_idx = make_dummy_g_idx(512, group_size)
+        model.dummy.register_parameter("weight_g_idx", init_g_idx)
+
+    # compress
+    compressor = PackedQuantizationCompressor(config=quant_config)
+    quantized_modules_to_args = {
+        "dummy": quant_config.config_groups["group_1"].weights,
+    }
+    compressed_state_dict = compressor.compress(
+        model.state_dict(), names_to_scheme=quantized_modules_to_args
+    )
+    save_file(compressed_state_dict, tmp_path / "model.safetensors")
+
+    # decompress
+    reconstructed_dense_gen = compressor.decompress(
+        tmp_path, names_to_scheme=quantized_modules_to_args
+    )
+    reconstructed_dense = {}
+    for name, value in reconstructed_dense_gen:
+        reconstructed_dense[name] = value
+
+    fake_quant_dummy = fake_quantize(
+        model.dummy.weight,
+        scale=model.dummy.weight_scale,
+        zero_point=model.dummy.weight_zero_point,
+        g_idx=getattr(model.dummy, "weight_g_idx", None),
+        args=quantized_modules_to_args["dummy"],
+    )
+    assert torch.equal(fake_quant_dummy, reconstructed_dense["dummy.weight"])
 
     shutil.rmtree(tmp_path)

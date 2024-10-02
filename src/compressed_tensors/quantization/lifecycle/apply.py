@@ -21,6 +21,7 @@ from typing import OrderedDict as OrderedDictType
 from typing import Union
 
 import torch
+from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.lifecycle.calibration import (
     set_module_for_calibration,
 )
@@ -42,8 +43,9 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     is_kv_cache_quant_scheme,
     iter_named_leaf_modules,
+    iter_named_quantizable_modules,
 )
-from compressed_tensors.utils.helpers import fix_fsdp_module_name
+from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
@@ -104,12 +106,16 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
             )
 
 
-def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict:
+def apply_quantization_config(
+    model: Module, config: QuantizationConfig, run_compressed: bool = False
+) -> Dict:
     """
     Initializes the model for quantization in-place based on the given config
 
     :param model: model to apply quantization config to
     :param config: quantization config
+    :param run_compressed: Whether the model will be run in compressed mode or
+        decompressed fully on load
     """
     # remove reference to the original `config`
     # argument. This function can mutate it, and we'd
@@ -124,22 +130,47 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
+    if run_compressed:
+        from compressed_tensors.linear.compressed_linear import CompressedLinear
+
     # list of submodules to ignore
     ignored_submodules = defaultdict(list)
     # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in iter_named_leaf_modules(model):
+    for name, submodule in iter_named_quantizable_modules(
+        model,
+        include_children=True,
+        include_attn=True,
+    ):  # child modules and attention modules
         # potentially fix module name to remove FSDP wrapper prefix
         name = fix_fsdp_module_name(name)
         if matches := find_name_or_class_matches(name, submodule, config.ignore):
             for match in matches:
                 ignored_submodules[match].append(name)
             continue  # layer matches ignore list, continue
+
         targets = find_name_or_class_matches(name, submodule, target_to_scheme)
+
         if targets:
+            # mark modules to be quantized by adding
+            # quant scheme to the matching layers
+            scheme = _scheme_from_targets(target_to_scheme, targets, name)
+            if run_compressed:
+                format = config.format
+                if format != CompressionFormat.dense.value:
+                    if isinstance(submodule, torch.nn.Linear):
+                        # TODO: expand to more module types
+                        compressed_linear = CompressedLinear.from_linear(
+                            submodule,
+                            quantization_scheme=scheme,
+                            quantization_format=format,
+                        )
+                        replace_module(model, name, compressed_linear)
+
             # target matched - add layer and scheme to target list
             submodule.quantization_scheme = _scheme_from_targets(
                 target_to_scheme, targets, name
             )
+
             names_to_scheme[name] = submodule.quantization_scheme.weights
 
     if config.ignore is not None and ignored_submodules is not None:
@@ -149,8 +180,8 @@ def apply_quantization_config(model: Module, config: QuantizationConfig) -> Dict
                 "not found in the model: "
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
-    # apply current quantization status across all targeted layers
 
+    # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
     return names_to_scheme
 
@@ -178,6 +209,9 @@ def process_kv_cache_config(
     :param config: the QuantizationConfig
     :return: the QuantizationConfig with additional "kv_cache" group
     """
+    if targets == KV_CACHE_TARGETS:
+        _LOGGER.info(f"KV cache targets set to default value of: {KV_CACHE_TARGETS}")
+
     kv_cache_dict = config.kv_cache_scheme.model_dump()
     kv_cache_scheme = QuantizationScheme(
         output_activations=QuantizationArgs(**kv_cache_dict),
@@ -198,7 +232,12 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     current_status = infer_quantization_status(model)
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
-        model.apply(initialize_module_for_quantization)
+        force_zero_point_init = status != QuantizationStatus.COMPRESSED
+        model.apply(
+            lambda module: initialize_module_for_quantization(
+                module, force_zero_point=force_zero_point_init
+            )
+        )
 
     if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
         # only quantize weights up front when our end goal state is calibration,
@@ -279,9 +318,11 @@ def _load_quant_args_from_state_dict(
     """
     scale_name = f"{base_name}_scale"
     zp_name = f"{base_name}_zero_point"
+    g_idx_name = f"{base_name}_g_idx"
 
     state_dict_scale = state_dict.get(f"{module_name}.{scale_name}", None)
     state_dict_zp = state_dict.get(f"{module_name}.{zp_name}", None)
+    state_dict_g_idx = state_dict.get(f"{module_name}.{g_idx_name}", None)
 
     if state_dict_scale is not None:
         # module is quantized
@@ -290,6 +331,9 @@ def _load_quant_args_from_state_dict(
             # fill in zero point for symmetric quantization
             state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
         update_parameter_data(module, state_dict_zp, zp_name)
+
+    if state_dict_g_idx is not None:
+        update_parameter_data(module, state_dict_g_idx, g_idx_name)
 
 
 def _scheme_from_targets(
