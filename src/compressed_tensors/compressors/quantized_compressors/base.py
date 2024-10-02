@@ -40,7 +40,7 @@ class BaseQuantizationCompressor(BaseCompressor):
     Model Load Lifecycle (run_compressed=False):
         - ModelCompressor.decompress()
             - apply_quantization_config()
-            - BaseQuantiazationCompressor.decompress()
+            - BaseQuantizationCompressor.decompress()
                 - BaseQuantizationCompressor.decompress_weight()
 
     Model Save Lifecycle:
@@ -55,7 +55,7 @@ class BaseQuantizationCompressor(BaseCompressor):
             - BaseQuantizationCompressor.compression_param_info()
             - register_parameters()
         - compressed_module.forward()
-            -compressed_module.decompress()
+            - compressed_module.decompress()
 
 
     :param config: config specifying compression parameters
