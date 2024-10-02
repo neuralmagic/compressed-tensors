@@ -26,7 +26,7 @@ def compressed_tensors_config_available():
         return False
 
 
-def requires_hf_quantizer(test_case):
+def requires_hf_quantizer():
     return pytest.mark.skipif(
         not compressed_tensors_config_available(),
         reason="requires transformers>=4.45 to support CompressedTensorsHfQuantizer",

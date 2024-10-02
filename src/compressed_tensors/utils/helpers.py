@@ -110,6 +110,8 @@ def is_compressed_tensors_config(compression_config: Any) -> bool:
     """
     Returns True if CompressedTensorsConfig is available from transformers and
     compression_config is an instance of CompressedTensorsConfig
+
+    See: https://github.com/huggingface/transformers/pull/31704
     """
     try:
         from transformers.utils.quantization_config import CompressedTensorsConfig
