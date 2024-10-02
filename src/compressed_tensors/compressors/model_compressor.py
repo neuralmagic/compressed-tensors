@@ -205,6 +205,10 @@ class ModelCompressor:
         if hasattr(compression_config, QUANTIZATION_CONFIG_NAME):
             # for loaded HFQuantizer config
             return getattr(compression_config, QUANTIZATION_CONFIG_NAME)
+        elif isinstance(compression_config, dict) and (
+            QUANTIZATION_CONFIG_NAME in compression_config
+        ):
+            return compression_config[QUANTIZATION_CONFIG_NAME]
 
         if QUANTIZATION_CONFIG_NAME in compression_config:
             # for loaded HFQuantizer config from dict
