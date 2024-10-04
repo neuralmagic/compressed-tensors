@@ -117,6 +117,7 @@ def apply_quantization_config(
     :param run_compressed: Whether the model will be run in compressed mode or
         decompressed fully on load
     """
+    # Workaround for when HF Quantizer passes None, see PR #180
     if config is None:
         return OrderedDict()
 
@@ -189,14 +190,14 @@ def apply_quantization_config(
     return names_to_scheme
 
 
-def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
+def process_quantization_config(config: Optional[QuantizationConfig]) -> Optional[QuantizationConfig]:
     """
     Preprocess the raw QuantizationConfig
 
-    :param config: the raw QuantizationConfig
-    :return: the processed QuantizationConfig
+    :param config: Optional raw QuantizationConfig
+    :return: the processed QuantizationConfig, if the raw config is not None
     """
-    if config.kv_cache_scheme is not None:
+    if config is not None and config.kv_cache_scheme is not None:
         config = process_kv_cache_config(config)
 
     return config
