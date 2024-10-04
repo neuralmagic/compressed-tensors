@@ -117,6 +117,7 @@ def apply_quantization_config(
     :param run_compressed: Whether the model will be run in compressed mode or
         decompressed fully on load
     """
+    # Workaround for when HF Quantizer passes None, see PR #180
     if config is None:
         return OrderedDict()
 
