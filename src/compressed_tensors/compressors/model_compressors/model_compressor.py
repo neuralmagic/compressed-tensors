@@ -17,6 +17,7 @@ import logging
 import operator
 import os
 import re
+import warnings
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union
 
@@ -242,8 +243,14 @@ class ModelCompressor:
         self.sparsity_compressor = None
         self.quantization_compressor = None
 
-        if sparsity_config and sparsity_config.format == CompressionFormat.dense.value:
-            # ignore dense sparsity config
+        # ignore sparse-quantized models are not supported
+        # in this case, ignore sparsity config
+        if quantization_config and sparsity_config:
+            warnings.warn(
+                "Sparse-quantized model compression is not supported in this version "
+                "of compressed-tensors. Since the model is quantized, model sparsity "
+                "will be ignored"
+            )
             self.sparsity_config = None
 
         if sparsity_config is not None:
