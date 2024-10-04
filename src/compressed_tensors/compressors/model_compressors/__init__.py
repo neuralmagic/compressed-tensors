@@ -11,10 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# flake8: noqa
 
-SPARSITY_CONFIG_NAME = "sparsity_config"
-QUANTIZATION_CONFIG_NAME = "quantization_config"
-COMPRESSION_CONFIG_NAME = "compression_config"
-KV_CACHE_SCHEME_NAME = "kv_cache_scheme"
-COMPRESSION_VERSION_NAME = "version"
-QUANTIZATION_METHOD_NAME = "quant_method"
+
+from .model_compressor import *

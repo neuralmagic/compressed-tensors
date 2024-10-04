@@ -12,9 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SPARSITY_CONFIG_NAME = "sparsity_config"
-QUANTIZATION_CONFIG_NAME = "quantization_config"
-COMPRESSION_CONFIG_NAME = "compression_config"
-KV_CACHE_SCHEME_NAME = "kv_cache_scheme"
-COMPRESSION_VERSION_NAME = "version"
-QUANTIZATION_METHOD_NAME = "quant_method"
+import pytest
+
+
+def compressed_tensors_config_available():
+    try:
+        from transformers.utils.quantization_config import (  # noqa: F401
+            CompressedTensorsConfig,
+        )
+
+        return True
+    except ImportError:
+        return False
+
+
+def requires_hf_quantizer():
+    return pytest.mark.skipif(
+        not compressed_tensors_config_available(),
+        reason="requires transformers>=4.45 to support CompressedTensorsHfQuantizer",
+    )

@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from typing import Dict, Optional, Tuple
 
 import torch
-from compressed_tensors.compressors import Compressor
+from compressed_tensors.compressors.base import BaseCompressor
+from compressed_tensors.compressors.quantized_compressors.base import (
+    BaseQuantizationCompressor,
+)
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import QuantizationArgs
 from compressed_tensors.quantization.lifecycle.forward import dequantize, quantize
@@ -25,16 +27,14 @@ from torch import Tensor
 
 
 __all__ = [
-    "QuantizationCompressor",
+    "NaiveQuantizationCompressor",
     "IntQuantizationCompressor",
     "FloatQuantizationCompressor",
 ]
 
-_LOGGER: logging.Logger = logging.getLogger(__name__)
 
-
-@Compressor.register(name=CompressionFormat.naive_quantized.value)
-class QuantizationCompressor(Compressor):
+@BaseCompressor.register(name=CompressionFormat.naive_quantized.value)
+class NaiveQuantizationCompressor(BaseQuantizationCompressor):
     """
     Implements naive compression for quantized models. Weight of each
     quantized layer is converted from its original float type to the closest Pytorch
@@ -122,8 +122,8 @@ class QuantizationCompressor(Compressor):
         return decompressed_weight
 
 
-@Compressor.register(name=CompressionFormat.int_quantized.value)
-class IntQuantizationCompressor(QuantizationCompressor):
+@BaseCompressor.register(name=CompressionFormat.int_quantized.value)
+class IntQuantizationCompressor(NaiveQuantizationCompressor):
     """
     Alias for integer quantized models
     """
@@ -131,8 +131,8 @@ class IntQuantizationCompressor(QuantizationCompressor):
     pass
 
 
-@Compressor.register(name=CompressionFormat.float_quantized.value)
-class FloatQuantizationCompressor(QuantizationCompressor):
+@BaseCompressor.register(name=CompressionFormat.float_quantized.value)
+class FloatQuantizationCompressor(NaiveQuantizationCompressor):
     """
     Alias for fp quantized models
     """
