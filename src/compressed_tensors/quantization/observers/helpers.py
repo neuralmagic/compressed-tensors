@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import Counter
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import (
@@ -109,3 +109,62 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         raise ValueError(f"Invalid quantization type {quantization_args.type}")
 
     return q_min, q_max
+
+
+def quantize_round_to_nearest(
+    weights: Tensor,
+    symmetric: bool = False,
+    bit_width: int = 8,
+    group_size: int = -1,
+    dtype: torch.dtype = None,
+) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
+    """
+    Quantize the given weights to the given bit width
+
+    :param weights: weights to quantize
+    :param symmetric: whether to use symmetric quantization
+    :param bit_width: bit width to quantize the weights to
+    :param group_size: group size to quantize the weights to
+    :return: A tuple containing the quantized weights, scales, and zeros
+    """
+    org_w_shape = weights.shape
+    if group_size is None:
+        group_size = 1
+        
+    if group_size > 0:
+        assert org_w_shape[-1] % group_size == 0
+        weights = weights.reshape(-1, group_size)
+    assert weights.dim() == 2
+    assert torch.isnan(weights).sum() == 0
+
+    if not symmetric:
+        max_val = weights.amax(dim=1, keepdim=True)
+        min_val = weights.amin(dim=1, keepdim=True)
+        max_int = 2**bit_width - 1
+        min_int = 0
+        scales = (max_val - min_val).clamp(min=1e-5) / max_int
+        zeros = (-torch.round(min_val / scales)).clamp_(min_int, max_int)
+        weights = (
+            torch.clamp(torch.round(weights / scales) + zeros, min_int, max_int) - zeros
+        ) * scales
+        zeros = zeros.view(org_w_shape[0], -1)
+    else:
+        max_val = weights.abs().amax(dim=1, keepdim=True)
+        max_val = max_val.clamp(min=1e-5)
+        max_int = 2 ** (bit_width - 1) - 1
+        min_int = -(2 ** (bit_width - 1))
+        scales = max_val / max_int
+        weights = torch.clamp(torch.round(weights / scales), min_int, max_int) * scales
+        zeros = None
+
+    assert torch.isnan(scales).sum() == 0
+    assert torch.isnan(weights).sum() == 0
+
+    scales = scales.view(org_w_shape[0], -1)
+    weights = weights.reshape(org_w_shape)
+    if zeros is None:
+        zeros = torch.zeros_like(scales)
+    if dtype is not None:
+        zeros = zeros.to(dtype)
+
+    return weights, scales, zeros
