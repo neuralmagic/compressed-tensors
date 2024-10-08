@@ -115,10 +115,9 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         """
         from compressed_tensors.quantization.observers.base import Observer
 
+        # No observer required for the dynamic case
         if self.dynamic:
-            # override defualt observer for dynamic, you never want minmax which
-            # keeps state across samples for dynamic
-            self.observer = "memoryless"
+            return None
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
 
