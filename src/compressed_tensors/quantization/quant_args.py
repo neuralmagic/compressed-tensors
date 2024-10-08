@@ -117,7 +117,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
 
         # No observer required for the dynamic case
         if self.dynamic:
-            return None
+            self.observer = None
+            return self.observer
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
 

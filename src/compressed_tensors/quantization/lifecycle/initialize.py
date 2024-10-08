@@ -153,12 +153,16 @@ def _initialize_scale_zero_point_observer(
     weight_shape: Optional[torch.Size] = None,
     force_zero_point: bool = True,
 ):
+
     # initialize observer module and attach as submodule
     observer = quantization_args.get_observer()
-    module.register_module(f"{base_name}_observer", observer)
+    # no need to register an observer for dynamic quantization
+    if observer:
+        module.register_module(f"{base_name}_observer", observer)
 
+    # no need to register a scale and zero point for a dynamic quantization
     if quantization_args.dynamic:
-        return  # no need to register a scale and zero point for a dynamic observer
+        return
 
     device = next(module.parameters()).device
     if is_module_offloaded(module):
