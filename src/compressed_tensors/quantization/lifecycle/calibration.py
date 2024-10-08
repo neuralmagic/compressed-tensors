@@ -15,6 +15,7 @@
 
 import logging
 
+from compressed_tensors.quantization.lifecycle.initialize import initialize_observers
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.utils import is_module_offloaded, update_parameter_data
 from torch.nn import Module
