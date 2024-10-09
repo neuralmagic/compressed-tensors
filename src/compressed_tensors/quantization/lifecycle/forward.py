@@ -423,8 +423,6 @@ def forward_quantize(
         # skip quantization
         return value
 
-    g_idx = getattr(module, "weight_g_idx", None)
-
     if args.dynamic:
         # dynamic quantization - no need to invoke observer
         scale, zero_point = compute_dynamic_scales_and_zp(value=value, args=args)
