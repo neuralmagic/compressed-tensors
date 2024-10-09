@@ -384,13 +384,17 @@ def calibrate_activations(
 ):
     # calibration mode - get new quant params from observer
     if not hasattr(module, f"{base_name}_observer"):
+        from compressed_tensors.quantization.lifecycle import initialize_observers
+
         initialize_observers(
             module=module, base_name=base_name, quantization_args=quantization_args
         )
 
     observer = getattr(module, f"{base_name}_observer")
 
-    updated_scale, updated_zero_point = observer(value, g_idx=g_idx)
+    # g_idx = getattr(module, "weight_g_idx", None)
+    # updated_scale, updated_zero_point = observer(value, g_idx=g_idx)
+    updated_scale, updated_zero_point = observer(value)
 
     # update scale and zero point
     update_parameter_data(module, updated_scale, f"{base_name}_scale")
@@ -416,6 +420,8 @@ def forward_quantize(
         # if the tensor is empty,
         # skip quantization
         return value
+
+    g_idx = getattr(module, "weight_g_idx", None)
 
     if args.dynamic:
         # dynamic quantization - no need to invoke observer
