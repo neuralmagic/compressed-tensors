@@ -80,7 +80,7 @@ def test_forward_quantize(create_quantization_scheme, quantization_status):
         out = forward_quantize(layer, dummy_tensor, "input", quantization_args)
         assert torch.allclose(out, dummy_tensor)
     elif layer.quantization_status == QuantizationStatus.CALIBRATION:
-        dummy_tensor = calibrate_activations(module=layer, value=dummy_tensor)
+        calibrate_activations(module=layer, value=dummy_tensor)
         out = forward_quantize(layer, dummy_tensor, "input", quantization_args)
         assert torch.allclose(out, dummy_tensor, atol=0.2)
         assert layer.input_observer._num_observed_tokens == dummy_tensor.shape[0]
