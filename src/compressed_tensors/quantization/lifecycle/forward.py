@@ -408,10 +408,13 @@ def calibrate_activations(
 def forward_quantize(
     module: Module, value: torch.Tensor, base_name: str, args: "QuantizationArgs"
 ) -> torch.Tensor:
+
     # don't run quantization if we haven't entered calibration mode
+    # TODO: remove
+    """
     if module.quantization_status == QuantizationStatus.INITIALIZED:
         return value
-
+    """
     # in compressed mode, the weight is already compressed and quantized so we don't
     # need to run fake quantization
     if (
