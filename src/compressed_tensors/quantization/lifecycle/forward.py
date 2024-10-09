@@ -22,6 +22,7 @@ from compressed_tensors.quantization.observers.helpers import (
     calculate_range,
     compute_dynamic_scales_and_zp,
 )
+from compressed_tensors.quantization.lifecycle.initialize import initialize_observers
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
