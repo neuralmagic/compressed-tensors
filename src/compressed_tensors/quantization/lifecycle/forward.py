@@ -18,6 +18,7 @@ from typing import Callable, Optional
 
 import torch
 from compressed_tensors.quantization.cache import QuantizedKVParameterCache
+from compressed_tensors.quantization.lifecycle.initialize import initialize_observers
 from compressed_tensors.quantization.observers.helpers import calculate_range
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
