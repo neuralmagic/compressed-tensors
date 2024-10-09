@@ -16,8 +16,9 @@
 import pytest
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
+    calibrate_activations,
     dequantize,
-    maybe_calibrate_or_quantize,
+    forward_quantize,
     quantize,
     wrap_module_forward_quantized,
     wrap_module_forward_quantized_attn,
@@ -58,7 +59,7 @@ def test_wrap_module_forward_quantized(create_quantization_scheme):
 @pytest.mark.parametrize(
     "quantization_status", ["initialized", "calibration", "frozen"]
 )
-def test_maybe_calibrate_or_quantize(create_quantization_scheme, quantization_status):
+def test_forward_quantize(create_quantization_scheme, quantization_status):
     num_bits = 8
     quantization_scheme = create_quantization_scheme(
         targets=["*"],
@@ -76,22 +77,17 @@ def test_maybe_calibrate_or_quantize(create_quantization_scheme, quantization_st
 
     # only calibration updates the scale and zero-point
     if layer.quantization_status == QuantizationStatus.INITIALIZED:
-        out = maybe_calibrate_or_quantize(
-            layer, dummy_tensor, "input", quantization_args
-        )
+        out = forward_quantize(layer, dummy_tensor, "input", quantization_args)
         assert torch.allclose(out, dummy_tensor)
     elif layer.quantization_status == QuantizationStatus.CALIBRATION:
-        out = maybe_calibrate_or_quantize(
-            layer, dummy_tensor, "input", quantization_args
-        )
+        dummy_tensor = calibrate_activations(module=layer, value=dummy_tensor)
+        out = forward_quantize(layer, dummy_tensor, "input", quantization_args)
         assert torch.allclose(out, dummy_tensor, atol=0.2)
         assert layer.input_observer._num_observed_tokens == dummy_tensor.shape[0]
     elif layer.quantization_status == QuantizationStatus.FROZEN:
         # scale and zero points are empty -- cannot quantize
         with pytest.raises(Exception):
-            out = maybe_calibrate_or_quantize(
-                layer, layer.weight.data, "input", quantization_args
-            )
+            out = forward_quantize(layer, layer.weight.data, "input", quantization_args)
 
 
 @pytest.mark.parametrize(

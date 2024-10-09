@@ -29,6 +29,7 @@ __all__ = [
 _LOGGER = logging.getLogger(__name__)
 
 
+# TODO: will be removed from compressed-tensors
 def set_module_for_calibration(module: Module, quantize_weights_upfront: bool = True):
     """
     marks a layer as ready for calibration which activates observers
@@ -56,7 +57,11 @@ def set_module_for_calibration(module: Module, quantize_weights_upfront: bool = 
         # set weight scale and zero_point up front, calibration data doesn't affect it
         # temporary workaround until we move this is removed from llm-compressor
         if not hasattr(module, "weight_observer"):
-            initialize_observers(module, "weight", module.quantization_scheme.weights)
+            initialize_observers(
+                module=module,
+                base_name="weight_observer",
+                quantization_args=module.quantization_scheme.weights,
+            )
         observer = module.weight_observer
 
         g_idx = getattr(module, "weight_g_idx", None)
