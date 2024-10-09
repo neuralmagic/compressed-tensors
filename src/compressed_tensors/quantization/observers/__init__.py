@@ -20,3 +20,4 @@ from .base import *
 from .memoryless import *
 from .min_max import *
 from .mse import *
+from .roundtonearest import *
