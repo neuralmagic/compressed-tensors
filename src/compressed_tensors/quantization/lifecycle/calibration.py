@@ -59,7 +59,7 @@ def set_module_for_calibration(module: Module, quantize_weights_upfront: bool = 
         if not hasattr(module, "weight_observer"):
             initialize_observers(
                 module=module,
-                base_name="weight_observer",
+                base_name="weight",
                 quantization_args=module.quantization_scheme.weights,
             )
         observer = module.weight_observer
