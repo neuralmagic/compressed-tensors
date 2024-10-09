@@ -22,7 +22,7 @@ __all__ = [
     "freeze_module_quantization",
 ]
 
-
+# TODO: to be removed from compressed-tensors
 def freeze_module_quantization(module: Module):
     """
     deletes observers so static quantization is completed.
@@ -41,9 +41,9 @@ def freeze_module_quantization(module: Module):
         return
 
     # delete observers from module if not dynamic
-    if scheme.input_activations and not scheme.input_activations.dynamic:
+    if hasattr(module, "input_observer") and not scheme.input_activations.dynamic:
         delattr(module, "input_observer")
-    if scheme.weights and not scheme.weights.dynamic:
+    if hasattr(module, "weight_observer") and not scheme.weights.dynamic:
         delattr(module, "weight_observer")
     if (
         scheme.output_activations

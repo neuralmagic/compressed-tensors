@@ -382,6 +382,10 @@ def calibrate_activations(
     base_name: str,
     quantization_args: QuantizationArgs,
 ):
+    # If empty tensor, can't update zp/scale
+    # Case for MoEs
+    if value.numel() == 0:
+        return
     # calibration mode - get new quant params from observer
     if not hasattr(module, f"{base_name}_observer"):
         from compressed_tensors.quantization.lifecycle import initialize_observers
