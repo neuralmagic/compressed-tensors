@@ -94,7 +94,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     block_structure: Optional[str] = None
     dynamic: bool = False
     actorder: Union[ActivationOrdering, bool, None] = None
-    observer: str = Field(
+    observer: Optional[str] = Field(
         default="minmax",
         description=(
             "The class to use to compute the quantization param - "
@@ -115,10 +115,10 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         """
         from compressed_tensors.quantization.observers.base import Observer
 
+        # No observer required for the dynamic case
         if self.dynamic:
-            # override defualt observer for dynamic, you never want minmax which
-            # keeps state across samples for dynamic
-            self.observer = "memoryless"
+            self.observer = None
+            return self.observer
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
 
