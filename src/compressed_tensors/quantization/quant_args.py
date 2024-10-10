@@ -94,7 +94,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     block_structure: Optional[str] = None
     dynamic: bool = False
     actorder: Union[ActivationOrdering, bool, None] = None
-    observer: str = Field(
+    observer: Optional[str] = Field(
         default="minmax",
         description=(
             "The class to use to compute the quantization param - "
