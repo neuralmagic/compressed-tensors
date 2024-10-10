@@ -109,3 +109,23 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         raise ValueError(f"Invalid quantization type {quantization_args.type}")
 
     return q_min, q_max
+
+
+def calculate_min_max_from_qparams(
+    scales: FloatTensor, zero_points: IntTensor, quantization_args: QuantizationArgs
+) -> Tuple[Tensor, Tensor]:
+    """
+    Calculate the min and max values from the given scale and zero points
+
+    :param scales: tensor of scale(s) to calculate min and max value(s) from
+    :param zero_points: tensor of zero point(s) to calculate min and max value(s) from
+    :param quantization_args: settings to quantization
+    :return: tuple of the calculated min and max value(s)
+    """
+    device = scales.device
+    bit_min, bit_max = calculate_range(quantization_args, device)
+
+    min_val_from_scale_zero_point = scales * (bit_min - zero_points)
+    max_val_from_scale_zero_point = scales * (bit_max - zero_points)
+
+    return min_val_from_scale_zero_point, max_val_from_scale_zero_point
