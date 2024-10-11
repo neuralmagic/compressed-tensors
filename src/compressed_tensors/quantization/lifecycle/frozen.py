@@ -45,11 +45,7 @@ def freeze_module_quantization(module: Module):
         delattr(module, "input_observer")
     if hasattr(module, "weight_observer") and not scheme.weights.dynamic:
         delattr(module, "weight_observer")
-    if (
-        hasattr(module, "output_observer")
-        and not is_kv_cache_quant_scheme(scheme)
-        and not scheme.output_activations.dynamic
-    ):
+    if hasattr(module, "output_observer") and not scheme.output_activations.dynamic:
         delattr(module, "output_observer")
 
     module.quantization_status = QuantizationStatus.FROZEN
