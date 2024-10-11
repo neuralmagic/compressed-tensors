@@ -210,11 +210,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 "activation ordering"
             )
 
-        # if we have not set an observer and we
-        # are running static quantization, use minmax
-        if not observer and not dynamic:
-            model.observer = "minmax"
-
         if dynamic:
             if strategy not in (
                 QuantizationStrategy.TOKEN,
@@ -230,6 +225,11 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     "No observer is used for dynamic quantization, setting to None"
                 )
                 model.observer = None
+
+        # if we have not set an observer and we
+        # are running static quantization, use minmax
+        if not observer and not dynamic:
+            model.observer = "minmax"
 
         # write back modified values
         model.strategy = strategy
