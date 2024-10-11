@@ -29,13 +29,14 @@ __all__ = [
     "calculate_qparams",
     "get_observer_token_count",
     "calculate_range",
-    "compute_memoryless_zp_and_scales",
+    "compute_dynamic_scales_and_zp",
 ]
 
 
-def compute_memoryless_zp_and_scales(value: Tensor, args: QuantizationArgs):
+def compute_dynamic_scales_and_zp(value: Tensor, args: QuantizationArgs):
     """
-    Returns the min and max values of observed tensor
+    Returns the computed scales and zero points for dynamic activation
+    qunatization.
 
     :param value: tensor to calculate quantization parameters for
     :param args: quantization args

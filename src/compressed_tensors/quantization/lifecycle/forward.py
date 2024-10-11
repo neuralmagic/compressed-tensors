@@ -20,7 +20,7 @@ import torch
 from compressed_tensors.quantization.cache import QuantizedKVParameterCache
 from compressed_tensors.quantization.observers.helpers import (
     calculate_range,
-    compute_memoryless_zp_and_scales,
+    compute_dynamic_scales_and_zp,
 )
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
@@ -380,7 +380,7 @@ def maybe_calibrate_or_quantize(
 
     if args.dynamic:
         # dynamic quantization - no need to invoke observer
-        scale, zero_point = compute_memoryless_zp_and_scales(value=value, args=args)
+        scale, zero_point = compute_dynamic_scales_and_zp(value=value, args=args)
     else:
         # static quantization - get previous scale and zero point from layer
         scale = getattr(module, f"{base_name}_scale")
