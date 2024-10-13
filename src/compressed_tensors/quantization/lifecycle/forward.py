@@ -22,7 +22,6 @@ from compressed_tensors.quantization.observers.helpers import (
     calculate_range,
     compute_dynamic_scales_and_zp,
 )
-from compressed_tensors.quantization.lifecycle.initialize import initialize_observers
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
@@ -279,7 +278,10 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         if scheme.input_activations is not None:
             # calibrate and (fake) quantize input activations when applicable
             # NOTE: will be moved out of compressed-tensors
-            if module.quantization_status == QuantizationStatus.CALIBRATION:
+            if (
+                module.quantization_status == QuantizationStatus.CALIBRATION
+                and not scheme.input_activations.dynamic
+            ):
                 calibrate_activations(
                     module=module,
                     value=input_,
@@ -307,7 +309,10 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             # wrap_module_forward_quantized_attn
 
             # NOTE: will be removed from compressed-tensors
-            if module.quantization_status == QuantizationStatus.CALIBRATION:
+            if (
+                module.quantization_status == QuantizationStatus.CALIBRATION
+                and not scheme.output_activations.dynamic
+            ):
                 calibrate_activations(
                     module=module,
                     value=output,
