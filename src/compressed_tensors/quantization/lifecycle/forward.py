@@ -22,7 +22,6 @@ from compressed_tensors.quantization.observers.helpers import (
     calculate_range,
     compute_dynamic_scales_and_zp,
 )
-from compressed_tensors.quantization.lifecycle.initialize import initialize_observers
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
@@ -309,6 +308,10 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             # kv_cache scales updated on model self_attn forward call in
             # wrap_module_forward_quantized_attn
 
+<<<<<<< HEAD
+=======
+            # NOTE: will be removed from compressed-tensors
+>>>>>>> 2567660 (fix test case)
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.output_activations.dynamic
