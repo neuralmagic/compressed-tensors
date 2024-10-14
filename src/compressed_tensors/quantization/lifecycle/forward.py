@@ -276,21 +276,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
         if scheme.input_activations is not None:
-            # calibrate and (fake) quantize input activations when applicable
-            # NOTE: will be moved out of compressed-tensors
-            """
-            if (
-                module.quantization_status == QuantizationStatus.CALIBRATION
-                and not scheme.input_activations.dynamic
-            ):
-                calibrate_activations(
-                    module=module,
-                    value=input_,
-                    base_name="input",
-                    quantization_args=scheme.input_activations,
-                )
-            """
-
+            # prehook in llm-compressor will calibrate activations before forward call
             input_ = forward_quantize(module, input_, "input", scheme.input_activations)
 
         if scheme.weights is not None and not compressed:
@@ -314,20 +300,15 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             # kv_cache scales updated on model self_attn forward call in
             # wrap_module_forward_quantized_attn
 
-
-            """
+            # NOTE: will be removed from compressed-tensors
+         
+            # Hook in llm-compressor will calibrate + forward quantize
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.output_activations.dynamic
             ):
-                calibrate_activations(
-                    module=module,
-                    value=output,
-                    base_name="output",
-                    quantization_args=scheme.ouput_activations,
-                )
-            """
-
+                return output
+            
             output = forward_quantize(
                 module, output, "output", scheme.output_activations
             )
@@ -427,8 +408,6 @@ def forward_quantize(
         # if the tensor is empty,
         # skip quantization
         return value
-
-    g_idx = getattr(module, "weight_g_idx", None)
 
     if args.dynamic:
         # dynamic quantization - no need to invoke observer
