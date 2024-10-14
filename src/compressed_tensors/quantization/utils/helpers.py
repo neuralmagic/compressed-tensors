@@ -16,11 +16,16 @@ import logging
 from typing import Generator, List, Optional, Tuple
 
 import torch
-from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_args import (
+    FP8_DTYPE,
+    QuantizationArgs,
+    QuantizationStrategy,
+    QuantizationType,
+)
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
 from tqdm import tqdm
-from torch import Tensor, FloatTensor, IntTensor
 
 
 __all__ = [
@@ -37,7 +42,7 @@ __all__ = [
     "iter_named_leaf_modules",
     "iter_named_quantizable_modules",
     "calculate_range",
-    "compute_dynamic_scales_and_zp"
+    "compute_dynamic_scales_and_zp",
 ]
 
 # target the self_attn layer
@@ -45,6 +50,7 @@ __all__ = [
 KV_CACHE_TARGETS = ["re:.*self_attn$"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
 
 def calculate_qparams(
     min_vals: Tensor, max_vals: Tensor, quantization_args: QuantizationArgs
@@ -84,6 +90,7 @@ def calculate_qparams(
         zero_points = zero_points.reshape(1)
 
     return scales, zero_points
+
 
 def compute_dynamic_scales_and_zp(value: Tensor, args: QuantizationArgs):
     """
@@ -220,9 +227,14 @@ def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None
         if len(children) == 0 and "observer" in name:
             yield name, submodule
         else:
+            if len(children) > 0:
+                named_children, children = zip(*list(submodule.named_children()))
             has_non_observer_children = False
-            for child in children:
-                if not isinstance(child, Observer):
+            for i in range(len(children)):
+                child = children[i]
+                child_name = named_children[i]
+
+                if "observer" not in child_name:
                     has_non_observer_children = True
 
             if not has_non_observer_children:
@@ -248,9 +260,14 @@ def iter_named_quantizable_modules(
             if len(children) == 0 and "observer" not in name:
                 yield name, submodule
             else:
+                if len(children) > 0:
+                    named_children, children = zip(*list(submodule.named_children()))
                 has_non_observer_children = False
-                for child in children:
-                    if not isinstance(child, Observer):
+                for i in range(len(children)):
+                    child_name = named_children[i]
+                    child = children[i]
+
+                    if "observer" not in child_name:
                         has_non_observer_children = True
 
                 if not has_non_observer_children:

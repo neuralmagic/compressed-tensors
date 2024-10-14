@@ -114,7 +114,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         """
         :return: torch quantization FakeQuantize built based on these QuantizationArgs
         """
-        from compressed_tensors.quantization.observers.base import Observer
 
         # No observer required for the dynamic case
         if self.dynamic:
@@ -122,7 +121,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             return self.observer
 
         return self.observer
-        #return Observer.load_from_registry(self.observer, quantization_args=self)
+        # return Observer.load_from_registry(self.observer, quantization_args=self)
 
     # TODO: update to be removed into llm-compressor
     def get_kv_cache(self):
