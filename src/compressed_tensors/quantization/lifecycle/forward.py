@@ -278,6 +278,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         if scheme.input_activations is not None:
             # calibrate and (fake) quantize input activations when applicable
             # NOTE: will be moved out of compressed-tensors
+            """
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.input_activations.dynamic
@@ -288,6 +289,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
                     base_name="input",
                     quantization_args=scheme.input_activations,
                 )
+            """
 
             input_ = forward_quantize(module, input_, "input", scheme.input_activations)
 
@@ -302,13 +304,18 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         output = forward_func_orig.__get__(module, module.__class__)(
             input_, *args[1:], **kwargs
         )
-        if scheme.output_activations is not None:
 
+        # restore back to unquantized_value
+        if scheme.weights is not None and not compressed:
+            self.weight.data = unquantized_weight
+
+        if scheme.output_activations is not None:
             # calibrate and (fake) quantize output activations when applicable
             # kv_cache scales updated on model self_attn forward call in
             # wrap_module_forward_quantized_attn
 
             # NOTE: will be removed from compressed-tensors
+            """
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.output_activations.dynamic
@@ -319,14 +326,11 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
                     base_name="output",
                     quantization_args=scheme.ouput_activations,
                 )
+            """
 
             output = forward_quantize(
                 module, output, "output", scheme.output_activations
             )
-
-        # restore back to unquantized_value
-        if scheme.weights is not None and not compressed:
-            self.weight.data = unquantized_weight
 
         return output
 
@@ -378,37 +382,6 @@ def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationSchem
     bound_wrapped_forward = wrapped_forward.__get__(module, module.__class__)
     # set forward to wrapped forward
     setattr(module, "forward", bound_wrapped_forward)
-
-
-# TODO: to be moved out of compressed-tensors
-def calibrate_activations(
-    module: Module,
-    value: torch.Tensor,
-    base_name: str,
-    quantization_args: QuantizationArgs,
-):
-    # If empty tensor, can't update zp/scale
-    # Case for MoEs
-    if value.numel() == 0:
-        return
-    # calibration mode - get new quant params from observer
-    if not hasattr(module, f"{base_name}_observer"):
-        from compressed_tensors.quantization.lifecycle import initialize_observers
-
-        initialize_observers(
-            module=module, base_name=base_name, quantization_args=quantization_args
-        )
-
-    observer = getattr(module, f"{base_name}_observer")
-
-    # g_idx = getattr(module, "weight_g_idx", None)
-    # updated_scale, updated_zero_point = observer(value, g_idx=g_idx)
-    updated_scale, updated_zero_point = observer(value)
-
-    # update scale and zero point
-    update_parameter_data(module, updated_scale, f"{base_name}_scale")
-    update_parameter_data(module, updated_zero_point, f"{base_name}_zero_point")
-
 
 def forward_quantize(
     module: Module, value: torch.Tensor, base_name: str, args: "QuantizationArgs"

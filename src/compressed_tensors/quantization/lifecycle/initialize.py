@@ -34,7 +34,7 @@ from compressed_tensors.utils import get_execution_device, is_module_offloaded
 from torch.nn import Module, Parameter
 
 
-__all__ = ["initialize_module_for_quantization", "initialize_observers"]
+__all__ = ["initialize_module_for_quantization"]
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,6 +107,7 @@ def initialize_module_for_quantization(
         module.quantization_status = QuantizationStatus.INITIALIZED
 
         offloaded = False
+        # What is this doing/why isn't this in the attn case?
         if is_module_offloaded(module):
             try:
                 from accelerate.hooks import add_hook_to_module, remove_hook_from_module
@@ -142,17 +143,6 @@ def initialize_module_for_quantization(
             add_hook_to_module(module, hook)
             if prefix_dict is not None:
                 module._hf_hook.weights_map = new_prefix_dict
-
-
-# TODO: to be moved out of compressed-tensors
-def initialize_observers(
-    module: Module,
-    base_name: str,
-    quantization_args: QuantizationArgs,
-):
-    # initialize observer module and attach as submodule
-    observer = quantization_args.get_observer()
-    module.register_module(f"{base_name}_observer", observer)
 
 
 def _initialize_scale_zero_point(
