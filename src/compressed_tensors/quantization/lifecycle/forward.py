@@ -278,6 +278,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         if scheme.input_activations is not None:
             # calibrate and (fake) quantize input activations when applicable
             # NOTE: will be moved out of compressed-tensors
+            """
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.input_activations.dynamic
@@ -288,6 +289,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
                     base_name="input",
                     quantization_args=scheme.input_activations,
                 )
+            """
 
             input_ = forward_quantize(module, input_, "input", scheme.input_activations)
 
@@ -302,16 +304,18 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         output = forward_func_orig.__get__(module, module.__class__)(
             input_, *args[1:], **kwargs
         )
-        if scheme.output_activations is not None:
 
+        # restore back to unquantized_value
+        if scheme.weights is not None and not compressed:
+            self.weight.data = unquantized_weight
+
+        if scheme.output_activations is not None:
             # calibrate and (fake) quantize output activations when applicable
             # kv_cache scales updated on model self_attn forward call in
             # wrap_module_forward_quantized_attn
 
-<<<<<<< HEAD
-=======
-            # NOTE: will be removed from compressed-tensors
->>>>>>> 2567660 (fix test case)
+
+            """
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.output_activations.dynamic
@@ -322,14 +326,11 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
                     base_name="output",
                     quantization_args=scheme.ouput_activations,
                 )
+            """
 
             output = forward_quantize(
                 module, output, "output", scheme.output_activations
             )
-
-        # restore back to unquantized_value
-        if scheme.weights is not None and not compressed:
-            self.weight.data = unquantized_weight
 
         return output
 

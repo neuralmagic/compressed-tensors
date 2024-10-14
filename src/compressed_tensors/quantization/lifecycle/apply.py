@@ -22,9 +22,6 @@ from typing import Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization.lifecycle.calibration import (
-    set_module_for_calibration,
-)
 from compressed_tensors.quantization.lifecycle.compressed import (
     compress_quantized_weights,
 )
@@ -243,15 +240,6 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
             )
         )
 
-    if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
-        # only quantize weights up front when our end goal state is calibration,
-        # weight quantization parameters are already loaded for frozen/compressed
-        quantize_weights_upfront = status == QuantizationStatus.CALIBRATION
-        model.apply(
-            lambda module: set_module_for_calibration(
-                module, quantize_weights_upfront=quantize_weights_upfront
-            )
-        )
     if current_status < status >= QuantizationStatus.FROZEN > current_status:
         model.apply(freeze_module_quantization)
 
