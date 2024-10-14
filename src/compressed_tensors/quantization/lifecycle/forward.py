@@ -23,12 +23,12 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationStrategy,
     round_to_quantized_type,
 )
+from compressed_tensors.quantization.quant_config import QuantizationStatus
+from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     calculate_range,
     compute_dynamic_scales_and_zp,
 )
-from compressed_tensors.quantization.quant_config import QuantizationStatus
-from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.utils import safe_permute, update_parameter_data
 from torch.nn import Module
 
@@ -38,7 +38,7 @@ __all__ = [
     "dequantize",
     "fake_quantize",
     "wrap_module_forward_quantized",
-    "forward_quantize"
+    "forward_quantize",
 ]
 
 
@@ -266,10 +266,12 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
     @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
     def wrapped_forward(self, *args, **kwargs):
         if not getattr(module, "quantization_enabled", True):
+            print("QUANTIZATION DISABLED")
             # quantization is disabled on forward passes, return baseline
             # forward call
             return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
 
+        print("QUANTIZATION ENABLED")
         input_ = args[0]
 
         compressed = module.quantization_status == QuantizationStatus.COMPRESSED
@@ -300,14 +302,14 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             # wrap_module_forward_quantized_attn
 
             # NOTE: will be removed from compressed-tensors
-         
+
             # Hook in llm-compressor will calibrate + forward quantize
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.output_activations.dynamic
             ):
                 return output
-            
+
             output = forward_quantize(
                 module, output, "output", scheme.output_activations
             )
@@ -364,33 +366,6 @@ def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationSchem
     setattr(module, "forward", bound_wrapped_forward)
 
 
-def calibrate_activations(
-    module: Module,
-    value: torch.Tensor,
-    base_name: str,
-    quantization_args: QuantizationArgs,
-):
-    # If empty tensor, can't update zp/scale
-    # Case for MoEs
-    if value.numel() == 0:
-        return
-    # calibration mode - get new quant params from observer
-    if not hasattr(module, f"{base_name}_observer"):
-        from compressed_tensors.quantization.lifecycle import initialize_observers
-
-        initialize_observers(
-            module=module, base_name=base_name, quantization_args=quantization_args
-        )
-
-    observer = getattr(module, f"{base_name}_observer")
-
-    updated_scale, updated_zero_point = observer(value)
-
-    # update scale and zero point
-    update_parameter_data(module, updated_scale, f"{base_name}_scale")
-    update_parameter_data(module, updated_zero_point, f"{base_name}_zero_point")
-
-
 def forward_quantize(
     module: Module, value: torch.Tensor, base_name: str, args: "QuantizationArgs"
 ) -> torch.Tensor:
@@ -407,6 +382,8 @@ def forward_quantize(
         # if the tensor is empty,
         # skip quantization
         return value
+
+    g_idx = getattr(module, "weight_g_idx", None)
 
     if args.dynamic:
         # dynamic quantization - no need to invoke observer

@@ -67,7 +67,7 @@ class QuantizedKVParameterCache(HFDyanmicCache):
 
     def __init__(self, quantization_args: QuantizationArgs):
         from compressed_tensors.quantization.observers import Observer
-        
+
         if not self._initialized:
             super().__init__()
 
