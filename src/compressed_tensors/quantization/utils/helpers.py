@@ -41,8 +41,9 @@ __all__ = [
     "is_kv_cache_quant_scheme",
     "iter_named_leaf_modules",
     "iter_named_quantizable_modules",
-    "calculate_range",
     "compute_dynamic_scales_and_zp",
+    "calculate_range",
+    "calculate_qparams",
 ]
 
 # target the self_attn layer
