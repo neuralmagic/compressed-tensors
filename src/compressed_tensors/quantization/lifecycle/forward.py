@@ -18,14 +18,14 @@ from typing import Callable, Optional
 
 import torch
 from compressed_tensors.quantization.cache import QuantizedKVParameterCache
-from compressed_tensors.quantization.observers.helpers import (
-    calculate_range,
-    compute_dynamic_scales_and_zp,
-)
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
     round_to_quantized_type,
+)
+from compressed_tensors.quantization.utils import (
+    calculate_range,
+    compute_dynamic_scales_and_zp,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -38,8 +38,7 @@ __all__ = [
     "dequantize",
     "fake_quantize",
     "wrap_module_forward_quantized",
-    "forward_quantize",
-    "calibrate_activations",
+    "forward_quantize"
 ]
 
 

@@ -16,7 +16,6 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from compressed_tensors.quantization.observers import Observer
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from torch import Tensor
 from transformers import DynamicCache as HFDyanmicCache
@@ -67,6 +66,8 @@ class QuantizedKVParameterCache(HFDyanmicCache):
         return cls._instance
 
     def __init__(self, quantization_args: QuantizationArgs):
+        from compressed_tensors.quantization.observers import Observer
+        
         if not self._initialized:
             super().__init__()
 
