@@ -266,18 +266,16 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
     @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
     def wrapped_forward(self, *args, **kwargs):
         if not getattr(module, "quantization_enabled", True):
-            print("QUANTIZATION DISABLED")
             # quantization is disabled on forward passes, return baseline
             # forward call
             return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
 
-        print("QUANTIZATION ENABLED")
         input_ = args[0]
 
         compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
         if scheme.input_activations is not None:
-            # prehook in llm-compressor will calibrate activations before forward call
+            # prehook should calibrate activations before forward call
             input_ = forward_quantize(module, input_, "input", scheme.input_activations)
 
         if scheme.weights is not None and not compressed:
@@ -297,13 +295,10 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             self.weight.data = unquantized_weight
 
         if scheme.output_activations is not None:
-            # calibrate and (fake) quantize output activations when applicable
             # kv_cache scales updated on model self_attn forward call in
             # wrap_module_forward_quantized_attn
 
-            # NOTE: will be removed from compressed-tensors
-
-            # Hook in llm-compressor will calibrate + forward quantize
+            # forward-hook should calibrate/forward_quantize
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.output_activations.dynamic
@@ -386,10 +381,10 @@ def forward_quantize(
     g_idx = getattr(module, "weight_g_idx", None)
 
     if args.dynamic:
-        # dynamic quantization - no need to invoke observer
+        # dynamic quantization - determine the scale/zp on the fly
         scale, zero_point = compute_dynamic_scales_and_zp(value=value, args=args)
     else:
-        # static quantization - get previous scale and zero point from layer
+        # static quantization - get scale and zero point from layer
         scale = getattr(module, f"{base_name}_scale")
         zero_point = getattr(module, f"{base_name}_zero_point", None)
 

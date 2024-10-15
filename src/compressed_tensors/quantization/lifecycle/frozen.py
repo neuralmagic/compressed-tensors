@@ -21,6 +21,7 @@ __all__ = [
     "freeze_module_quantization",
 ]
 
+
 # TODO: to be removed from compressed-tensors
 def freeze_module_quantization(module: Module):
     """
