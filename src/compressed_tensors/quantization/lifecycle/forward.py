@@ -296,9 +296,6 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             self.weight.data = unquantized_weight
 
         if scheme.output_activations is not None:
-            # kv_cache scales updated on model self_attn forward call in
-            # wrap_module_forward_quantized_attn
-
             # forward-hook should calibrate/forward_quantize
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
@@ -309,8 +306,6 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             output = forward_quantize(
                 module, output, "output", scheme.output_activations
             )
-
-        print("running qdq")
         return output
 
     # bind wrapped forward to module class so reference to `self` is correct
