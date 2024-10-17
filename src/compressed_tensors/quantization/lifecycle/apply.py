@@ -25,7 +25,6 @@ from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.lifecycle.compressed import (
     compress_quantized_weights,
 )
-from compressed_tensors.quantization.lifecycle.frozen import freeze_module_quantization
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
@@ -239,9 +238,6 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
                 module, force_zero_point=force_zero_point_init
             )
         )
-
-    if current_status < status >= QuantizationStatus.FROZEN > current_status:
-        model.apply(freeze_module_quantization)
 
     if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
         model.apply(compress_quantized_weights)
