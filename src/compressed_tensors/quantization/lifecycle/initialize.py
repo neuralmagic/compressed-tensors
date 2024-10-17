@@ -14,13 +14,12 @@
 
 
 import logging
+from enum import Enum
 from typing import Optional
 
 import torch
-#from compressed_tensors.quantization.cache import KVCacheScaleType
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
-    wrap_module_forward_quantized_attn,
 )
 from compressed_tensors.quantization.quant_args import (
     ActivationOrdering,
@@ -38,6 +37,11 @@ __all__ = ["initialize_module_for_quantization", "is_attention_module"]
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class KVCacheScaleType(Enum):
+    KEY = "k_scale"
+    VALUE = "v_scale"
 
 
 def initialize_module_for_quantization(
@@ -64,9 +68,7 @@ def initialize_module_for_quantization(
         return
 
     if is_attention_module(module):
-        # wrap forward call of module to perform
         # quantized actions based on calltime status
-        # wrap_module_forward_quantized_attn(module, scheme)
         _initialize_attn_scales(module)
 
     else:
@@ -153,7 +155,6 @@ def is_attention_module(module: Module):
     )
 
 
-
 def _initialize_scale_zero_point(
     module: Module,
     base_name: str,
@@ -207,6 +208,7 @@ def _initialize_scale_zero_point(
             requires_grad=False,
         )
         module.register_parameter(f"{base_name}_g_idx", init_g_idx)
+
 
 def _initialize_attn_scales(module: Module) -> None:
     """Initlaize k_scale, v_scale for  self_attn"""
