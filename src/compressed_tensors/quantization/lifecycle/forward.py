@@ -17,7 +17,7 @@ from math import ceil
 from typing import Callable, Optional
 
 import torch
-from compressed_tensors.quantization.cache import QuantizedKVParameterCache
+#from compressed_tensors.quantization.cache import QuantizedKVParameterCache
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
@@ -309,6 +309,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
                 module, output, "output", scheme.output_activations
             )
 
+        print("running qdq")
         return output
 
     # bind wrapped forward to module class so reference to `self` is correct
