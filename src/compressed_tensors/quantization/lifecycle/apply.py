@@ -229,8 +229,9 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     :param model: model to apply quantization to
     :param status: status to update the module to
     """
+    
     current_status = infer_quantization_status(model)
-
+    
     if status >= QuantizationStatus.INITIALIZED > current_status:
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
         model.apply(
