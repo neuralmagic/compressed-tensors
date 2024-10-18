@@ -23,7 +23,6 @@ __all__ = [
 ]
 
 
-# TODO: to be removed from compressed-tensors
 def freeze_module_quantization(module: Module):
     """
     deletes observers so static quantization is completed.
