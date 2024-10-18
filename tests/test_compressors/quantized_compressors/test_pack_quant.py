@@ -205,7 +205,7 @@ def test_reload_match(tmp_path, num_bits):
         None,
     ],
 )
-def test_actorder_reload_match(actorder, tmp_path):
+def test_actorder_reload_match(actorder, tmp_path, mock_calibration):
     model = Sequential(OrderedDict([("dummy", Linear(512, 1024, bias=None))]))
     group_size = 128
     quant_config = get_dummy_quant_config(
@@ -215,9 +215,11 @@ def test_actorder_reload_match(actorder, tmp_path):
 
     # run calibration
     apply_quantization_status(model, QuantizationStatus.CALIBRATION)
+
     for _ in range(16):
         inputs = torch.rand((512, 512))
-        _ = model(inputs)
+        #_ = model(inputs)
+        model.apply(lambda module: mock_calibration(module, base_name="weight", value=inputs))
     apply_quantization_status(model, QuantizationStatus.FROZEN)
 
     # apply gptq
