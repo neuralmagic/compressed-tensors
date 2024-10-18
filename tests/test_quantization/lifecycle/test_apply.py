@@ -27,6 +27,7 @@ from compressed_tensors.quantization import (
 from compressed_tensors.quantization.lifecycle import (
     apply_quantization_config,
     apply_quantization_status,
+    find_compression_targets,
 )
 from compressed_tensors.quantization.utils import iter_named_leaf_modules
 from transformers import AutoModelForCausalLM
@@ -272,3 +273,29 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
             assert len(caplog.text) > 0
         else:
             assert len(caplog.text) == 0
+
+
+@pytest.fixture
+def model():
+    return AutoModelForCausalLM.from_pretrained(
+        "Xenova/llama2.c-stories15M",
+        torch_dtype="auto",
+    )
+
+
+@pytest.mark.parametrize(
+    "targets, ignore, expected",
+    [
+        # ignore all
+        (["Linear"], ["Linear"], set()),
+        # ignore subset
+        (
+            ["re:model.layers.[01].self_attn.q_proj"],
+            ["re:model.layers.1.self_attn.q_proj"],
+            set(["model.layers.0.self_attn.q_proj"]),
+        ),
+    ],
+)
+def test_find_compression_targets(model, targets, ignore, expected):
+    actual_targets = find_compression_targets(model, targets, ignore)
+    assert actual_targets == expected

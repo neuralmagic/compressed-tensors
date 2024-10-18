@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import logging
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, Optional, Set, Tuple
 
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
@@ -59,11 +59,17 @@ class BaseSparseCompressor(BaseCompressor):
     :param config: config specifying compression parameters
     """
 
-    def compress(self, model_state: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    def compress(
+        self,
+        model_state: Dict[str, Tensor],
+        compression_targets: Optional[Set[str]] = None,
+    ) -> Dict[str, Tensor]:
         """
         Compresses a dense state dict using bitmask compression
 
         :param model_state: state dict of uncompressed model
+        :param compression_targets: optional set of layer prefixes to compress, if None
+            compress all layers (for backwards compatibility)
         :return: compressed state dict
         """
         compressed_dict = {}
@@ -71,6 +77,9 @@ class BaseSparseCompressor(BaseCompressor):
             f"Compressing model with {len(model_state)} parameterized layers..."
         )
         for name, value in tqdm(model_state.items(), desc="Compressing model"):
+            prefix = name.rsplit(".", 1)[0]
+            if compression_targets and prefix not in compression_targets:
+                continue
             compression_data = self.compress_weight(name, value)
             for key in compression_data.keys():
                 if key in compressed_dict:
