@@ -54,7 +54,7 @@ def test_marlin_registered():
     "strategy", [QuantizationStrategy.GROUP, QuantizationStrategy.CHANNEL]
 )
 @pytest.mark.parametrize("layer_shape", [(512, 128), (1024, 1024), (128, 256)])
-def test_marlin24_format(num_bits, strategy, layer_shape):
+def test_marlin24_format(mock_calibration, num_bits, strategy, layer_shape):
     QUANT_NAME = "quant"
     NOT_QUANT_NAME = "not_quant"
     model = Sequential(
@@ -74,7 +74,8 @@ def test_marlin24_format(num_bits, strategy, layer_shape):
 
     # runs observer to get scale and zero point
     input = torch.rand((64, layer_shape[0]))
-    _ = model(input)
+    model.apply(lambda module: mock_calibration(module, base_name="weight", value=input))
+    #_ = model(input)
 
     state_dict = model.state_dict()
     assert len(state_dict) == 4
