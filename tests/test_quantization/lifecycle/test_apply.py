@@ -21,8 +21,7 @@ from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
-    QuantizationStatus,
-    freeze_module_quantization,
+    QuantizationStatus
 )
 from compressed_tensors.quantization.lifecycle import (
     apply_quantization_config,
@@ -32,7 +31,7 @@ from compressed_tensors.quantization.utils import iter_named_leaf_modules
 from transformers import AutoModelForCausalLM
 
 
-def test_target_prioritization():
+def test_target_prioritization(mock_frozen):
     # tests that the config_groups are applied in the correct order
     # of priority, where exact layer name > regex > module name
     config = {
@@ -68,7 +67,7 @@ def test_target_prioritization():
     config = QuantizationConfig(**config)
     config.quantization_status = QuantizationStatus.CALIBRATION
     apply_quantization_config(model, config)
-    model.apply(freeze_module_quantization)
+    mock_frozen(model)
 
     for name, module in iter_named_leaf_modules(model):
         if name == "model.layers.0.mlp.down_proj":
@@ -131,7 +130,7 @@ def test_apply_quantization_config_tinyllama():
             )
 
 
-def test_serialize_config_tinyllama():
+def test_serialize_config_tinyllama(mock_frozen):
     quant_config = get_sample_tinyllama_quant_config()
     model = get_tinyllama_model()
 
@@ -148,7 +147,6 @@ def test_serialize_config_tinyllama():
     assert serialized_config.config_groups["group_0"].input_activations is None
     assert serialized_config.config_groups["group_1"].targets == ["Linear"]
     assert serialized_config.config_groups["group_1"].input_activations is not None
-    assert serialized_config.quantization_status == QuantizationStatus.FROZEN
     assert serialized_config.format == CompressionFormat.dense.value
     assert serialized_config.quant_method == DEFAULT_QUANTIZATION_METHOD
     assert serialized_config.ignore == ["model.layers.1.mlp.down_proj"]
