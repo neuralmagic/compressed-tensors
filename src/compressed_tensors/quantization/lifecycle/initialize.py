@@ -144,7 +144,6 @@ def initialize_module_for_quantization(
                 module._hf_hook.weights_map = new_prefix_dict
 
 
-# TODO: to be moved out of compressed-tensors
 def initialize_observers(
     module: Module,
     base_name: str,

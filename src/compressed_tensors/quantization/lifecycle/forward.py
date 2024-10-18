@@ -379,7 +379,6 @@ def wrap_module_forward_quantized_attn(module: Module, scheme: QuantizationSchem
     setattr(module, "forward", bound_wrapped_forward)
 
 
-# TODO: to be moved out of compressed-tensors
 def calibrate_activations(
     module: Module,
     value: torch.Tensor,

@@ -123,7 +123,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
 
         return Observer.load_from_registry(self.observer, quantization_args=self)
 
-    # TODO: update to be removed into llm-compressor
     def get_kv_cache(self):
         """Get the singleton KV Cache"""
         from compressed_tensors.quantization.cache import QuantizedKVParameterCache
