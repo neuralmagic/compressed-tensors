@@ -28,7 +28,6 @@ __all__ = [
 _LOGGER = logging.getLogger(__name__)
 
 
-# TODO: will be removed from compressed-tensors
 def set_module_for_calibration(module: Module, quantize_weights_upfront: bool = True):
     """
     marks a layer as ready for calibration which activates observers

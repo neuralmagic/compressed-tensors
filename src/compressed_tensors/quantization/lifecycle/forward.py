@@ -308,7 +308,6 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             # kv_cache scales updated on model self_attn forward call in
             # wrap_module_forward_quantized_attn
 
-            # NOTE: will be removed from compressed-tensors
             if (
                 module.quantization_status == QuantizationStatus.CALIBRATION
                 and not scheme.output_activations.dynamic
@@ -401,8 +400,6 @@ def calibrate_activations(
 
     observer = getattr(module, f"{base_name}_observer")
 
-    # g_idx = getattr(module, "weight_g_idx", None)
-    # updated_scale, updated_zero_point = observer(value, g_idx=g_idx)
     updated_scale, updated_zero_point = observer(value)
 
     # update scale and zero point
