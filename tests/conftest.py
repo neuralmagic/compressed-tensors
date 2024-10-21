@@ -41,6 +41,94 @@ def mock_calibration():
 
     return update_scale_zp
 
+def _get_dim(dim: int, value: torch.Tensor):
+    if isinstance(dim, int):
+        dim = [dim]
+        dim = set(dim)
+
+    reduce_dims = tuple(idx for idx in range(value.ndim) if idx not in dim)
+    return reduce_dims
+
+
+@pytest.fixture
+def mock_per_token_calibration():
+    def update_scale_zp(module: torch.nn.Module, base_name: str, value: torch.Tensor):
+        quantization_scheme = getattr(module, "quantization_scheme", None)
+        if not quantization_scheme:
+            # no quantization scheme nothing to do
+            return
+
+        arg_name = "weights" if base_name == "weight" else f"{base_name}_activations"
+
+        scale = getattr(module, f"{base_name}_scale", None)
+        zero_point = getattr(module, f"{base_name}_zero_point", None)
+        args = getattr(quantization_scheme, arg_name, None)
+
+        dim = _get_dim({0, 1}, value)
+        min_val = torch.amin(value, dim=dim, keepdims=True)
+        max_val = torch.amax(value, dim=dim, keepdims=True)
+        scale, zp = calculate_qparams(min_val, max_val, args)
+        scale = scale.reshape((1, 1))
+        zp = zp.reshape((1, 1))
+        update_parameter_data(module, scale, f"{base_name}_scale")
+        update_parameter_data(module, zp, f"{base_name}_zero_point")
+
+    return update_scale_zp
+
+@pytest.fixture
+def mock_per_group_calibration():
+    def update_scale_zp(module: torch.nn.Module, base_name: str, value: torch.Tensor, group_size: int):
+        quantization_scheme = getattr(module, "quantization_scheme", None)
+        if not quantization_scheme:
+            # no quantization scheme nothing to do
+            return
+
+        arg_name = "weights" if base_name == "weight" else f"{base_name}_activations"
+
+        scale = getattr(module, f"{base_name}_scale", None)
+        zero_point = getattr(module, f"{base_name}_zero_point", None)
+        args = getattr(quantization_scheme, arg_name, None)
+
+        rows = value.shape[0]
+        columns = value.shape[1]
+        num_groups = int(ceil(columns / group_size))
+
+        scale = torch.empty(
+            (rows, num_groups), dtype=value.dtype, device=value.device
+        )
+        zp_dtype = args.pytorch_dtype()
+        zp = torch.empty(
+            (rows, num_groups), dtype=zp_dtype, device=value.device
+        )
+        update_parameter_data(module, scale, f"{base_name}_scale")
+        update_parameter_data(module, zp, f"{base_name}_zero_point")
+        
+    return update_scale_zp
+
+
+@pytest.fixture
+def mock_per_channel_calibration():
+    def update_scale_zp(module: torch.nn.Module, base_name: str, value: torch.Tensor):
+        quantization_scheme = getattr(module, "quantization_scheme", None)
+        if not quantization_scheme:
+            # no quantization scheme nothing to do
+            return
+
+        arg_name = "weights" if base_name == "weight" else f"{base_name}_activations"
+
+        scale = getattr(module, f"{base_name}_scale", None)
+        zero_point = getattr(module, f"{base_name}_zero_point", None)
+
+        args = getattr(quantization_scheme, arg_name, None)
+        dim = _get_dim(0, value)
+        min_val = torch.amin(value, dim=dim, keepdims=True)
+        max_val = torch.amax(value, dim=dim, keepdims=True)
+        scale, zp = calculate_qparams(min_val, max_val, args)
+        update_parameter_data(module, scale, f"{base_name}_scale")
+        update_parameter_data(module, zp, f"{base_name}_zero_point")
+        
+    return update_scale_zp
+
 @pytest.fixture
 def mock_per_tensor_calibration():
     def update_scale_zp(module: torch.nn.Module, base_name: str, value: torch.Tensor):
@@ -59,10 +147,8 @@ def mock_per_tensor_calibration():
         min_val, max_val = torch.aminmax(value)
         scale, zp = calculate_qparams(min_val, max_val, args)
 
-        if scale is not None:
-            update_parameter_data(module, scale, f"{base_name}_scale")
-        if zero_point is not None and not args.symmetric:
-            update_parameter_data(module, zp, f"{base_name}_zero_point")
+        update_parameter_data(module, scale, f"{base_name}_scale")
+        update_parameter_data(module, zp, f"{base_name}_zero_point")
         
     return update_scale_zp
 

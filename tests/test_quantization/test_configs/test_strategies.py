@@ -53,7 +53,7 @@ def create_config(
 @pytest.mark.parametrize("input_symmetry", [None])
 @pytest.mark.parametrize("weight_symmetry", [True, False])
 @pytest.mark.parametrize("model_shape", [(64, 128), (300, 200), (400, 400)])
-def test_channelwise(mock_calibration, input_symmetry, weight_symmetry, model_shape):
+def test_channelwise(mock_per_channel_calibration, input_symmetry, weight_symmetry, model_shape):
     model = Linear(model_shape[0], model_shape[1])
     quant_config = create_config(
         input_symmetry, weight_symmetry, w_strategy=QuantizationStrategy.CHANNEL
@@ -61,8 +61,9 @@ def test_channelwise(mock_calibration, input_symmetry, weight_symmetry, model_sh
     apply_quantization_config(model, quant_config)
 
     inputs = torch.randn(32, model_shape[0])
-    model.apply(lambda module: mock_calibration(module, base_name="weight", value=inputs))
-    model.apply(lambda module: mock_calibration(module, base_name="input", value=inputs))
+    model.apply(lambda module: mock_per_channel_calibration(module, base_name="weight", value=model.weight))
+    if input_symmetry is not None:
+        model.apply(lambda module: mock_per_channel_calibration(module, base_name="input", value=inputs))
 
     assert list(model.weight_scale.shape) == [model_shape[1], 1]
     assert list(model.weight_zero_point.shape) == [model_shape[1], 1]
@@ -73,7 +74,7 @@ def test_channelwise(mock_calibration, input_symmetry, weight_symmetry, model_sh
 @pytest.mark.parametrize("weight_symmetry", [True, False])
 @pytest.mark.parametrize("model_shape", [(128, 256), (256, 512), (512, 1024)])
 @pytest.mark.parametrize("group_size", [32, 128])
-def test_group(mock_calibration, input_symmetry, weight_symmetry, model_shape, group_size):
+def test_group(mock_per_group_calibration, input_symmetry, weight_symmetry, model_shape, group_size):
     model = Linear(model_shape[0], model_shape[1])
     quant_config = create_config(
         input_symmetry,
@@ -84,8 +85,9 @@ def test_group(mock_calibration, input_symmetry, weight_symmetry, model_shape, g
     apply_quantization_config(model, quant_config)
 
     inputs = torch.randn(128, model_shape[0])
-    model.apply(lambda module: mock_calibration(module, base_name="weight", value=inputs))
-    model.apply(lambda module: mock_calibration(module, base_name="input", value=inputs))
+    model.apply(lambda module: mock_per_group_calibration(module, base_name="weight", value=model.weight, group_size=group_size))
+    if input_symmetry is not None:
+        model.apply(lambda module: mock_per_group_calibration(module, base_name="input", value=inputs, group_size=group_size))
 
     assert list(model.weight_scale.shape) == [
         model_shape[1],
@@ -101,7 +103,7 @@ def test_group(mock_calibration, input_symmetry, weight_symmetry, model_shape, g
 @pytest.mark.parametrize("input_symmetry", [True, False])
 @pytest.mark.parametrize("weight_symmetry", [True, False])
 @pytest.mark.parametrize("input_shape", [(32, 256), (300, 200), (400, 400)])
-def test_token(mock_calibration, input_symmetry, weight_symmetry, input_shape):
+def test_token(mock_per_channel_calibration, mock_per_token_calibration, input_symmetry, weight_symmetry, input_shape):
     model = Linear(input_shape[1], 256)
     quant_config = create_config(
         input_symmetry,
@@ -112,13 +114,11 @@ def test_token(mock_calibration, input_symmetry, weight_symmetry, input_shape):
     apply_quantization_config(model, quant_config)
 
     inputs = torch.randn(input_shape)
-    model.apply(lambda module: mock_calibration(module, base_name="weight", value=inputs))
-    model.apply(lambda module: mock_calibration(module, base_name="input", value=inputs))
+    model.apply(lambda module: mock_per_channel_calibration(module, base_name="weight", value=model.weight))
+    model.apply(lambda module: mock_per_token_calibration(module, base_name="input", value=inputs))
 
     assert list(model.input_scale.shape) == [1, 1]
-    if not model.quantization_scheme.input_activations.symmetric:
-        assert list(model.input_zero_point.shape) == [1, 1]
+    assert list(model.input_zero_point.shape) == [1, 1]
 
     assert list(model.weight_scale.shape) == [256, 1]
-    if not model.quantization_scheme.weights.symmetric:
-        assert list(model.weight_zero_point.shape) == [256, 1]
+    assert list(model.weight_zero_point.shape) == [256, 1]
