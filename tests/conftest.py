@@ -43,9 +43,6 @@ def mock_per_token_calibration():
             return
 
         arg_name = "weights" if base_name == "weight" else f"{base_name}_activations"
-
-        scale = getattr(module, f"{base_name}_scale", None)
-        zero_point = getattr(module, f"{base_name}_zero_point", None)
         args = getattr(quantization_scheme, arg_name, None)
 
         dim = _get_dim({0, 1}, value)
@@ -71,9 +68,6 @@ def mock_per_group_calibration():
             return
 
         arg_name = "weights" if base_name == "weight" else f"{base_name}_activations"
-
-        scale = getattr(module, f"{base_name}_scale", None)
-        zero_point = getattr(module, f"{base_name}_zero_point", None)
         args = getattr(quantization_scheme, arg_name, None)
 
         rows = value.shape[0]
@@ -116,9 +110,6 @@ def mock_per_channel_calibration():
 
         arg_name = "weights" if base_name == "weight" else f"{base_name}_activations"
 
-        scale = getattr(module, f"{base_name}_scale", None)
-        zero_point = getattr(module, f"{base_name}_zero_point", None)
-
         args = getattr(quantization_scheme, arg_name, None)
         dim = _get_dim(0, value)
         min_val = torch.amin(value, dim=dim, keepdims=True)
@@ -139,9 +130,6 @@ def mock_per_tensor_calibration():
             return
 
         arg_name = "weights" if base_name == "weight" else f"{base_name}_activations"
-
-        scale = getattr(module, f"{base_name}_scale", None)
-        zero_point = getattr(module, f"{base_name}_zero_point", None)
         args = getattr(quantization_scheme, arg_name, None)
 
         # per tensor quantization just calls calculate_qparams directly
