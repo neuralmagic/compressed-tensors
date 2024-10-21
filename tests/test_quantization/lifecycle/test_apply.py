@@ -21,7 +21,7 @@ from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
-    QuantizationStatus
+    QuantizationStatus,
 )
 from compressed_tensors.quantization.lifecycle import (
     apply_quantization_config,
@@ -130,7 +130,7 @@ def test_apply_quantization_config_tinyllama():
             )
 
 
-def test_serialize_config_tinyllama(mock_frozen):
+def test_serialize_config_tinyllama():
     quant_config = get_sample_tinyllama_quant_config()
     model = get_tinyllama_model()
 

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from copy import deepcopy
+
 import pytest
 import torch
 from compressed_tensors.quantization.lifecycle.initialize import (
@@ -21,6 +22,7 @@ from compressed_tensors.quantization.lifecycle.initialize import (
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from torch.nn import Linear
+
 
 @pytest.mark.skip(reason="wip")
 def test_lifecyle(create_quantization_scheme):

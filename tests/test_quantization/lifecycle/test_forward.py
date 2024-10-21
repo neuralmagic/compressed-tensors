@@ -53,6 +53,7 @@ def test_wrap_module_forward_quantized(create_quantization_scheme):
 
     assert not func_forward == layer.forward.__func__
 
+
 @pytest.mark.skip(reason="wip")
 @pytest.mark.parametrize(
     "quantization_status", ["initialized", "calibration", "frozen"]

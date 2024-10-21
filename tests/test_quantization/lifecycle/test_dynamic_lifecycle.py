@@ -14,9 +14,7 @@
 
 
 import torch
-from compressed_tensors.quantization.lifecycle import (
-    apply_quantization_config
-)
+from compressed_tensors.quantization.lifecycle import apply_quantization_config
 from compressed_tensors.quantization.quant_config import QuantizationConfig
 from transformers import AutoModelForCausalLM
 
@@ -76,7 +74,6 @@ def _test_layer_dynamic_quantization_status(
     # check weights always have scale/zp and observer only if not frozen
     assert hasattr(module, "weight_scale") == weights
     assert hasattr(module, "weight_zero_point") == weights
-
 
 
 def get_tinyllama_model():

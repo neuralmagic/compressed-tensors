@@ -52,7 +52,9 @@ def create_config(bit_depth, quant_type, input_symmetry, weight_symmetry):
 @pytest.mark.parametrize("quant_type", ["int"])
 @pytest.mark.parametrize("input_symmetry", [True, False, None])
 @pytest.mark.parametrize("weight_symmetry", [True, False])
-def test_bit_depths(mock_per_tensor_calibration, bit_depth, quant_type, input_symmetry, weight_symmetry):
+def test_bit_depths(
+    mock_per_tensor_calibration, bit_depth, quant_type, input_symmetry, weight_symmetry
+):
     model = Linear(64, 64)
     quant_config = create_config(bit_depth, quant_type, input_symmetry, weight_symmetry)
     apply_quantization_config(model, quant_config)
@@ -61,9 +63,17 @@ def test_bit_depths(mock_per_tensor_calibration, bit_depth, quant_type, input_sy
     max = int(2**bit_depth / 2) - 1
 
     inputs = torch.randn(32, 64)
-    model.apply(lambda module: mock_per_tensor_calibration(module, base_name="weight", value=model.weight))
+    model.apply(
+        lambda module: mock_per_tensor_calibration(
+            module, base_name="weight", value=model.weight
+        )
+    )
     if input_symmetry is not None:
-        model.apply(lambda module: mock_per_tensor_calibration(module, base_name="input", value=inputs))
+        model.apply(
+            lambda module: mock_per_tensor_calibration(
+                module, base_name="input", value=inputs
+            )
+        )
         assert model.input_zero_point >= min
         assert model.input_zero_point <= max
 
@@ -105,7 +115,9 @@ def test_bit_depths(mock_per_tensor_calibration, bit_depth, quant_type, input_sy
 @pytest.mark.parametrize("quant_type", ["float"])
 @pytest.mark.parametrize("input_symmetry", [True, False, None])
 @pytest.mark.parametrize("weight_symmetry", [True, False])
-def test_fp8(mock_per_tensor_calibration, bit_depth, quant_type, input_symmetry, weight_symmetry):
+def test_fp8(
+    mock_per_tensor_calibration, bit_depth, quant_type, input_symmetry, weight_symmetry
+):
     model = Linear(64, 64)
     quant_config = create_config(bit_depth, quant_type, input_symmetry, weight_symmetry)
     apply_quantization_config(model, quant_config)
@@ -115,11 +127,19 @@ def test_fp8(mock_per_tensor_calibration, bit_depth, quant_type, input_symmetry,
     max = dtype_info.max
 
     inputs = torch.randn(32, 64)
-    model.apply(lambda module: mock_per_tensor_calibration(module, base_name="weight", value=model.weight))
+    model.apply(
+        lambda module: mock_per_tensor_calibration(
+            module, base_name="weight", value=model.weight
+        )
+    )
     assert model.weight_zero_point.dtype == torch.float8_e4m3fn
     model.weight_zero_point.data = model.weight_zero_point.to(model.weight.dtype)
     if input_symmetry is not None:
-        model.apply(lambda module: mock_per_tensor_calibration(module, base_name="input", value=inputs))
+        model.apply(
+            lambda module: mock_per_tensor_calibration(
+                module, base_name="input", value=inputs
+            )
+        )
         assert model.input_zero_point.dtype == torch.float8_e4m3fn
         model.input_zero_point.data = model.input_zero_point.to(model.weight.dtype)
         assert model.input_zero_point >= min

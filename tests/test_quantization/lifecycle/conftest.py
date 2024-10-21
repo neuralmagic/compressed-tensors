@@ -15,10 +15,10 @@
 from typing import List, Optional
 
 import pytest
-from compressed_tensors.quantization.quant_args import QuantizationArgs
-from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.quant_config import QuantizationStatus
 import torch
+from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_config import QuantizationStatus
+from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 
 
 @pytest.fixture
@@ -38,8 +38,10 @@ def create_quantization_scheme():
 
     return quantization_scheme
 
+
 @pytest.fixture
 def mock_frozen():
     def update_status(model: torch.nn.Module):
         model.quantization_status = QuantizationStatus.FROZEN
+
     return update_status
