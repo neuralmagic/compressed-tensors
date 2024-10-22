@@ -33,7 +33,11 @@ from compressed_tensors.utils import get_execution_device, is_module_offloaded
 from torch.nn import Module, Parameter
 
 
-__all__ = ["initialize_module_for_quantization", "is_attention_module"]
+__all__ = [
+    "initialize_module_for_quantization",
+    "is_attention_module",
+    "KVCacheScaleType",
+]
 
 
 _LOGGER = logging.getLogger(__name__)
