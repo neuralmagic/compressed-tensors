@@ -17,8 +17,6 @@ from math import ceil
 from typing import Callable, Optional
 
 import torch
-
-# from compressed_tensors.quantization.cache import QuantizedKVParameterCache
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,

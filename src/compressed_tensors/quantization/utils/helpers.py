@@ -225,7 +225,7 @@ def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None
     """
     for name, submodule in model.named_modules():
         children = list(submodule.children())
-        # would the observer ever be attached when this function is called?
+        # TODO: verify if an observer would ever be attached in this case/remove check
         if len(children) == 0 and "observer" in name:
             yield name, submodule
         else:
@@ -257,9 +257,9 @@ def iter_named_quantizable_modules(
     :returns: generator tuple of (name, submodule)
     """
     for name, submodule in model.named_modules():
+        # TODO: verify if an observer would ever be attached in this case/remove check
         if include_children:
             children = list(submodule.children())
-            # would the observer ever be attached when this function is called?
             if len(children) == 0 and "observer" not in name:
                 yield name, submodule
             else:
