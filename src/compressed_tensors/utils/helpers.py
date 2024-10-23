@@ -24,6 +24,7 @@ __all__ = [
     "tensor_follows_mask_structure",
     "replace_module",
     "is_compressed_tensors_config",
+    "getattr_chain",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -119,3 +120,35 @@ def is_compressed_tensors_config(compression_config: Any) -> bool:
         return isinstance(compression_config, CompressedTensorsConfig)
     except ImportError:
         return False
+
+
+def getattr_chain(obj: Any, chain_str: str, *args, **kwargs) -> Any:
+    """
+    Chain multiple getattr calls, separated by `.`
+
+    :param obj: base object whose attributes are being retrieved
+    :param chain_str: attribute names separated by `.`
+    :param default: default value, throw error otherwise
+
+    """
+    if len(args) >= 1:
+        has_default = True
+        default = args[0]
+    elif "default" in kwargs:
+        has_default = True
+        default = kwargs["default"]
+    else:
+        has_default = False
+
+    attr_names = chain_str.split(".")
+
+    res = obj
+    for attr_name in attr_names:
+        if not hasattr(res, attr_name):
+            if has_default:
+                return default
+            else:
+                raise AttributeError(f"{res} object has no attribute {attr_name}")
+        res = getattr(res, attr_name)
+
+    return res
