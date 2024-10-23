@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import contextlib
+from functools import wraps
 from typing import Optional
 
 import torch
@@ -34,25 +35,32 @@ __all__ = [
 ]
 
 
-# upstream candidate
-def can_offload(module: torch.nn.Module) -> bool:
+def has_offloaded_params(module: torch.nn.Module) -> bool:
     """
-    :param module: module to check
-    :return: True if module has offloading capabilities
+    Checks if a module has offloaded parameters by checking if the given module
+    has a AlignDevicesHook attached with offloading enabled
+
+    Args:
+        module (`torch.nn.Module`): The module to check for an offload hook.
+
+    Returns:
+        bool: `True` if the module has an offload hook and offloading is enabled,
+        `False` otherwise.
     """
     return (
-        hasattr(module, "_hf_hook")
-        and isinstance(module._hf_hook, AlignDevicesHook)
-        and module._hf_hook.offload  # offload after forward pass
+        hasattr(module, "_hf_hook") and
+        isinstance(module._hf_hook, AlignDevicesHook) and
+        module._hf_hook.offload
     )
 
 
-# backwards compatibility, optional package checking
+# depreciation candidate
+@wraps(has_offloaded_params)
 def is_module_offloaded(module: torch.nn.Module) -> bool:
     if AlignDevicesHook is None:
         return False
 
-    return can_offload(module)
+    return has_offloaded_params(module)
 
 
 # depreciation candidate
@@ -108,14 +116,13 @@ def update_offload_parameter(
     module: torch.nn.Module,
     name: str,
     data: torch.Tensor,
-    offload_device: Optional[torch.device] = None,
+    init_device: Optional[torch.device] = torch.device("cpu"),
 ):
     """
     :param module: module containing the parameter to update
     :param name: name of module parameter to update
     :param data: tensor to update parameter with
-    :param offload_device: new offload device for parameter, otherwise default to
-        using the existing offload device
+    :param init_device: offload device for newly registered parameters
     """
     param = getattr(module, name)
     param.data = data
@@ -125,18 +132,11 @@ def update_offload_parameter(
         prefix = module._hf_hook.weights_map.prefix
         key = f"{prefix}{name}"
 
-        if offload_device is None:
-            if key not in prefix_dict:
-                raise ValueError(
-                    "Cannot initialize new offload parameter without specifying "
-                    "offload_device"
-                )
-            offload_device = prefix_dict[key].device
-
+        offload_device = prefix_dict[key].device if key in prefix_dict else init_device
         prefix_dict[key] = data.to(device=offload_device)
 
 
-# backwards compatibility
+# depreciation candidate
 def update_parameter_data(
     module: torch.nn.Module, new_param_data: torch.Tensor, param_name: str
 ):
@@ -147,27 +147,57 @@ def update_parameter_data(
 
 # upstream candidate
 @contextlib.contextmanager
-def align_module(module: torch.nn.Module, device: Optional[torch.device] = None):
+def align_module(module: torch.nn.Module, execution_device: Optional[torch.device] = None):
     """
     Move an offloaded module's parameters to device or module execution device
-
     :param module: module with parameters to align
-    :param device: optional device to move parameters to, if None is provided then
-        module execution device will be used
+    :param execution_device: optional device to move parameters to, if None is
+        provided then default module execution device will be used
     """
-    if device is not None:
-        original_device = module._hf_hook.execution_device
-        module._hf_hook.execution_device = device
+    if is_module_offloaded(module):
+        if execution_device is not None:
+            original_device = module._hf_hook.execution_device
+            module._hf_hook.execution_device = original_device
 
-    module._hf_hook.pre_forward(module)
-    yield
-    module._hf_hook.post_forward(module, torch.tensor([]))
+        module._hf_hook.pre_forward(module)
+        yield
+        module._hf_hook.post_forward(module, None)
 
-    if device is not None:
-        module._hf_hook.execution_device = original_device
+        if execution_device is not None:
+            module._hf_hook.execution_device = original_device
+
+    elif execution_device is not None:
+        devices = {}
+        for name, param in module.named_parameters():
+            devices[name] = param.device
+            setattr(module, name, param.to(execution_device))
+
+        yield
+
+        for name, param_device in module.named_parameters:
+            setattr(module, name, param.to(param_device))
+
+    else:
+        yield
 
 
-# upstream candidate
+@contextlib.contextmanager
+def modify_offload_module(
+    module: torch.nn.Module,
+    execution_device: Optional[torch.device] = None,
+    offload_device: Optional[torch.device] = None,
+):
+    with align_module(module, execution_device):
+        yield
+
+        # there is little performance gain from checking if a parameter's data
+        # has been modified before copying since the new data must be copied
+        # to the offload device anyways; just update all module parameters
+        for name, param in module.named_parameters():
+            update_offload_parameter(module, name, param.data, offload_device)
+
+
+# upstream candidate?
 def register_offload_parameter(
     module: torch.nn.Module,
     name: str,
