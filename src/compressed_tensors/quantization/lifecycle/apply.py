@@ -18,7 +18,7 @@ from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
-from typing import Union
+from typing import Set, Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
@@ -56,6 +56,7 @@ __all__ = [
     "apply_quantization_config",
     "apply_quantization_status",
     "find_name_or_class_matches",
+    "expand_targets",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -278,6 +279,29 @@ def find_name_or_class_matches(
         )
         matches = [match for match in matches if match is not None]
         return matches
+
+
+def expand_targets(
+    model: Module, targets: Iterable[str], ignore: Iterable[str]
+) -> Set[str]:
+    """
+    Finds all the targets in the model that match the given targets and ignore lists
+
+    Note: Targets must be regexes, layer types, or full layer names
+
+    :param model: model to search for targets in
+    :param targets: list of targets to search for
+    :param ignore: list of targets to ignore
+    :return: set of all targets that match the given targets and should
+        not be ignored
+    """
+    current_targets = set()
+    for name, module in iter_named_leaf_modules(model):
+        if find_name_or_class_matches(
+            name, module, targets
+        ) and not find_name_or_class_matches(name, module, ignore):
+            current_targets.add(name)
+    return current_targets
 
 
 def _find_matches(

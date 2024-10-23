@@ -16,7 +16,7 @@ import json
 import os
 import re
 import struct
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 from safetensors import safe_open
 from torch import Tensor
@@ -33,6 +33,9 @@ __all__ = [
     "get_quantization_state_dict",
     "is_quantization_param",
 ]
+
+WEIGHT_MAPPING_TYPE = Dict[str, str]
+NESTED_WEIGHT_MAPPING_TYPE = Dict[str, WEIGHT_MAPPING_TYPE]
 
 
 def get_safetensors_folder(
@@ -176,8 +179,10 @@ def get_weight_mappings(path_to_model_or_tensors: str) -> Dict[str, str]:
 
 
 def get_nested_weight_mappings(
-    model_path: str, params_to_nest: List[str]
-) -> Dict[str, Dict[str, str]]:
+    model_path: str, params_to_nest: List[str], return_other_params: bool = False
+) -> Union[
+    NESTED_WEIGHT_MAPPING_TYPE, Tuple[NESTED_WEIGHT_MAPPING_TYPE, WEIGHT_MAPPING_TYPE]
+]:
     """
     Takes a path to a state dict saved in safetensors format and returns a nested
     mapping from uncompressed parameterized layer names to the file locations of each
@@ -193,22 +198,36 @@ def get_nested_weight_mappings(
     This generalizes to cases where the model is split into multiple safetensors files
 
     :param model_path: path to safetensors state dict, must contain either a single
-    safetensors file or multiple files with an index
-    :return: nested mapping of parameterized layer name to file location
+        safetensors file or multiple files with an index
+    :param return_other_params: if True, return a second dictionary containing the
+        remaining parameters that were not matched to the nested parameters
+    :return: nested mapping of parameterized layer name to file location if
+        return_other_params is False, else a tuple containing the nested mapping
+        and a mapping of the remaining parameters that were not matched to
+        the nested parameters
     """
     weight_mappings = get_weight_mappings(model_path)
+    other_params = {}
 
     nested_weight_mappings = {}
     for key in weight_mappings.keys():
+        matched = False
         for param_name in params_to_nest:
             maybe_match = match_param_name(key, param_name)
             if maybe_match is not None:
                 dense_param = maybe_match
                 if dense_param not in nested_weight_mappings:
                     nested_weight_mappings[dense_param] = {}
+                matched = True
                 nested_weight_mappings[dense_param][param_name] = weight_mappings[key]
+        if not matched:
+            other_params[key] = weight_mappings[key]
 
-    return nested_weight_mappings
+    return (
+        nested_weight_mappings
+        if not return_other_params
+        else (nested_weight_mappings, other_params)
+    )
 
 
 def get_quantization_state_dict(model_path: str) -> Dict[str, Tensor]:
