@@ -35,6 +35,7 @@ __all__ = [
 ]
 
 
+# upstream candidate
 def has_offloaded_params(module: torch.nn.Module) -> bool:
     """
     Checks if a module has offloaded parameters by checking if the given module
@@ -149,12 +150,13 @@ def update_parameter_data(
 @contextlib.contextmanager
 def align_module(module: torch.nn.Module, execution_device: Optional[torch.device] = None):
     """
-    Move an offloaded module's parameters to device or module execution device
+    Move a module's parameters to the execution device
+
     :param module: module with parameters to align
-    :param execution_device: optional device to move parameters to, if None is
-        provided then default module execution device will be used
+    :param execution_device: if provided, overrides module execution device
+        within the context
     """
-    if is_module_offloaded(module):
+    if has_offloaded_params(module):
         if execution_device is not None:
             original_device = module._hf_hook.execution_device
             module._hf_hook.execution_device = original_device
