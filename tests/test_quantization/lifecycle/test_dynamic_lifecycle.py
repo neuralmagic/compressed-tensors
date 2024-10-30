@@ -23,6 +23,7 @@ from transformers import AutoModelForCausalLM
 
 
 def test_apply_tinyllama_dynamic_activations():
+    # NOTE: should not calibrate dynamic quant
     quant_config = get_sample_dynamic_tinyllama_quant_config()
     model = get_tinyllama_model()
 
@@ -73,7 +74,7 @@ def _test_layer_dynamic_quantization_status(
     # check inputs always have an observer if quantized but never scale/zp
     assert not hasattr(module, "input_scale")
     assert not hasattr(module, "input_zero_point")
-    assert hasattr(module, "input_observer") == inputs
+    assert not hasattr(module, "input_observer")
 
     # check weights always have scale/zp and observer only if not frozen
     assert hasattr(module, "weight_scale") == weights
