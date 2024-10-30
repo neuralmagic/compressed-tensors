@@ -311,7 +311,7 @@ def sparse_semi_structured_to_dense_cutlass(sparse, meta_reordered):
         if sparse.dtype == torch.float8_e4m3fn:
             dense.scatter_(0, dense_offsets, sparse.view(torch.int8).view(-1))
         else:
-            dense.scatter_(0, dense_offsets, sparse.view.reshape(-1))
+            dense.scatter_(0, dense_offsets, sparse.reshape(-1))
     else:
         dense.view(torch.half).scatter_(
             0, dense_offsets, sparse.view(torch.half).view(-1)
