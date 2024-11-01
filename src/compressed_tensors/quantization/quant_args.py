@@ -197,6 +197,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 "activation ordering"
             )
 
+        # infer observer w.r.t. dynamic
         if dynamic:
             if strategy not in (
                 QuantizationStrategy.TOKEN,
@@ -208,9 +209,10 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     "quantization",
                 )
             if observer is not None:
-                warnings.warn(
-                    "No observer is used for dynamic quantization, setting to None"
-                )
+                if observer != "memoryless":  # avoid annoying users with old configs
+                    warnings.warn(
+                        "No observer is used for dynamic quantization, setting to None"
+                    )
                 observer = None
 
         elif observer is None:
