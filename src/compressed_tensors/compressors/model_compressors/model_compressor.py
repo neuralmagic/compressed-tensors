@@ -103,7 +103,9 @@ class ModelCompressor:
         :return: compressor for the configs, or None if model is not compressed
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None)
+        compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None) or getattr(
+            config, QUANTIZATION_CONFIG_NAME, None
+        )
         return cls.from_compression_config(compression_config)
 
     @classmethod
