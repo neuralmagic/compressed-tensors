@@ -131,7 +131,6 @@ def getattr_chain(obj: Any, chain_str: str, *args, **kwargs) -> Any:
     :param obj: base object whose attributes are being retrieved
     :param chain_str: attribute names separated by `.`
     :param default: default value, throw error otherwise
-
     """
     if len(args) >= 1:
         has_default = True
