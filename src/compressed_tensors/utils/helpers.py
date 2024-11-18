@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
+import warnings
+from typing import Any, Callable, Optional
 
 import torch
 from transformers import AutoConfig
@@ -25,6 +26,7 @@ __all__ = [
     "replace_module",
     "is_compressed_tensors_config",
     "getattr_chain",
+    "deprecated",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -152,3 +154,30 @@ def getattr_chain(obj: Any, chain_str: str, *args, **kwargs) -> Any:
         res = getattr(res, attr_name)
 
     return res
+
+
+def deprecated(future_name: Optional[str] = None, message: Optional[str] = None):
+    """
+    Decorator to mark functions as deprecated
+
+    :param new_function: Function called in place of depreciated function
+    :param message: Depreciation message, replaces default depreciation message
+    """
+
+    def decorator(func: Callable[[Any], Any]):
+        nonlocal message
+
+        if message is None:
+            message = (
+                f"{func.__name__} is deprecated and will be removed in a future release"
+            )
+            if future_name is not None:
+                message += f". Please use {future_name} instead."
+
+        def wrapped(*args, **kwargs):
+            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapped
+
+    return decorator

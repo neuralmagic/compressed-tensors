@@ -13,17 +13,20 @@
 # limitations under the License.
 
 import contextlib
-from functools import wraps
-from typing import Optional
+from typing import Any, Callable, Optional
 
 import torch
-import warnings
 from compressed_tensors.utils.helpers import getattr_chain
 
 
 try:
     from accelerate.hooks import AlignDevicesHook
-    from accelerate.utils import OffloadedWeightsLoader, PrefixedDataset, set_module_tensor_to_device
+    from accelerate.utils import (
+        OffloadedWeightsLoader,
+        PrefixedDataset,
+        set_module_tensor_to_device,
+    )
+
     _has_accelerate = True
 except ImportError:
     _has_accelerate = False
@@ -38,45 +41,38 @@ __all__ = [
     "get_offloaded_device",
     "update_prefix_dict",
     "update_parameter_data",
+    "register_offload_parameter",
+    "update_offload_data",
+    "delete_offload_parameter",
+    "has_offloaded_params",
+    "align_module",
 ]
 
 
-# upstream candidate
-def has_offloaded_params(module: torch.nn.Module) -> bool:
-    """
-    Checks if a module has offloaded parameters by checking if the given module
-    has a AlignDevicesHook attached with offloading enabled
+def check_accelerate(fallback: Any):
+    def decorator(func: Callable[[Any], Any]):
+        if not _has_accelerate:
+            return lambda *args, **kwargs: fallback
 
-    Args:
-        module (`torch.nn.Module`): The module to check for an offload hook.
+        return func
 
-    Returns:
-        bool: `True` if the module has an offload hook and offloading is enabled,
-        `False` otherwise.
-    """
-    return (
-        hasattr(module, "_hf_hook") and
-        isinstance(module._hf_hook, AlignDevicesHook) and
-        module._hf_hook.offload
-    )
+    return decorator
 
 
-# depreciation candidate
-@wraps(has_offloaded_params)
+""" Candidates for Depreciation """
+
+
+@check_accelerate(fallback=False)
 def is_module_offloaded(module: torch.nn.Module) -> bool:
-    if not _has_accelerate:
-        return False
-
     return has_offloaded_params(module)
 
 
-# depreciation candidate
 def get_execution_device(module: torch.nn.Module) -> torch.device:
     """
     :param module: module to check
     :return: device module is loaded onto during forward pass
     """
-    if is_module_offloaded(module):
+    if has_offloaded_params(module):
         return module._hf_hook.execution_device
     device = next(module.parameters()).device
 
@@ -87,11 +83,14 @@ def get_execution_device(module: torch.nn.Module) -> torch.device:
     return device
 
 
-# upstream candidate
-def _infer_offload_device(module: torch.nn.Module) -> torch.device:
+def get_offloaded_device(module: torch.nn.Module) -> torch.device:
+    """
+    :param module: module to check
+    :return: device module is offloaded to onto after forward pass
+    """
     if not has_offloaded_params(module):
         raise ValueError("Cannot infer offload device from non-offloaded module")
-    
+
     first_key = next(module._hf_hook.weights_map.keys(), None)
     if first_key is None:
         raise ValueError("Cannot infer offload device from empty weights map")
@@ -99,16 +98,8 @@ def _infer_offload_device(module: torch.nn.Module) -> torch.device:
     prefix_dataset = module._hf_hook.weights_map.dataset
     return prefix_dataset[first_key].device
 
-# depreciation candidate
-def get_offloaded_device(module: torch.nn.Module) -> torch.device:
-    """
-    :param module: module to check
-    :return: device module is offloaded to onto after forward pass
-    """
-    return _infer_offload_device(module)
 
-
-# depreciation candidate
+@check_accelerate(fallback=None)
 def update_prefix_dict(module: torch.nn.Module, key: str, data: torch.Tensor):
     """
     Updates the offloaded state dict for a given module. Parameter named key is replaced
@@ -120,69 +111,154 @@ def update_prefix_dict(module: torch.nn.Module, key: str, data: torch.Tensor):
     :param key: name of parameter to update
     :param data: tensor to update parameter with in the offloaded state dict
     """
-    if not is_module_offloaded(module):
+    if not has_offloaded_params(module):
         raise ValueError("Prefix dict is only applicable to offloaded modules")
     prefix_dict = module._hf_hook.weights_map
     prefix_dict.dataset[f"{prefix_dict.prefix}{key}"] = data
 
 
-# upstream candidate?
-def update_offload_parameter(
-    module: torch.nn.Module,
-    name: str,
-    data: Optional[torch.Tensor] = None,
-    offload_device: Optional[torch.device] = None,
+def update_parameter_data(
+    module: torch.nn.Module, new_param_data: torch.Tensor, param_name: str
 ):
     """
+    Update the data of an existing parameter and its offload dict. Supports both
+    parameters of offloaded modules and non-offloaded modules
+
+    :param module: module containing the parameter to update
+    :param new_param_data: tensor to update parameter with
+    :param param_name: name of module parameter to update
+    """
+    update_offload_data(module, param_name, new_param_data)
+
+
+""" Candidates for Upstreaming """
+
+
+def register_offload_parameter(
+    module: torch.nn.Module,
+    name: str,
+    parameter: torch.nn.Parameter,
+):
+    """
+    Register a parameter to the given module which may be offloaded
+
+    :param module: maybe offloaded module
+    :param name: name of newly registered parameter
+    :param parameter: parameter being registered
+    """
+    if has_offloaded_params(module):
+        module.register_parameter(name, parameter)
+        update_offload_data(module, name, parameter.data)
+        set_module_tensor_to_device(module, name, "meta")
+    else:
+        device = next(module.parameters()).device
+        parameter = parameter.to(device)
+        module.register_parameter(name, parameter)
+
+
+def update_offload_data(
+    module: torch.nn.Module,
+    name: str,
+    data: Optional[torch.Tensor],
+):
+    """
+    Update the data of an existing parameter and its offload dict. Supports both
+    parameters of offloaded modules and non-offloaded modules
+
     :param module: module containing the parameter to update
     :param name: name of module parameter to update
     :param data: tensor to update parameter with
-    :param offload_device: offload device for newly registered parameters
     """
     param = getattr(module, name)
-    if param.device == "meta" or data is not None and data.device == "meta":
-        raise ValueError("Cannot copy data to/from meta device. Consider calling with align_module(module)")
-    
-    if data is not None:
-        if param.data.dtype != data.dtype:
-            warnings.warn("TODO")
 
+    # copy data into onloaded parameter if applicable
+    if param.device != "meta":
         param.data.copy_(data)
+
+    # update offload dict
+    if has_offloaded_params(module):
+        weights_map = module._hf_hook.weights_map
+
+        # for upstreaming, better to add write capabilities to weight map classes first
+        if isinstance(weights_map, PrefixedDataset):
+            dataset = getattr_chain(module, "module._hf_hook.weights_map.dataset", None)
+            if dataset is not None:
+                prefix = module._hf_hook.weights_map.prefix
+                key = f"{prefix}{name}"
+
+                breakpoint()
+
+                offload_device = (
+                    dataset[key].device
+                    if key in dataset
+                    else next(dataset.values()).device
+                )
+                dataset[key] = param.data.to(device=offload_device)
+
+        if isinstance(weights_map, OffloadedWeightsLoader):
+            raise NotImplementedError()
+
+        else:
+            raise NotImplementedError()
+
+
+def delete_offload_parameter(module: torch.nn.Module, name: str):
+    """
+    Delete a module from a module which may be offloaded
+
+    :param module: maybe offloaded module
+    :param name: name of parameter being deleted
+    """
+    delattr(module, name)
 
     if has_offloaded_params(module):
         weights_map = module._hf_hook.weights_map
 
-        # for upstreaming, probably better to modify the weight map types so that they can be written to?
+        # for upstreaming, better to add write capabilities to weight map classes first
         if isinstance(weights_map, PrefixedDataset):
-            prefix_dict = getattr_chain(module, "module._hf_hook.weights_map.dataset", None)
-            if prefix_dict is not None:
-                prefix = module._hf_hook.weights_map.prefix
-                key = f"{prefix}{name}"
+            dataset = weights_map.dataset
+            prefix = weights_map.prefix
+            if dataset is not None:
+                del dataset[f"{prefix}{name}"]
 
-                offload_device = (
-                    prefix_dict[key].device if key in prefix_dict
-                    else offload_device if offload_device is not None
-                    else _infer_offload_device(module)
-                )
-                prefix_dict[key] = param.data.to(device=offload_device)
-            
-        if isinstance(weights_map, OffloadedWeightsLoader):
-            raise NotImplementedError()
-        
-        else:
+        elif isinstance(weights_map, OffloadedWeightsLoader):
             raise NotImplementedError()
 
-# depreciation candidate
-def update_parameter_data(
-    module: torch.nn.Module, new_param_data: torch.Tensor, param_name: str
-):
-    param = getattr(module, param_name)
-    new_param_data = new_param_data.to(device=param.device, dtype=param.dtype)
-    update_offload_parameter(module, param_name, new_param_data)
+        elif weights_map is not None:
+            raise NotImplementedError(
+                f"Cannot delete parameter from weights_map of type {type(weights_map)}"
+            )
 
 
+""" Upstreamed Functions """
+
+
+# introduced in accelerate v1.1.0
+@check_accelerate(fallback=False)
+def has_offloaded_params(module: torch.nn.Module) -> bool:
+    """
+    Checks if a module has offloaded parameters by checking if the given module has a
+    AlignDevicesHook attached with offloading enabled
+
+    Args:
+        module (`torch.nn.Module`): The module to check for an offload hook.
+
+    Returns:
+        bool: `True` if the module has an offload hook and offloading is enabled,
+        `False` otherwise.
+    """
+    return (
+        hasattr(module, "_hf_hook")
+        and isinstance(module._hf_hook, AlignDevicesHook)
+        and module._hf_hook.offload
+    )
+
+
+# introduced in accelerate v1.1.0
 @contextlib.contextmanager
-def align_module(module: torch.nn.Module, execution_device: Optional[torch.device] = None):
+def align_module(
+    module: torch.nn.Module, execution_device: Optional[torch.device] = None
+):
     """
     Moves a module's parameters to the specified execution device.
 
@@ -192,7 +268,8 @@ def align_module(module: torch.nn.Module, execution_device: Optional[torch.devic
             module's execution device within the context.
 
     Yields:
-        None: Yields control while the module's parameters are aligned to the execution device.
+        None: Yields control while the module's parameters are aligned to the execution
+        device.
     """
     if has_offloaded_params(module):
         if execution_device is not None:
@@ -227,52 +304,3 @@ def align_module(module: torch.nn.Module, execution_device: Optional[torch.devic
 
     else:
         yield
-
-
-
-@contextlib.contextmanager
-def modify_offload_module(
-    module: torch.nn.Module,
-    execution_device: Optional[torch.device] = None,
-    offload_device: Optional[torch.device] = None,
-):
-    with align_module(module, execution_device):
-        yield
-
-        # there is little performance gain from checking if a parameter's data
-        # has been modified before copying since the new data must be copied
-        # to the offload device anyways; just update all module parameters
-        for name, param in module.named_parameters():
-            update_offload_parameter(module, name, param.data, offload_device)
-
-
-# upstream candidate?
-def register_offload_parameter(
-    module: torch.nn.Module,
-    name: str,
-    parameter: torch.nn.Parameter,
-    offload_device: Optional[torch.device] = None,
-):
-    module.register_parameter(name, parameter)
-    update_offload_parameter(module, name, parameter.data, offload_device)
-
-
-# upstream candidate?
-def delete_offload_parameter(module: torch.nn.Module, name: str):
-    delattr(module, name)
-
-    if has_offloaded_params(module):
-        weights_map = module._hf_hook.weights_map
-
-        # for upstreaming, probably better to modify the weight map types so that they can be written to?
-        if isinstance(weights_map, PrefixedDataset):
-            dataset = weights_map.dataset
-            prefix = weights_map.prefix
-            if dataset is not None:
-                del dataset[f"{prefix}{name}"]
-            
-        elif isinstance(weights_map, OffloadedWeightsLoader):
-            raise NotImplementedError()
-        
-        elif weights_map is not None:
-            raise NotImplementedError(f"Cannot delete parameter from weights_map of type {type(weights_map)}")

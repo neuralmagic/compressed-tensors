@@ -16,7 +16,7 @@
 import logging
 
 from compressed_tensors.quantization.quant_config import QuantizationStatus
-from compressed_tensors.utils import is_module_offloaded, update_parameter_data
+from compressed_tensors.utils import has_offloaded_params, update_parameter_data
 from torch.nn import Module
 
 
@@ -56,7 +56,7 @@ def set_module_for_calibration(module: Module, quantize_weights_upfront: bool = 
         observer = module.weight_observer
         g_idx = getattr(module, "weight_g_idx", None)
 
-        offloaded = is_module_offloaded(module)
+        offloaded = has_offloaded_params(module)
         if offloaded:
             module._hf_hook.pre_forward(module)
 

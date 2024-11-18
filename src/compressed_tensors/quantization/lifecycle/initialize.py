@@ -30,7 +30,7 @@ from compressed_tensors.quantization.quant_args import (
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
-from compressed_tensors.utils import get_execution_device, is_module_offloaded
+from compressed_tensors.utils import has_offloaded_params, register_offload_parameter
 from torch.nn import Module, Parameter
 
 
@@ -109,7 +109,7 @@ def initialize_module_for_quantization(
         module.quantization_status = QuantizationStatus.INITIALIZED
 
         offloaded = False
-        if is_module_offloaded(module):
+        if has_offloaded_params(module):
             try:
                 from accelerate.hooks import add_hook_to_module, remove_hook_from_module
                 from accelerate.utils import PrefixedDataset
@@ -164,9 +164,9 @@ def _initialize_scale_zero_point_observer(
     if quantization_args.dynamic:
         return
 
-    device = next(module.parameters()).device
-    if is_module_offloaded(module):
-        device = get_execution_device(module)
+    # begin on the same device as other parameters or cpu if offloaded
+    params_device = next(module.parameters()).device
+    device = "cpu" if has_offloaded_params(module) else params_device
 
     # infer expected scale/zero point shape
     expected_shape = 1  # per tensor
@@ -188,7 +188,7 @@ def _initialize_scale_zero_point_observer(
         torch.empty(expected_shape, dtype=scale_dtype, device=device),
         requires_grad=False,
     )
-    module.register_parameter(f"{base_name}_scale", init_scale)
+    register_offload_parameter(module, f"{base_name}_scale", init_scale)
 
     if force_zero_point or not quantization_args.symmetric:
         zp_dtype = quantization_args.pytorch_dtype()
@@ -196,7 +196,7 @@ def _initialize_scale_zero_point_observer(
             torch.zeros(expected_shape, device=device, dtype=zp_dtype),
             requires_grad=False,
         )
-        module.register_parameter(f"{base_name}_zero_point", init_zero_point)
+        register_offload_parameter(module, f"{base_name}_zero_point", init_zero_point)
 
     # only grouped activation ordering has g_idx
     if quantization_args.actorder == ActivationOrdering.GROUP:
@@ -206,7 +206,7 @@ def _initialize_scale_zero_point_observer(
             torch.full(g_idx_shape, -1, device=device, dtype=g_idx_dtype),
             requires_grad=False,
         )
-        module.register_parameter(f"{base_name}_g_idx", init_g_idx)
+        register_offload_parameter(module, f"{base_name}_g_idx", init_g_idx)
 
 
 def is_attention_module(module: Module):
