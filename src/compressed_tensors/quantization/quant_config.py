@@ -35,6 +35,7 @@ from torch.nn import Module
 __all__ = [
     "QuantizationStatus",
     "QuantizationConfig",
+    "QuantizationConfigHFQuantizer",
     "LIFECYCLE_ORDER",
     "DEFAULT_QUANTIZATION_METHOD",
     "DEFAULT_QUANTIZATION_FORMAT",
@@ -135,7 +136,7 @@ class QuantizationConfig(BaseModel):
         compression ratio acheived by the quantization config
     :ignore: optional list of layers to ignore from config_groups. Layers in this list
         are not quantized even if they match up with a target in config_groups
-    :version param: version of the compressors used to optimize the given model 
+    :version param: version of the compressors used to optimize the given model
     """
 
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
@@ -264,3 +265,14 @@ class QuantizationConfig(BaseModel):
                     return True
 
         return False
+
+
+# For HFQuantizer, be able to adjust run_compressed on model load
+class QuantizationConfigHFQuantizer(QuantizationConfig):
+    """
+    :param run_compressed: param used set run_compressed.
+     Used for `apply_quantization_config` in CompressedTensorsHfQuantizer
+     in transformers
+    """
+
+    run_compressed: bool = True
