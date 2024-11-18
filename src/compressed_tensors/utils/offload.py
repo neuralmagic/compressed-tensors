@@ -88,15 +88,11 @@ def get_offloaded_device(module: torch.nn.Module) -> torch.device:
     :param module: module to check
     :return: device module is offloaded to onto after forward pass
     """
-    if not has_offloaded_params(module):
-        raise ValueError("Cannot infer offload device from non-offloaded module")
-
-    first_key = next(module._hf_hook.weights_map.keys(), None)
-    if first_key is None:
-        raise ValueError("Cannot infer offload device from empty weights map")
-
-    prefix_dataset = module._hf_hook.weights_map.dataset
-    return prefix_dataset[first_key].device
+    if has_offloaded_params(module):
+        first_key = list(module._hf_hook.weights_map.keys())[0]
+        prefix_dataset = module._hf_hook.weights_map.dataset
+        return prefix_dataset[first_key].device
+    return next(module.parameters()).device
 
 
 @check_accelerate(fallback=None)
