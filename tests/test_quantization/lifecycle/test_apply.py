@@ -29,6 +29,7 @@ from compressed_tensors.quantization.lifecycle import (
     apply_quantization_status,
 )
 from compressed_tensors.quantization.utils import iter_named_leaf_modules
+from tests.testing_utils import requires_accelerate
 from transformers import AutoModelForCausalLM
 
 
@@ -226,6 +227,7 @@ def get_sample_tinyllama_quant_config(status: str = "frozen"):
     return QuantizationConfig.parse_obj(config_dict)
 
 
+@requires_accelerate()
 @pytest.mark.parametrize(
     "ignore,should_raise_warning",
     [
