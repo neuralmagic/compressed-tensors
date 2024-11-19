@@ -179,8 +179,6 @@ def update_offload_data(
                 prefix = module._hf_hook.weights_map.prefix
                 key = f"{prefix}{name}"
 
-                breakpoint()
-
                 offload_device = (
                     dataset[key].device
                     if key in dataset

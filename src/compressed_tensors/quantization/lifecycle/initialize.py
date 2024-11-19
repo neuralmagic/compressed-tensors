@@ -173,7 +173,10 @@ def _initialize_scale_zero_point(
     device = "cpu" if has_offloaded_params(module) else params_device
 
     # infer expected scale/zero point shape
-    expected_shape = 1  # per tensor
+    if quantization_args.strategy == QuantizationStrategy.TOKEN:
+        expected_shape = (1, 1)
+    else:
+        expected_shape = 1
 
     if base_name == "weight" and weight_shape is not None:
         if quantization_args.strategy == QuantizationStrategy.CHANNEL:
