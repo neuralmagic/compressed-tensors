@@ -114,20 +114,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         """
         :return: torch quantization FakeQuantize built based on these QuantizationArgs
         """
-        from compressed_tensors.quantization.observers.base import Observer
-
-        # No observer required for the dynamic case
-        if self.dynamic:
-            self.observer = None
-            return self.observer
-
-        return Observer.load_from_registry(self.observer, quantization_args=self)
-
-    def get_kv_cache(self):
-        """Get the singleton KV Cache"""
-        from compressed_tensors.quantization.cache import QuantizedKVParameterCache
-
-        return QuantizedKVParameterCache(self)
+        return self.observer
 
     @field_validator("type", mode="before")
     def validate_type(cls, value) -> QuantizationType:
@@ -210,6 +197,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 "activation ordering"
             )
 
+        # infer observer w.r.t. dynamic
         if dynamic:
             if strategy not in (
                 QuantizationStrategy.TOKEN,
@@ -221,18 +209,19 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     "quantization",
                 )
             if observer is not None:
-                warnings.warn(
-                    "No observer is used for dynamic quantization, setting to None"
-                )
-                model.observer = None
+                if observer != "memoryless":  # avoid annoying users with old configs
+                    warnings.warn(
+                        "No observer is used for dynamic quantization, setting to None"
+                    )
+                observer = None
 
-        # if we have not set an observer and we
-        # are running static quantization, use minmax
-        if not observer and not dynamic:
-            model.observer = "minmax"
+        elif observer is None:
+            # default to minmax for non-dynamic cases
+            observer = "minmax"
 
         # write back modified values
         model.strategy = strategy
+        model.observer = observer
         return model
 
     def pytorch_dtype(self) -> torch.dtype:

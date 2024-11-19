@@ -14,13 +14,12 @@
 
 
 import logging
+from enum import Enum
 from typing import Optional
 
 import torch
-from compressed_tensors.quantization.cache import KVCacheScaleType
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
-    wrap_module_forward_quantized_attn,
 )
 from compressed_tensors.quantization.quant_args import (
     ActivationOrdering,
@@ -36,10 +35,17 @@ from torch.nn import Module, Parameter
 
 __all__ = [
     "initialize_module_for_quantization",
+    "is_attention_module",
+    "KVCacheScaleType",
 ]
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class KVCacheScaleType(Enum):
+    KEY = "k_scale"
+    VALUE = "v_scale"
 
 
 def initialize_module_for_quantization(
@@ -66,15 +72,13 @@ def initialize_module_for_quantization(
         return
 
     if is_attention_module(module):
-        # wrap forward call of module to perform
         # quantized actions based on calltime status
-        wrap_module_forward_quantized_attn(module, scheme)
         _initialize_attn_scales(module)
 
     else:
 
         if scheme.input_activations is not None:
-            _initialize_scale_zero_point_observer(
+            _initialize_scale_zero_point(
                 module,
                 "input",
                 scheme.input_activations,
@@ -85,7 +89,7 @@ def initialize_module_for_quantization(
                 weight_shape = None
                 if isinstance(module, torch.nn.Linear):
                     weight_shape = module.weight.shape
-                _initialize_scale_zero_point_observer(
+                _initialize_scale_zero_point(
                     module,
                     "weight",
                     scheme.weights,
@@ -101,7 +105,7 @@ def initialize_module_for_quantization(
 
         if scheme.output_activations is not None:
             if not is_kv_cache_quant_scheme(scheme):
-                _initialize_scale_zero_point_observer(
+                _initialize_scale_zero_point(
                     module, "output", scheme.output_activations
                 )
 
@@ -146,21 +150,21 @@ def initialize_module_for_quantization(
                 module._hf_hook.weights_map = new_prefix_dict
 
 
-def _initialize_scale_zero_point_observer(
+def is_attention_module(module: Module):
+    return "attention" in module.__class__.__name__.lower() and (
+        hasattr(module, "k_proj")
+        or hasattr(module, "v_proj")
+        or hasattr(module, "qkv_proj")
+    )
+
+
+def _initialize_scale_zero_point(
     module: Module,
     base_name: str,
     quantization_args: QuantizationArgs,
     weight_shape: Optional[torch.Size] = None,
     force_zero_point: bool = True,
 ):
-
-    # initialize observer module and attach as submodule
-    observer = quantization_args.get_observer()
-    # no need to register an observer for dynamic quantization
-    if observer:
-        module.register_module(f"{base_name}_observer", observer)
-
-    # no need to register a scale and zero point for a dynamic quantization
     if quantization_args.dynamic:
         return
 
@@ -207,14 +211,6 @@ def _initialize_scale_zero_point_observer(
             requires_grad=False,
         )
         register_offload_parameter(module, f"{base_name}_g_idx", init_g_idx)
-
-
-def is_attention_module(module: Module):
-    return "attention" in module.__class__.__name__.lower() and (
-        hasattr(module, "k_proj")
-        or hasattr(module, "v_proj")
-        or hasattr(module, "qkv_proj")
-    )
 
 
 def _initialize_attn_scales(module: Module) -> None:

@@ -22,7 +22,6 @@ from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
     QuantizationStatus,
-    freeze_module_quantization,
 )
 from compressed_tensors.quantization.lifecycle import (
     apply_quantization_config,
@@ -33,7 +32,7 @@ from tests.testing_utils import requires_accelerate
 from transformers import AutoModelForCausalLM
 
 
-def test_target_prioritization():
+def test_target_prioritization(mock_frozen):
     # tests that the config_groups are applied in the correct order
     # of priority, where exact layer name > regex > module name
     config = {
@@ -69,7 +68,7 @@ def test_target_prioritization():
     config = QuantizationConfig(**config)
     config.quantization_status = QuantizationStatus.CALIBRATION
     apply_quantization_config(model, config)
-    model.apply(freeze_module_quantization)
+    mock_frozen(model)
 
     for name, module in iter_named_leaf_modules(model):
         if name == "model.layers.0.mlp.down_proj":
@@ -149,7 +148,6 @@ def test_serialize_config_tinyllama():
     assert serialized_config.config_groups["group_0"].input_activations is None
     assert serialized_config.config_groups["group_1"].targets == ["Linear"]
     assert serialized_config.config_groups["group_1"].input_activations is not None
-    assert serialized_config.quantization_status == QuantizationStatus.FROZEN
     assert serialized_config.format == CompressionFormat.dense.value
     assert serialized_config.quant_method == DEFAULT_QUANTIZATION_METHOD
     assert serialized_config.ignore == ["model.layers.1.mlp.down_proj"]
@@ -238,14 +236,8 @@ def get_sample_tinyllama_quant_config(status: str = "frozen"):
 def test_apply_quantization_status(caplog, ignore, should_raise_warning):
     import logging
 
-    from transformers import AutoModelForCausalLM
-
     # load a dense, unquantized tiny llama model
-    model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name, device_map="cpu", torch_dtype="auto"
-    )
-
+    model = get_tinyllama_model()
     quantization_config_dict = {
         "quant_method": "sparseml",
         "format": "pack-quantized",

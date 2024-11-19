@@ -15,10 +15,6 @@
 from copy import deepcopy
 
 import torch
-from compressed_tensors.quantization.lifecycle.calibration import (
-    set_module_for_calibration,
-)
-from compressed_tensors.quantization.lifecycle.frozen import freeze_module_quantization
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
@@ -27,7 +23,7 @@ from compressed_tensors.quantization.quant_config import QuantizationStatus
 from torch.nn import Linear
 
 
-def test_lifecyle(create_quantization_scheme):
+def test_lifecyle(mock_per_tensor_calibration, create_quantization_scheme):
     num_bits = 8
 
     quantization_scheme = create_quantization_scheme(
@@ -59,18 +55,10 @@ def test_lifecyle(create_quantization_scheme):
         expected_layer_keys.remove(key)
     assert len(expected_layer_keys) == 0
 
-    # should have both input and weight observer after initalizing
-    assert hasattr(layer, "input_observer")
-    assert hasattr(layer, "weight_observer")
-
     assert hasattr(layer, "quantization_scheme")
     assert hasattr(layer, "quantization_status")
     assert layer.quantization_status == QuantizationStatus.INITIALIZED
 
-    set_module_for_calibration(layer)
-    assert layer.quantization_status == QuantizationStatus.CALIBRATION
-
-    # do a calibration step
     assert torch.numel(layer.input_zero_point.data) == 1
     assert torch.numel(layer.input_scale) == 1
     assert torch.numel(layer.weight_scale) == 1
@@ -78,7 +66,10 @@ def test_lifecyle(create_quantization_scheme):
 
     random_input = torch.randn(4, 4)
     random_input[0][0] = 42  # skew distribution to force non-zero zp
-    layer(random_input)
+
+    # do a calibration step
+    mock_per_tensor_calibration(layer, "weight", value=layer.weight)
+    mock_per_tensor_calibration(layer, "input", value=random_input)
 
     # zero-points and scale should be updated after forward pass
     assert torch.numel(layer.input_zero_point.data) > 0
@@ -99,7 +90,9 @@ def test_lifecyle(create_quantization_scheme):
     for _ in range(10):
         random_input = torch.randn(4, 4)
         random_input[0][0] = 42  # skew distribution to force non-zero zp
-        layer(random_input)
+
+        mock_per_tensor_calibration(layer, "weight", value=layer.weight)
+        mock_per_tensor_calibration(layer, "input", value=random_input)
 
     assert initialized_layer_input_zero_point != 0
     assert initialized_layer_input_scale != layer.input_scale
@@ -112,9 +105,6 @@ def test_lifecyle(create_quantization_scheme):
     layer_before_freeze_input_zero_point = deepcopy(layer.input_zero_point)
     layer_before_freeze_input_scale = deepcopy(layer.input_scale)
     layer_before_freeze_weight_scale = deepcopy(layer.weight_scale)
-
-    # Freeze, no update after any forward pass
-    freeze_module_quantization(layer)
 
     for _ in range(10):
         layer(torch.randn(4, 4))
