@@ -50,16 +50,11 @@ class QuantizationScheme(BaseModel):
     @model_validator(mode="after")
     def validate_model_after(model: "QuantizationArgs") -> Dict[str, Any]:
         inputs = model.input_activations
-        weights = model.weights
         outputs = model.output_activations
 
         if inputs is not None:
             if inputs.actorder is not None:
                 raise ValueError("Cannot apply actorder to input activations")
-
-        if weights is not None:
-            if weights.dynamic:
-                raise ValueError("Cannot apply dynamic quantization to weights")
 
         if outputs is not None:
             if outputs.actorder is not None:
