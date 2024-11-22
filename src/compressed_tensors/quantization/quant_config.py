@@ -132,9 +132,10 @@ class QuantizationConfig(BaseModel):
         `k_proj` and `v_proj` in their names. If this is not the case
         and kv_cache_scheme != None, the quantization of kv cache will fail
     :global_compression_ratio: optional informational config to report the model
-    compression ratio acheived by the quantization config
+        compression ratio acheived by the quantization config
     :ignore: optional list of layers to ignore from config_groups. Layers in this list
-    are not quantized even if they match up with a target in config_groups
+        are not quantized even if they match up with a target in config_groups
+    :version param: version of the compressors used to optimize the given model 
     """
 
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
@@ -144,6 +145,7 @@ class QuantizationConfig(BaseModel):
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
+    version: str = "0.7.1"
 
     def model_post_init(self, __context):
         """
