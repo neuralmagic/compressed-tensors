@@ -125,8 +125,6 @@ class BaseCompressor(RegistryMixin, ABC):
             return None  # module is not quantized
         quantization_scheme = module.quantization_scheme
         if not hasattr(quantization_scheme, "weights"):
-            # models that ran CompressedLinear.from_linear will
-            # run delattr(module, "weight")
             return None  # weights are not quantized
 
         quantization_args = quantization_scheme.weights

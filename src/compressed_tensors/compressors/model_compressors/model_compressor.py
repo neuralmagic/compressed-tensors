@@ -24,7 +24,6 @@ import compressed_tensors
 import torch
 import transformers
 from compressed_tensors.base import (
-    COMPRESSION_CONFIG_NAME,
     COMPRESSION_VERSION_NAME,
     QUANTIZATION_CONFIG_NAME,
     QUANTIZATION_METHOD_NAME,
@@ -103,14 +102,14 @@ class ModelCompressor:
         :return: compressor for the configs, or None if model is not compressed
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        compression_config = getattr(config, COMPRESSION_CONFIG_NAME, None) or getattr(
-            config, QUANTIZATION_CONFIG_NAME, None
-        )
+        compression_config = getattr(config, QUANTIZATION_CONFIG_NAME, None)
+
         return cls.from_compression_config(compression_config)
 
     @classmethod
     def from_compression_config(
-        cls, compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
+        cls,
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"],
     ):
         """
         :param compression_config:
@@ -267,7 +266,10 @@ class ModelCompressor:
             state_dict = model.state_dict()
 
         compressed_state_dict = state_dict
+
+        # submodule name to q_args
         quantized_modules_to_args = map_modules_to_quant_args(model)
+
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(
                 state_dict, names_to_scheme=quantized_modules_to_args
