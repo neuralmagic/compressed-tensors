@@ -35,7 +35,6 @@ from torch.nn import Module
 __all__ = [
     "QuantizationStatus",
     "QuantizationConfig",
-    "QuantizationConfigHFQuantizer",
     "LIFECYCLE_ORDER",
     "DEFAULT_QUANTIZATION_METHOD",
     "DEFAULT_QUANTIZATION_FORMAT",
@@ -263,14 +262,3 @@ class QuantizationConfig(BaseModel):
                     return True
 
         return False
-
-
-# For HFQuantizer, be able to adjust run_compressed on model load
-class QuantizationConfigHFQuantizer(QuantizationConfig):
-    """
-    :param run_compressed: param used set run_compressed.
-     Used for `apply_quantization_config` in CompressedTensorsHfQuantizer
-     in transformers
-    """
-
-    run_compressed: bool = True
