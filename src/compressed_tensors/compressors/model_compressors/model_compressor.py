@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import json
-import logging
 import operator
 import os
 import re
@@ -48,6 +47,7 @@ from compressed_tensors.utils.helpers import (
     fix_fsdp_module_name,
     is_compressed_tensors_config,
 )
+from loguru import logger
 from torch import Tensor
 from torch.nn import Module
 from tqdm import tqdm
@@ -56,8 +56,6 @@ from transformers.file_utils import CONFIG_NAME
 
 
 __all__ = ["ModelCompressor", "map_modules_to_quant_args"]
-
-_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
@@ -332,7 +330,7 @@ class ModelCompressor:
 
         config_file_path = os.path.join(save_directory, CONFIG_NAME)
         if not os.path.exists(config_file_path):
-            _LOGGER.warning(
+            logger.warning(
                 f"Could not find a valid model config file in "
                 f"{save_directory}. Compression config will not be saved."
             )

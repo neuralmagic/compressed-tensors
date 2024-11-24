@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from typing import Generator, List, Optional, Tuple
 
 import torch
@@ -23,6 +22,7 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationType,
 )
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from loguru import logger
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
 from tqdm import tqdm
@@ -49,8 +49,6 @@ __all__ = [
 # target the self_attn layer
 # QuantizedKVParameterCache is responsible for obtaining the k_scale and v_scale
 KV_CACHE_TARGETS = ["re:.*self_attn$"]
-
-_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 def calculate_qparams(
@@ -305,7 +303,7 @@ def can_quantize(value: torch.Tensor, quant_args: "QuantizationArgs") -> bool:  
     bit_depth = get_torch_bit_depth(value)
     requested_depth = quant_args.num_bits
     if bit_depth < quant_args.num_bits:
-        _LOGGER.warn(
+        logger.warning(
             f"Can't quantize tensor with bit depth {bit_depth} to {requested_depth}."
             "The QuantizationArgs provided are not compatible with the input tensor."
         )

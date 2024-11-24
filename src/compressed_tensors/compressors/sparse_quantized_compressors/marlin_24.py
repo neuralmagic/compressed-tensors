@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from typing import Dict, Generator, Tuple
 
 import numpy as np
@@ -28,11 +27,9 @@ from compressed_tensors.utils import (
     sparse_semi_structured_from_dense_cutlass,
     tensor_follows_mask_structure,
 )
+from loguru import logger
 from torch import Tensor
 from tqdm import tqdm
-
-
-_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 @BaseCompressor.register(name=CompressionFormat.marlin_24.value)
@@ -124,7 +121,7 @@ class Marlin24Compressor(BaseCompressor):
 
         compressed_dict = {}
         weight_suffix = ".weight"
-        _LOGGER.debug(
+        logger.debug(
             f"Compressing model with {len(model_state)} parameterized layers..."
         )
 

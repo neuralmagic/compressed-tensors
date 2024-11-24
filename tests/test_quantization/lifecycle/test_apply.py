@@ -28,6 +28,7 @@ from compressed_tensors.quantization.lifecycle import (
     apply_quantization_status,
 )
 from compressed_tensors.quantization.utils import iter_named_leaf_modules
+from loguru import logger
 from tests.testing_utils import requires_accelerate
 from transformers import AutoModelForCausalLM
 
@@ -233,10 +234,8 @@ def get_sample_tinyllama_quant_config(status: str = "frozen"):
         [("lm_head", "re:.*foobarbaz"), True],
     ],
 )
-def test_apply_quantization_status(caplog, ignore, should_raise_warning):
-    import logging
-
-    # load a dense, unquantized tiny llama model
+def test_apply_quantization_status(ignore, should_raise_warning):
+    # Load a dense, unquantized Tiny Llama model
     model = get_tinyllama_model()
     quantization_config_dict = {
         "quant_method": "sparseml",
@@ -259,10 +258,17 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
     config = QuantizationConfig(**quantization_config_dict)
     config.quantization_status = QuantizationStatus.CALIBRATION
 
-    # mismatch in the ignore key of quantization_config_dict
-    with caplog.at_level(logging.WARNING):
-        apply_quantization_config(model, config)
-        if should_raise_warning:
-            assert len(caplog.text) > 0
-        else:
-            assert len(caplog.text) == 0
+    log_messages = []
+
+    def capture_log(msg):
+        log_messages.append(msg)
+
+    logger.remove()  # Remove default handler
+    logger.add(capture_log)
+
+    apply_quantization_config(model, config)
+
+    if should_raise_warning:
+        assert len(log_messages) > 0
+    else:
+        assert len(log_messages) == 0

@@ -12,19 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from typing import Dict, Generator, Tuple
 
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
+from loguru import logger
 from safetensors import safe_open
 from torch import Tensor
 from tqdm import tqdm
 
 
 __all__ = ["BaseSparseCompressor"]
-
-_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 class BaseSparseCompressor(BaseCompressor):
@@ -67,14 +65,14 @@ class BaseSparseCompressor(BaseCompressor):
         :return: compressed state dict
         """
         compressed_dict = {}
-        _LOGGER.debug(
+        logger.debug(
             f"Compressing model with {len(model_state)} parameterized layers..."
         )
         for name, value in tqdm(model_state.items(), desc="Compressing model"):
             compression_data = self.compress_weight(name, value)
             for key in compression_data.keys():
                 if key in compressed_dict:
-                    _LOGGER.warn(
+                    logger.warn(
                         f"Expected all compressed state_dict keys to be unique, but "
                         f"found an existing entry for {key}. The existing entry will "
                         "be replaced."
