@@ -149,7 +149,7 @@ def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
         33409 -> 33409
 
     :param value: tensor to pack
-    :param num_bits: number of bits used to store underlying data
+    :param num_bits: number of bits used to store underlying data, must be at least 1
     :returns: packed int32 tensor
     """
     if value.dtype is not torch.int8:
