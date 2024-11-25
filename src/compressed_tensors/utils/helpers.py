@@ -127,7 +127,7 @@ class AliasableEnum:
     A mixin for enums to allow aliasing of enum members
 
     Example:
-    >>> class MyClass(int, AliasableEnum, Enum):
+    >>> class MyClass(AliasableEnum, int, Enum):
     >>>     ...
     """
 
