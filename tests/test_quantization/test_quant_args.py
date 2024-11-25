@@ -119,7 +119,7 @@ def test_actorder_aliases():
     assert (
         ActivationOrdering.GROUP
         == ActivationOrdering.DYNAMIC
-        # == ActivationOrdering.GROUP
+        == ActivationOrdering.GROUP
     )
     assert (
         ActivationOrdering.WEIGHT
