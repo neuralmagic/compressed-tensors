@@ -267,7 +267,7 @@ def test_actorder_reload_match(actorder, tmp_path, mock_per_group_calibration):
         ),
         # 0000 0000 0000 0000 1100 1011 1010 1001
         (4, torch.tensor([[1, 2, 3, 4]]), torch.tensor([[52137]], dtype=torch.int32)),
-        #  0111 0110 0101 0100 0011 0010 0001 0000
+        # 0111 0110 0101 0100 0011 0010 0001 0000
         (
             4,
             torch.tensor([[-8, -7, -6, -5, -4, -3, -2, -1]]),
