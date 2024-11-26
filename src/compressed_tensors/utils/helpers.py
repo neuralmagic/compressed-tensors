@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from abc import abstractmethod
 from typing import Any, Dict, Optional
 
 import torch
@@ -24,7 +25,7 @@ __all__ = [
     "tensor_follows_mask_structure",
     "replace_module",
     "is_compressed_tensors_config",
-    "AliasableEnum",
+    "Aliasable",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -122,17 +123,18 @@ def is_compressed_tensors_config(compression_config: Any) -> bool:
         return False
 
 
-class AliasableEnum:
+class Aliasable:
     """
     A mixin for enums to allow aliasing of enum members
 
     Example:
-    >>> class MyClass(AliasableEnum, int, Enum):
+    >>> class MyClass(Aliasable, int, Enum):
     >>>     ...
     """
 
     @property
     @staticmethod
+    @abstractmethod
     def aliases(self) -> Dict[str, str]:
         raise NotImplementedError()
 

@@ -17,7 +17,7 @@ from enum import Enum
 from typing import Any, Dict, Optional, Union
 
 import torch
-from compressed_tensors.utils import AliasableEnum
+from compressed_tensors.utils import Aliasable
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -54,7 +54,7 @@ class QuantizationStrategy(str, Enum):
     TOKEN = "token"
 
 
-class ActivationOrdering(AliasableEnum, str, Enum):
+class ActivationOrdering(Aliasable, str, Enum):
     """
     Enum storing strategies for activation ordering
 
