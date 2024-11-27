@@ -75,6 +75,7 @@ def _calculate_meta_reordering_scatter_offsets(m, meta_ncols, meta_dtype, device
 # This function converts dense matrix into sparse semi-structured
 # representation, producing "compressed" matrix, in the layout used by
 # CUTLASS backend, and corresponding metadata matrix.
+# Modified from https://github.com/pytorch/pytorch/blob/78cf8df4a019e919e8eac5f5d048d8842d4fc692/torch/sparse/_semi_structured_conversions.py#L47
 def sparse_semi_structured_from_dense_cutlass(dense):
     if dense.dim() != 2:
         raise RuntimeError(
@@ -85,7 +86,7 @@ def sparse_semi_structured_from_dense_cutlass(dense):
     device = dense.device
 
     meta_dtype = torch.int8
-    if dense.dtype == torch.int8:
+    if dense.dtype == torch.int8 or dense.dtype == torch.float8_e4m3fn:
         meta_dtype = torch.int32
     elif dense.dtype in [torch.half, torch.bfloat16, torch.float, torch.int32]:
         meta_dtype = torch.int16
@@ -165,11 +166,15 @@ def sparse_semi_structured_from_dense_cutlass(dense):
     idxs1 = bit2 | (bit3.to(torch.int64) << 1)
 
     if dense.dtype != torch.float:
+        if dense.dtype == torch.float8_e4m3fn:
+            dense_4 = dense_4.view(torch.int8)
         sparse0 = dense_4.gather(
             -1, idxs0.unsqueeze(-1)
         )  # type: ignore[possibly-undefined]
         sparse1 = dense_4.gather(-1, idxs1.unsqueeze(-1))
         sparse = torch.stack((sparse0, sparse1), dim=-1).view(m, k // 2)
+        if dense.dtype == torch.float8_e4m3fn:
+            sparse = sparse.view(torch.float8_e4m3fn)
     else:
         sparse = dense_2.gather(-1, idxs0.unsqueeze(-1) // 2).view(
             m, k // 2
@@ -213,6 +218,7 @@ def sparse_semi_structured_from_dense_cutlass(dense):
 # reconstructs dense matrix from a pair of "compressed" matrix, given
 # in the layout used by CUTLASS backend, and accompanying metadata
 # matrix.
+# Copied from https://github.com/pytorch/pytorch/blob/78cf8df4a019e919e8eac5f5d048d8842d4fc692/torch/sparse/_semi_structured_conversions.py#L180
 def sparse_semi_structured_to_dense_cutlass(sparse, meta_reordered):
     if sparse.dim() != 2:
         raise RuntimeError(
@@ -298,16 +304,21 @@ def sparse_semi_structured_to_dense_cutlass(sparse, meta_reordered):
         torch.arange(0, 2 * m * k // ksparse, device=device) * 4
     ).view(-1, 1).repeat(1, 2).view(-1)
 
-    dense = torch.zeros((m * 2 * k,), dtype=sparse.dtype, device=device)
+    sparse_dtype = sparse.dtype if sparse.dtype != torch.float8_e4m3fn else torch.int8
+    dense = torch.zeros((m * 2 * k,), dtype=sparse_dtype, device=device)
     if sparse.dtype != torch.float:
         # dense.scatter_(0, dense_offsets, sparse.view(-1))
-        dense.scatter_(0, dense_offsets, sparse.reshape(-1))
+        if sparse.dtype == torch.float8_e4m3fn:
+            dense.scatter_(0, dense_offsets, sparse.view(torch.int8).view(-1))
+        else:
+            dense.scatter_(0, dense_offsets, sparse.reshape(-1))
     else:
         dense.view(torch.half).scatter_(
             0, dense_offsets, sparse.view(torch.half).view(-1)
         )
 
-    return dense.view(m, 2 * k)
+    result = dense.view(m, 2 * k)
+    return result.view(sparse.dtype)
 
 
 def mask_creator(tensor):
