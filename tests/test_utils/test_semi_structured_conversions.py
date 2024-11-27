@@ -21,7 +21,12 @@ from compressed_tensors.utils.semi_structured_conversions import (
 
 
 def supported_dtypes():
-    return [torch.int8, torch.float16, torch.bfloat16, torch.float8_e4m3fn]
+    dtypes = [torch.int8, torch.float16, torch.bfloat16]
+    if torch.cuda.is_available():
+        major, minor = torch.cuda.get_device_capability()
+        if major > 9 or (major == 9 and minor >= 0):
+            dtypes += [torch.float8_e4m3fn]
+    return dtypes
 
 
 def get_random_mat(M, K, dtype):
