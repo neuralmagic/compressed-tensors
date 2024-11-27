@@ -16,7 +16,7 @@ import json
 import os
 import re
 import struct
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 from safetensors import safe_open
 from torch import Tensor
@@ -32,7 +32,11 @@ __all__ = [
     "get_nested_weight_mappings",
     "get_quantization_state_dict",
     "is_quantization_param",
+    "get_nested_mappings_from_state_dict",
 ]
+
+WEIGHT_MAPPING_TYPE = Dict[str, str]
+NESTED_WEIGHT_MAPPING_TYPE = Dict[str, WEIGHT_MAPPING_TYPE]
 
 
 def get_safetensors_folder(
@@ -92,7 +96,7 @@ def get_safetensors_header(safetensors_path: str) -> Dict[str, str]:
     return header
 
 
-def match_param_name(full_name: str, param_name: str) -> str:
+def match_param_name(full_name: str, param_name: str) -> Optional[str]:
     """
     Helper function extracting the uncompressed parameterized layer name from a
     compressed name. Assumes the compressed name was merged using merge_names.
@@ -176,8 +180,10 @@ def get_weight_mappings(path_to_model_or_tensors: str) -> Dict[str, str]:
 
 
 def get_nested_weight_mappings(
-    model_path: str, params_to_nest: List[str]
-) -> Dict[str, Dict[str, str]]:
+    model_path: str, params_to_nest: List[str], return_other_params: bool = False
+) -> Union[
+    NESTED_WEIGHT_MAPPING_TYPE, Tuple[NESTED_WEIGHT_MAPPING_TYPE, WEIGHT_MAPPING_TYPE]
+]:
     """
     Takes a path to a state dict saved in safetensors format and returns a nested
     mapping from uncompressed parameterized layer names to the file locations of each
@@ -190,24 +196,36 @@ def get_nested_weight_mappings(
         compressed: file_location
     }
 
-    This generalizes to cases where the model is split into multiple safetensors files
+    This generalizes to cases where the model is split into multiple safetensors files.
 
     :param model_path: path to safetensors state dict, must contain either a single
-    safetensors file or multiple files with an index
-    :return: nested mapping of parameterized layer name to file location
+        safetensors file or multiple files with an index.
+    :param params_to_nest: list of parameter names to nest.
+    :param return_other_params: if True, return a second dictionary containing the
+        remaining parameters that were not matched to the nested parameters.
+    :return: nested mapping of parameterized layer name to file location if
+        return_other_params is False, else a tuple containing the nested mapping
+        and a mapping of the remaining parameters that were not matched to
+        the nested parameters.
     """
     weight_mappings = get_weight_mappings(model_path)
-
     nested_weight_mappings = {}
-    for key in weight_mappings.keys():
+    other_params = {}
+
+    for key, file_location in weight_mappings.items():
+        matched = False
         for param_name in params_to_nest:
-            maybe_match = match_param_name(key, param_name)
-            if maybe_match is not None:
-                dense_param = maybe_match
+            dense_param = match_param_name(key, param_name)
+            if dense_param:
                 if dense_param not in nested_weight_mappings:
                     nested_weight_mappings[dense_param] = {}
-                nested_weight_mappings[dense_param][param_name] = weight_mappings[key]
+                nested_weight_mappings[dense_param][param_name] = file_location
+                matched = True
+        if not matched:
+            other_params[key] = file_location
 
+    if return_other_params:
+        return nested_weight_mappings, other_params
     return nested_weight_mappings
 
 
@@ -238,3 +256,17 @@ def is_quantization_param(name: str) -> bool:
         return True
 
     return False
+
+
+def get_nested_mappings_from_state_dict(state_dict, params_to_nest):
+    nested_weight_mappings = {}
+    for key in state_dict.keys():
+        for param_name in params_to_nest:
+            maybe_match = match_param_name(key, param_name)
+            if maybe_match is not None:
+                dense_param = maybe_match
+                if dense_param not in nested_weight_mappings:
+                    nested_weight_mappings[dense_param] = {}
+                nested_weight_mappings[dense_param][param_name] = state_dict[key]
+
+    return nested_weight_mappings
