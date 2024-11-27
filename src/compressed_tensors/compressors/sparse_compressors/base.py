@@ -127,15 +127,17 @@ class BaseSparseCompressor(BaseCompressor):
             yield other_name, value
 
     @staticmethod
-    def should_compress(name: str, targets: Optional[Set[str]] = None) -> bool:
+    def should_compress(name: str, expanded_targets: Optional[Set[str]] = None) -> bool:
         """
         Check if a parameter should be compressed
 
         :param name: name of the parameter
-        :param targets: set of layer prefixes to compress
+        :param expanded_targets: set of layer prefixes to compress
         :return: whether or not the parameter should be compressed
         """
-        if targets is None:
+        if expanded_targets is None:
             return name.endswith(".weight")
 
-        return name.endswith(".weight") and name[: -(len(".weight"))] in targets
+        return (
+            name.endswith(".weight") and name[: -(len(".weight"))] in expanded_targets
+        )

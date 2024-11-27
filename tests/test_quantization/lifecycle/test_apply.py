@@ -296,7 +296,7 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
 
 
 @pytest.mark.parametrize(
-    "targets, ignore, expected",
+    "targets, ignore, expected_targets",
     [
         ([], [], set()),
         (["layer1", "layer2"], [], {"layer1", "layer2"}),
@@ -305,13 +305,13 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
         (["re:layer.*"], ["layer3"], {"layer1", "layer2"}),
     ],
 )
-def test_expand_targets_with_mock(mock_model, targets, ignore, expected):
-    result = expand_targets(mock_model, targets, ignore)
-    assert result == expected
+def test_expand_targets_with_mock(mock_model, targets, ignore, expected_targets):
+    expanded_targets = expand_targets(mock_model, targets, ignore)
+    assert expanded_targets == expected_targets
 
 
 @pytest.mark.parametrize(
-    "targets, ignore, expected",
+    "targets, ignore, expected_targets",
     [
         (
             ["re:model.layers.[01].self_attn.q_proj"],
@@ -344,10 +344,10 @@ def test_expand_targets_with_mock(mock_model, targets, ignore, expected):
     ],
 )
 def test_expand_targets_with_llama_stories(
-    llama_stories_model, targets, ignore, expected
+    llama_stories_model, targets, ignore, expected_targets
 ):
-    actual_targets = expand_targets(llama_stories_model, targets, ignore)
-    assert actual_targets == expected
+    expanded_targets = expand_targets(llama_stories_model, targets, ignore)
+    assert expanded_targets == expected_targets
 
 
 @pytest.mark.parametrize(
