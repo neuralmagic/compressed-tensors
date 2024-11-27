@@ -110,12 +110,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         ),
     )
 
-    def get_observer(self):
-        """
-        :return: torch quantization FakeQuantize built based on these QuantizationArgs
-        """
-        return self.observer
-
     @field_validator("type", mode="before")
     def validate_type(cls, value) -> QuantizationType:
         if isinstance(value, str):
@@ -236,6 +230,13 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 return torch.int32
         else:
             raise ValueError(f"Invalid quantization type {self.type}")
+
+    def get_observer(self) -> str:
+        warnings.warn(
+            "`get_observer` is depreciated, please use `observer` attribute instead",
+            DeprecationWarning,
+        )
+        return self.observer
 
 
 def round_to_quantized_type(
