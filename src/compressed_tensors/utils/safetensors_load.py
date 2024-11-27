@@ -32,11 +32,10 @@ __all__ = [
     "get_nested_weight_mappings",
     "get_quantization_state_dict",
     "is_quantization_param",
-    "get_nested_mappings_from_state_dict",
 ]
 
-WEIGHT_MAPPING_TYPE = Dict[str, str]
-NESTED_WEIGHT_MAPPING_TYPE = Dict[str, WEIGHT_MAPPING_TYPE]
+WeightMappingType = Dict[str, str]
+NestedWeightMappingType = Dict[str, WeightMappingType]
 
 
 def get_safetensors_folder(
@@ -181,9 +180,7 @@ def get_weight_mappings(path_to_model_or_tensors: str) -> Dict[str, str]:
 
 def get_nested_weight_mappings(
     model_path: str, params_to_nest: List[str], return_other_params: bool = False
-) -> Union[
-    NESTED_WEIGHT_MAPPING_TYPE, Tuple[NESTED_WEIGHT_MAPPING_TYPE, WEIGHT_MAPPING_TYPE]
-]:
+) -> Union[NestedWeightMappingType, Tuple[NestedWeightMappingType, WeightMappingType]]:
     """
     Takes a path to a state dict saved in safetensors format and returns a nested
     mapping from uncompressed parameterized layer names to the file locations of each
@@ -256,17 +253,3 @@ def is_quantization_param(name: str) -> bool:
         return True
 
     return False
-
-
-def get_nested_mappings_from_state_dict(state_dict, params_to_nest):
-    nested_weight_mappings = {}
-    for key in state_dict.keys():
-        for param_name in params_to_nest:
-            maybe_match = match_param_name(key, param_name)
-            if maybe_match is not None:
-                dense_param = maybe_match
-                if dense_param not in nested_weight_mappings:
-                    nested_weight_mappings[dense_param] = {}
-                nested_weight_mappings[dense_param][param_name] = state_dict[key]
-
-    return nested_weight_mappings
