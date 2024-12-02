@@ -12,10 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import torch
 from transformers import AutoConfig
+
+
+if TYPE_CHECKING:
+    from compressed_tensors.compressors import ModelCompressor
 
 
 __all__ = [
