@@ -158,6 +158,9 @@ def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
     if num_bits > 8:
         raise ValueError("Packing is only supported for less than 8 bits")
 
+    if num_bits < 1:
+        raise ValueError(f"num_bits must be at least 1, got {num_bits}")
+
     # convert to unsigned for packing
     offset = 1 << (num_bits - 1)
     value = (value + offset).to(torch.uint8)
@@ -184,7 +187,7 @@ def unpack_from_int32(
 ) -> torch.Tensor:
     """
     Unpacks a tensor of packed int32 weights into individual int8s, maintaining the
-    original their bit range.
+    original bit range.
 
     Return tensors in int8
 
