@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import abstractmethod
 from typing import Any, Dict, Optional
 
 import torch
@@ -132,24 +131,22 @@ class Aliasable:
     >>>     ...
     """
 
-    @property
     @staticmethod
-    @abstractmethod
-    def aliases(self) -> Dict[str, str]:
+    def get_aliases() -> Dict[str, str]:
         raise NotImplementedError()
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
+            aliases = self.get_aliases()
             return self.value == other.value or (
-                self.aliases.get(self.value, self.value)
-                == self.aliases.get(other.value, other.value)
+                aliases.get(self.value, self.value)
+                == aliases.get(other.value, other.value)
             )
         else:
-            self_value = self.aliases.get(self.value, self.value)
-            other_value = self.aliases.get(other, other)
+            aliases = self.get_aliases()
+            self_value = aliases.get(self.value, self.value)
+            other_value = aliases.get(other, other)
             return self_value == other_value
-
-        return False
 
     def __hash__(self):
         canonical_value = self.aliases.get(self.value, self.value)

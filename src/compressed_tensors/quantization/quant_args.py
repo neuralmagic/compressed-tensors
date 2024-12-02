@@ -71,9 +71,8 @@ class ActivationOrdering(Aliasable, str, Enum):
     DYNAMIC = "dynamic"
     STATIC = "static"
 
-    @property
     @staticmethod
-    def aliases(self) -> Dict[str, str]:
+    def get_aliases() -> Dict[str, str]:
         return {
             "dynamic": "group",
             "static": "weight",
