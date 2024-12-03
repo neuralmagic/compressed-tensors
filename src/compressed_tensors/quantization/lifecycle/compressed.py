@@ -13,20 +13,16 @@
 # limitations under the License.
 
 
-import logging
-
 import torch
 from compressed_tensors.quantization.lifecycle.forward import quantize
 from compressed_tensors.quantization.quant_config import QuantizationStatus
+from loguru import logger
 from torch.nn import Module
 
 
 __all__ = [
     "compress_quantized_weights",
 ]
-
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def compress_quantized_weights(module: Module):

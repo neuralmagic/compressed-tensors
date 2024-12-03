@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-import logging
 from enum import Enum
 from typing import Optional
 
@@ -38,9 +37,6 @@ __all__ = [
     "is_attention_module",
     "KVCacheScaleType",
 ]
-
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class KVCacheScaleType(Enum):
@@ -97,7 +93,7 @@ def initialize_module_for_quantization(
                     force_zero_point=force_zero_point,
                 )
             else:
-                _LOGGER.warning(
+                logger.warning(
                     f"module type {type(module)} targeted for weight quantization but "
                     "has no attribute weight, skipping weight quantization "
                     f"for {type(module)}"
