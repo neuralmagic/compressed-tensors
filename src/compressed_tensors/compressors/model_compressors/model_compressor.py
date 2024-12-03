@@ -104,7 +104,7 @@ class ModelCompressor:
         :return: compressor for the configs, or None if model is not compressed
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-
+        compression_config = getattr(config, QUANTIZATION_CONFIG_NAME, None)
         return cls.from_compression_config(compression_config)
 
     @classmethod
@@ -322,7 +322,6 @@ class ModelCompressor:
 
         if self.quantization_compressor is not None:
             # quantized decompression
-            names_to_scheme = apply_quantization_config(model, self.quantization_config)
             model_path_or_state_dict = (
                 model.state_dict() if sparse_decompressed else model_path
             )

@@ -141,9 +141,9 @@ class BaseQuantizationCompressor(BaseCompressor):
                 path_to_model_or_tensors, names_to_scheme
             )
 
-    def _decompress_from_path(self, path_to_model_or_tensors, names_to_scheme, device):
+    def _decompress_from_path(self, path_to_model, names_to_scheme, device):
         weight_mappings = get_nested_weight_mappings(
-            path_to_model_or_tensors, self.COMPRESSION_PARAM_NAMES
+            path_to_model, self.COMPRESSION_PARAM_NAMES
         )
         for weight_name in weight_mappings.keys():
             weight_data = {}
