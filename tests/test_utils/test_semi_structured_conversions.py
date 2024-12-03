@@ -14,6 +14,7 @@
 
 import pytest
 import torch
+from compressed_tensors.quantization import FP8_DTYPE
 from compressed_tensors.utils.semi_structured_conversions import (
     sparse_semi_structured_from_dense_cutlass,
     sparse_semi_structured_to_dense_cutlass,
@@ -25,13 +26,13 @@ def supported_dtypes():
     if torch.cuda.is_available():
         major, minor = torch.cuda.get_device_capability()
         if major > 9 or (major == 9 and minor >= 0):
-            dtypes += [torch.float8_e4m3fn]
+            dtypes += [FP8_DTYPE]
     return dtypes
 
 
 def get_random_mat(M, K, dtype):
     rand_tensor_dtype = dtype
-    if dtype in [torch.int8, torch.float8_e4m3fn]:
+    if dtype in [torch.int8, FP8_DTYPE]:
         rand_tensor_dtype = torch.float16
     mat = torch.rand(M, K, dtype=rand_tensor_dtype).cuda()
     mat = mat.masked_fill_(mat == 0, 1)
@@ -41,11 +42,11 @@ def get_random_mat(M, K, dtype):
 def generate_pruned_semi_structured_mat(M, K, dtype):
     mask = torch.Tensor([0, 0, 1, 1]).tile((M, K // 4)).bool()
     rand_tensor_dtype = dtype
-    if dtype in [torch.int8, torch.float8_e4m3fn]:
+    if dtype in [torch.int8, FP8_DTYPE]:
         rand_tensor_dtype = torch.float16
     mat = torch.rand(M, K, dtype=rand_tensor_dtype)
     mat = mat.masked_fill_(mat == 0, 1)
-    if dtype == torch.float8_e4m3fn:
+    if dtype == FP8_DTYPE:
         # some float8_e4m3fn operations are not supported on CPU
         mat = mat.cuda()
         mask = mask.cuda()

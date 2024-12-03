@@ -61,7 +61,7 @@ class TestGetNestedWeightMappings:
     def test_return_other_params(self):
         params_to_nest = ["weight"]
         result, other_params = get_nested_weight_mappings(
-            "dummy_path", params_to_nest, return_other_params=True
+            "dummy_path", params_to_nest, return_unmatched_params=True
         )
         expected_nested = {
             "layer1": {"weight": "file1"},

@@ -30,7 +30,7 @@ from torch import Tensor
 @BaseCompressor.register(name=CompressionFormat.sparse_24.value)
 class Sparse24Compressor(BaseSparseCompressor):
     """
-    Compresses a with 2:4 sparsity structure for inference
+    Compresses a model with 2:4 sparsity structure for inference
     with sparse 2:4 kernels for float/float16/bfloat16.
     https://github.com/pytorch/pytorch/blob/78cf8df4a019e919e8eac5f5d048d8842d4fc692/torch/sparse/semi_structured.py
     """
@@ -81,6 +81,20 @@ class Sparse24Compressor(BaseSparseCompressor):
         }
 
     def decompress_weight(self, weight_data):
+        """
+        Decompresses the given weight data from its compressed representation to its
+        dense form.
+
+        The weight_data dictionary must contain the keys 'sparse_24_packed_weight' and
+        'meta', which represent the sparse-compressed weight and its associated meta
+        tensor.
+
+        :param weight_data: A dictionary containing:
+            - sparse_24_packed_weight: The sparse-compressed representation of
+            the weight.
+            - meta: The meta tesnor associated with the compressed weight.
+        :return: The dense representation of the weight.
+        """
         assert (
             "sparse_24_packed_weight" in weight_data
         ), "sparse_24_packed_weight not found in weight_data"

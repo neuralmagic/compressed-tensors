@@ -20,7 +20,7 @@
 # limitations under the License.
 
 import torch
-
+from compressed_tensors.quantization import FP8_DTYPE
 
 __all__ = [
     "sparse_semi_structured_from_dense_cutlass",
@@ -85,8 +85,8 @@ def sparse_semi_structured_from_dense_cutlass(dense):
     m, k = dense.shape
     device = dense.device
 
-    meta_dtype = torch.int8
-    if dense.dtype == torch.int8 or dense.dtype == torch.float8_e4m3fn:
+    meta_dtype = None
+    if dense.dtype == torch.int8 or dense.dtype == FP8_DTYPE:
         meta_dtype = torch.int32
     elif dense.dtype in [torch.half, torch.bfloat16, torch.float, torch.int32]:
         meta_dtype = torch.int16
@@ -166,15 +166,15 @@ def sparse_semi_structured_from_dense_cutlass(dense):
     idxs1 = bit2 | (bit3.to(torch.int64) << 1)
 
     if dense.dtype != torch.float:
-        if dense.dtype == torch.float8_e4m3fn:
+        if dense.dtype == FP8_DTYPE:
             dense_4 = dense_4.view(torch.int8)
         sparse0 = dense_4.gather(
             -1, idxs0.unsqueeze(-1)
         )  # type: ignore[possibly-undefined]
         sparse1 = dense_4.gather(-1, idxs1.unsqueeze(-1))
         sparse = torch.stack((sparse0, sparse1), dim=-1).view(m, k // 2)
-        if dense.dtype == torch.float8_e4m3fn:
-            sparse = sparse.view(torch.float8_e4m3fn)
+        if dense.dtype == FP8_DTYPE:
+            sparse = sparse.view(FP8_DTYPE)
     else:
         sparse = dense_2.gather(-1, idxs0.unsqueeze(-1) // 2).view(
             m, k // 2
@@ -304,11 +304,11 @@ def sparse_semi_structured_to_dense_cutlass(sparse, meta_reordered):
         torch.arange(0, 2 * m * k // ksparse, device=device) * 4
     ).view(-1, 1).repeat(1, 2).view(-1)
 
-    sparse_dtype = sparse.dtype if sparse.dtype != torch.float8_e4m3fn else torch.int8
+    sparse_dtype = sparse.dtype if sparse.dtype != FP8_DTYPE else torch.int8
     dense = torch.zeros((m * 2 * k,), dtype=sparse_dtype, device=device)
     if sparse.dtype != torch.float:
         # dense.scatter_(0, dense_offsets, sparse.view(-1))
-        if sparse.dtype == torch.float8_e4m3fn:
+        if sparse.dtype == FP8_DTYPE:
             dense.scatter_(0, dense_offsets, sparse.view(torch.int8).view(-1))
         else:
             dense.scatter_(0, dense_offsets, sparse.reshape(-1))
