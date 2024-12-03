@@ -30,7 +30,6 @@ from compressed_tensors.quantization import (
     QuantizationScheme,
     QuantizationStatus,
     apply_quantization_config,
-    apply_quantization_status,
 )
 from compressed_tensors.quantization.lifecycle.forward import fake_quantize
 from compressed_tensors.quantization.quant_args import ActivationOrdering
@@ -205,7 +204,7 @@ def test_reload_match(tmp_path, num_bits):
         None,
     ],
 )
-def test_actorder_reload_match(actorder, tmp_path):
+def test_actorder_reload_match(actorder, tmp_path, mock_per_group_calibration):
     model = Sequential(OrderedDict([("dummy", Linear(512, 1024, bias=None))]))
     group_size = 128
     quant_config = get_dummy_quant_config(
@@ -214,12 +213,10 @@ def test_actorder_reload_match(actorder, tmp_path):
     apply_quantization_config(model, quant_config)
 
     # run calibration
-    apply_quantization_status(model, QuantizationStatus.CALIBRATION)
-    for _ in range(16):
-        inputs = torch.rand((512, 512))
-        _ = model(inputs)
-    apply_quantization_status(model, QuantizationStatus.FROZEN)
-
+    model.quantization_status = QuantizationStatus.CALIBRATION
+    mock_per_group_calibration(
+        model.dummy, base_name="weight", value=model.dummy.weight, group_size=group_size
+    )
     # apply gptq
     if actorder == ActivationOrdering.GROUP:
         init_g_idx = make_dummy_g_idx(512, group_size)

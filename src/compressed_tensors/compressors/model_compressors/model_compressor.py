@@ -24,7 +24,6 @@ import compressed_tensors
 import torch
 import transformers
 from compressed_tensors.base import (
-    COMPRESSION_CONFIG_NAME,
     COMPRESSION_VERSION_NAME,
     QUANTIZATION_CONFIG_NAME,
     QUANTIZATION_METHOD_NAME,
@@ -40,6 +39,7 @@ from compressed_tensors.quantization import (
     load_pretrained_quantization,
 )
 from compressed_tensors.quantization.lifecycle import expand_targets
+from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
@@ -104,14 +104,14 @@ class ModelCompressor:
         :return: compressor for the configs, or None if model is not compressed
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        compression_config = getattr(
-            config, QUANTIZATION_CONFIG_NAME, None
-        )
+        compression_config = getattr(config, QUANTIZATION_CONFIG_NAME, None)
+
         return cls.from_compression_config(compression_config)
 
     @classmethod
     def from_compression_config(
-        cls, compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
+        cls,
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"],
     ):
         """
         :param compression_config:
@@ -268,7 +268,11 @@ class ModelCompressor:
             state_dict = model.state_dict()
 
         compressed_state_dict = state_dict
-        quantized_modules_to_args = map_modules_to_quant_args(model)
+
+        quantized_modules_to_args: Dict[
+            str, QuantizationArgs
+        ] = map_modules_to_quant_args(model)
+
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(
                 state_dict, names_to_scheme=quantized_modules_to_args
@@ -404,7 +408,13 @@ class ModelCompressor:
         )
 
 
-def map_modules_to_quant_args(model: Module) -> Dict:
+def map_modules_to_quant_args(model: Module) -> Dict[str, QuantizationArgs]:
+    """
+    Given a pytorch model, map out the submodule name (usually linear layers)
+     to the QuantizationArgs
+
+    :param model: pytorch model
+    """
     quantized_modules_to_args = {}
     for name, submodule in iter_named_leaf_modules(model):
         if is_module_quantized(submodule):

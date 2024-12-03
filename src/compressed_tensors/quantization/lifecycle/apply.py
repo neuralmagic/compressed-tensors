@@ -22,13 +22,9 @@ from typing import Set, Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization.lifecycle.calibration import (
-    set_module_for_calibration,
-)
 from compressed_tensors.quantization.lifecycle.compressed import (
     compress_quantized_weights,
 )
-from compressed_tensors.quantization.lifecycle.frozen import freeze_module_quantization
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
@@ -111,7 +107,8 @@ def apply_quantization_config(
     model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
 ) -> OrderedDict:
     """
-    Initializes the model for quantization in-place based on the given config
+    Initializes the model for quantization in-place based on the given config.
+    Optionally coverts quantizable modules to compressed_linear modules
 
     :param model: model to apply quantization config to
     :param config: quantization config
@@ -234,6 +231,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     :param model: model to apply quantization to
     :param status: status to update the module to
     """
+
     current_status = infer_quantization_status(model)
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
@@ -243,18 +241,6 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
                 module, force_zero_point=force_zero_point_init
             )
         )
-
-    if current_status < status >= QuantizationStatus.CALIBRATION > current_status:
-        # only quantize weights up front when our end goal state is calibration,
-        # weight quantization parameters are already loaded for frozen/compressed
-        quantize_weights_upfront = status == QuantizationStatus.CALIBRATION
-        model.apply(
-            lambda module: set_module_for_calibration(
-                module, quantize_weights_upfront=quantize_weights_upfront
-            )
-        )
-    if current_status < status >= QuantizationStatus.FROZEN > current_status:
-        model.apply(freeze_module_quantization)
 
     if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
         model.apply(compress_quantized_weights)

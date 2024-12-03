@@ -17,6 +17,7 @@ from enum import Enum
 from typing import Any, Dict, Optional, Union
 
 import torch
+from compressed_tensors.utils import Aliasable
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -53,17 +54,29 @@ class QuantizationStrategy(str, Enum):
     TOKEN = "token"
 
 
-class ActivationOrdering(str, Enum):
+class ActivationOrdering(Aliasable, str, Enum):
     """
     Enum storing strategies for activation ordering
 
     Group: reorder groups and weight\n
-    Weight: only reorder weight, not groups. Slightly lower latency and
-    accuracy compared to group actorder\n
+    Weight: only reorder weight, not groups. Slightly lower accuracy but also lower
+    latency when compared to group actorder\n
+    Dynamic: alias for Group\n
+    Static: alias for Weight\n
     """
 
     GROUP = "group"
     WEIGHT = "weight"
+    # aliases
+    DYNAMIC = "dynamic"
+    STATIC = "static"
+
+    @staticmethod
+    def get_aliases() -> Dict[str, str]:
+        return {
+            "dynamic": "group",
+            "static": "weight",
+        }
 
 
 class QuantizationArgs(BaseModel, use_enum_values=True):
@@ -114,20 +127,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         """
         :return: torch quantization FakeQuantize built based on these QuantizationArgs
         """
-        from compressed_tensors.quantization.observers.base import Observer
-
-        # No observer required for the dynamic case
-        if self.dynamic:
-            self.observer = None
-            return self.observer
-
-        return Observer.load_from_registry(self.observer, quantization_args=self)
-
-    def get_kv_cache(self):
-        """Get the singleton KV Cache"""
-        from compressed_tensors.quantization.cache import QuantizedKVParameterCache
-
-        return QuantizedKVParameterCache(self)
+        return self.observer
 
     @field_validator("type", mode="before")
     def validate_type(cls, value) -> QuantizationType:
@@ -210,6 +210,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 "activation ordering"
             )
 
+        # infer observer w.r.t. dynamic
         if dynamic:
             if strategy not in (
                 QuantizationStrategy.TOKEN,
@@ -221,18 +222,19 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     "quantization",
                 )
             if observer is not None:
-                warnings.warn(
-                    "No observer is used for dynamic quantization, setting to None"
-                )
-                model.observer = None
+                if observer != "memoryless":  # avoid annoying users with old configs
+                    warnings.warn(
+                        "No observer is used for dynamic quantization, setting to None"
+                    )
+                observer = None
 
-        # if we have not set an observer and we
-        # are running static quantization, use minmax
-        if not observer and not dynamic:
-            model.observer = "minmax"
+        elif observer is None:
+            # default to minmax for non-dynamic cases
+            observer = "minmax"
 
         # write back modified values
         model.strategy = strategy
+        model.observer = observer
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
