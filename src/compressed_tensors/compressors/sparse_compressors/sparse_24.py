@@ -76,8 +76,10 @@ class Sparse24Compressor(BaseSparseCompressor):
             dense=value
         )
         return {
-            merge_names(name, "sparse_24_packed_weight"): sparse_24_packed_weight.cpu(),
-            merge_names(name, "meta"): meta.cpu(),
+            merge_names(
+                prefix, "sparse_24_packed_weight"
+            ): sparse_24_packed_weight.cpu(),
+            merge_names(prefix, "meta"): meta.cpu(),
         }
 
     def decompress_weight(self, weight_data):
