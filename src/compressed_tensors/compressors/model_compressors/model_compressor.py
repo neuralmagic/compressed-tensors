@@ -105,7 +105,6 @@ class ModelCompressor:
         """
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
         compression_config = getattr(config, QUANTIZATION_CONFIG_NAME, None)
-
         return cls.from_compression_config(compression_config)
 
     @classmethod
@@ -308,16 +307,27 @@ class ModelCompressor:
         :param model: pytorch model to load decompressed weights into
         """
         model_path = get_safetensors_folder(model_path)
+        sparse_decompressed = False
+        if self.quantization_compressor is not None:
+            # update model structure
+            names_to_scheme = apply_quantization_config(model, self.quantization_config)
+            load_pretrained_quantization(model, model_path)
+
         if self.sparsity_compressor is not None:
+            # sparse decompression
             dense_gen = self.sparsity_compressor.decompress(model_path)
             self._replace_weights(dense_gen, model)
             setattr(model, SPARSITY_CONFIG_NAME, self.sparsity_compressor.config)
+            sparse_decompressed = True
 
         if self.quantization_compressor is not None:
-            names_to_scheme = apply_quantization_config(model, self.quantization_config)
-            load_pretrained_quantization(model, model_path)
+            # quantized decompression
+            model_path_or_state_dict = (
+                model.state_dict() if sparse_decompressed else model_path
+            )
+
             dense_gen = self.quantization_compressor.decompress(
-                model_path, names_to_scheme=names_to_scheme
+                model_path_or_state_dict, names_to_scheme=names_to_scheme
             )
             self._replace_weights(dense_gen, model)
 
