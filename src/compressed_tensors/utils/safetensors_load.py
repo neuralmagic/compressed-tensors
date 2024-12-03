@@ -30,6 +30,7 @@ __all__ = [
     "merge_names",
     "get_weight_mappings",
     "get_nested_weight_mappings",
+    "get_nested_mappings_from_state_dict",
     "get_quantization_state_dict",
     "is_quantization_param",
 ]
@@ -242,6 +243,20 @@ def get_nested_weight_mappings(
 
     if return_unmatched_params:
         return nested_weight_mappings, unmatched_params
+    return nested_weight_mappings
+
+
+def get_nested_mappings_from_state_dict(state_dict, params_to_nest):
+    nested_weight_mappings = {}
+    for key in state_dict.keys():
+        for param_name in params_to_nest:
+            maybe_match = match_param_name(key, param_name)
+            if maybe_match is not None:
+                dense_param = maybe_match
+                if dense_param not in nested_weight_mappings:
+                    nested_weight_mappings[dense_param] = {}
+                nested_weight_mappings[dense_param][param_name] = state_dict[key]
+
     return nested_weight_mappings
 
 

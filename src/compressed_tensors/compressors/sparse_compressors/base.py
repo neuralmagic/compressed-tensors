@@ -119,7 +119,7 @@ class BaseSparseCompressor(BaseCompressor):
                 with safe_open(safe_path, framework="pt", device=device) as f:
                     weight_data[param_name] = f.get_tensor(full_name)
             decompressed = self.decompress_weight(weight_data)
-            yield weight_name, decompressed
+            yield merge_names(weight_name, "weight"), decompressed
 
         for uncompressed_param_name, safe_path in uncompressed_params.items():
             with safe_open(safe_path, framework="pt", device=device) as f:
