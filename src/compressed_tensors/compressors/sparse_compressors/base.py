@@ -121,10 +121,10 @@ class BaseSparseCompressor(BaseCompressor):
             decompressed = self.decompress_weight(weight_data)
             yield weight_name, decompressed
 
-        for other_name, safe_path in other_params.items():
-            with safe_open(safe_path, framework="pt", device=device) as f:
-                value = f.get_tensor(other_name)
-            yield other_name, value
+        # for other_name, safe_path in other_params.items():
+        #     with safe_open(safe_path, framework="pt", device=device) as f:
+        #         value = f.get_tensor(other_name)
+        #     yield other_name, value
 
     @staticmethod
     def should_compress(name: str, targets: Optional[Set[str]] = None) -> bool:
