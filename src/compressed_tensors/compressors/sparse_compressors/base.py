@@ -107,10 +107,10 @@ class BaseSparseCompressor(BaseCompressor):
         :param device: device to load decompressed weights onto
         :return: iterator for generating decompressed weights
         """
-        weight_mappings, other_params = get_nested_weight_mappings(
+        weight_mappings, uncompressed_params = get_nested_weight_mappings(
             path_to_model_or_tensors,
             self.COMPRESSION_PARAM_NAMES,
-            return_other_params=True,
+            return_unmatched_params=True,
         )
         for weight_name in weight_mappings.keys():
             weight_data = {}
@@ -121,21 +121,23 @@ class BaseSparseCompressor(BaseCompressor):
             decompressed = self.decompress_weight(weight_data)
             yield weight_name, decompressed
 
-        for other_name, safe_path in other_params.items():
+        for uncompressed_param_name, safe_path in uncompressed_params.items():
             with safe_open(safe_path, framework="pt", device=device) as f:
-                value = f.get_tensor(other_name)
-            yield other_name, value
+                value = f.get_tensor(uncompressed_param_name)
+            yield uncompressed_param_name, value
 
     @staticmethod
-    def should_compress(name: str, targets: Optional[Set[str]] = None) -> bool:
+    def should_compress(name: str, expanded_targets: Optional[Set[str]] = None) -> bool:
         """
         Check if a parameter should be compressed
 
         :param name: name of the parameter
-        :param targets: set of layer prefixes to compress
+        :param expanded_targets: set of layer prefixes to compress
         :return: whether or not the parameter should be compressed
         """
-        if targets is None:
+        if expanded_targets is None:
             return name.endswith(".weight")
 
-        return name.endswith(".weight") and name[: -(len(".weight"))] in targets
+        return (
+            name.endswith(".weight") and name[: -(len(".weight"))] in expanded_targets
+        )
