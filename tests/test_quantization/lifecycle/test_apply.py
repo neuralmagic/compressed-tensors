@@ -27,7 +27,7 @@ from compressed_tensors.quantization import (
 from compressed_tensors.quantization.lifecycle import (
     apply_quantization_config,
     apply_quantization_status,
-    expand_targets,
+    expand_sparse_target_names,
     is_target,
 )
 from compressed_tensors.quantization.utils import iter_named_leaf_modules
@@ -306,7 +306,7 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
     ],
 )
 def test_expand_targets_with_mock(mock_model, targets, ignore, expected_targets):
-    expanded_targets = expand_targets(mock_model, targets, ignore)
+    expanded_targets = expand_sparse_target_names(mock_model, targets, ignore)
     assert expanded_targets == expected_targets
 
 
@@ -346,7 +346,7 @@ def test_expand_targets_with_mock(mock_model, targets, ignore, expected_targets)
 def test_expand_targets_with_llama_stories(
     llama_stories_model, targets, ignore, expected_targets
 ):
-    expanded_targets = expand_targets(llama_stories_model, targets, ignore)
+    expanded_targets = expand_sparse_target_names(llama_stories_model, targets, ignore)
     assert expanded_targets == expected_targets
 
 

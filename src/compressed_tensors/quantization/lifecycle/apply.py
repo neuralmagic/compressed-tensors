@@ -52,7 +52,7 @@ __all__ = [
     "apply_quantization_config",
     "apply_quantization_status",
     "find_name_or_class_matches",
-    "expand_targets",
+    "expand_sparse_target_names",
     "is_target",
 ]
 
@@ -247,11 +247,11 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         model.apply(compress_quantized_weights)
 
 
-def expand_targets(
+def expand_sparse_target_names(
     model: Module, targets: Iterable[str], ignore: Iterable[str]
 ) -> Set[str]:
     """
-    Finds all the targets in the model that match the given
+    Finds all unique module names in the model that match the given
     targets and ignore lists.
 
     Note: Targets must be regexes, layer types, or full layer names.

@@ -179,13 +179,14 @@ def get_weight_mappings(path_to_model_or_tensors: str) -> Dict[str, str]:
 
 
 def get_nested_weight_mappings(
-    model_path: str, params_to_nest: List[str], return_other_params: bool = False
+    model_path: str, params_to_nest: List[str], return_unmatched_params: bool = False
 ) -> Union[NestedWeightMappingType, Tuple[NestedWeightMappingType, WeightMappingType]]:
     """
     Takes a path to a state dict saved in safetensors format and returns a nested
-    mapping from uncompressed parameterized layer names to the file locations of each
-    of the layers compression parameters.
+    mapping from uncompressed parameterized layer names to the file locations of
+    each layer's compression parameters.
 
+    Example of the nested mapping:
     layer.weight: {
         bitmask: file_location,
         row_offsets: file_location,
@@ -193,21 +194,39 @@ def get_nested_weight_mappings(
         compressed: file_location
     }
 
-    This generalizes to cases where the model is split into multiple safetensors files.
+    If other parameters are found that do not match the nested parameters, they will
+    be returned in a separate dictionary only if return_unmatched_params is True.
+    This dictionary may be needed for cases where compressors are stacked (e.g.,
+    quantization compression followed by sparse compression).
 
-    :param model_path: path to safetensors state dict, must contain either a single
-        safetensors file or multiple files with an index.
-    :param params_to_nest: list of parameter names to nest.
-    :param return_other_params: if True, return a second dictionary containing the
-        remaining parameters that were not matched to the nested parameters.
-    :return: nested mapping of parameterized layer name to file location if
-        return_other_params is False, else a tuple containing the nested mapping
-        and a mapping of the remaining parameters that were not matched to
-        the nested parameters.
+    Example of the unmatched params mapping:
+    {
+        layer.weight_scale: file_location,
+        layer.input_scale: file_location
+    }
+
+    This generalizes to cases where the model is split into multiple safetensors
+    files.
+
+    :param model_path: Path to the safetensors state dict, must contain either a
+        single safetensors file or multiple files with an index.
+    :param params_to_nest: List of parameter names to nest.
+    :param return_unmatched_params: If True, return a second dictionary containing
+        the remaining parameters that were not matched to the params_to_nest.
+    :return:
+        - If return_unmatched_params is False:
+            NestedWeightMappingType: A nested mapping of parameterized layer names to
+            file locations of each layer's compression parameters.
+        - If return_unmatched_params is True:
+            Tuple[NestedWeightMappingType, WeightMappingType]: A tuple containing:
+                - NestedWeightMappingType: A nested mapping of parameterized layer
+                names to file locations of each layer's compression parameters.
+                - WeightMappingType: A mapping of the remaining parameter names to
+                their file locations that were not matched to the params_to_nest.
     """
     weight_mappings = get_weight_mappings(model_path)
     nested_weight_mappings = {}
-    other_params = {}
+    unmatched_params = {}
 
     for key, file_location in weight_mappings.items():
         matched = False
@@ -218,11 +237,11 @@ def get_nested_weight_mappings(
                     nested_weight_mappings[dense_param] = {}
                 nested_weight_mappings[dense_param][param_name] = file_location
                 matched = True
-        if not matched:
-            other_params[key] = file_location
+        if return_unmatched_params and not matched:
+            unmatched_params[key] = file_location
 
-    if return_other_params:
-        return nested_weight_mappings, other_params
+    if return_unmatched_params:
+        return nested_weight_mappings, unmatched_params
     return nested_weight_mappings
 
 
