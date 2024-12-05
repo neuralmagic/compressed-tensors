@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import torch
 from transformers import AutoConfig
@@ -24,6 +24,8 @@ __all__ = [
     "tensor_follows_mask_structure",
     "replace_module",
     "is_compressed_tensors_config",
+    "combine_shards",
+    "shard_tensor",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -119,3 +121,68 @@ def is_compressed_tensors_config(compression_config: Any) -> bool:
         return isinstance(compression_config, CompressedTensorsConfig)
     except ImportError:
         return False
+
+
+def shard_tensor(
+    tensor: torch.Tensor, shard_sizes: List[int], dim: int = 0
+) -> List[torch.Tensor]:
+    """
+    Shards a tensor into a list of tensors along a given dimension.
+
+    raises: ValueError: If the sum of shard_sizes does not match the
+        size of the tensor along the given dimension.
+
+    :param tensor: The input tensor to shard.
+    :param shard_sizes : List of sizes for each shard along the specified dimension.
+    :param dim : The dimension along which to shard the tensor.
+    :returns: A list of tensors sharded along the specified dimension.
+    """
+    if sum(shard_sizes) != tensor.size(dim):
+        raise ValueError(
+            "Sum of shard_sizes must equal the size of the tensor "
+            "along the specified dimension."
+        )
+
+    shards = []
+    start_idx = 0
+
+    for size in shard_sizes:
+        end_idx = start_idx + size
+        shard = tensor.narrow(dim, start_idx, size)
+        shards.append(shard)
+        start_idx = end_idx
+
+    return shards
+
+
+def combine_shards(shards, dim=0):
+    """
+    Combine decompressed shards along a given dimension without using torch.cat
+    for unsupported dtypes like float8_e4m3fn.
+
+    :param shards: List of decompressed shard tensors.
+    :param dim: Dimension to combine along (default: 0).
+    :return: Combined decompressed tensor.
+    """
+    try:
+        # Attempt regular concatenation
+        return torch.cat(shards, dim=dim)
+    except RuntimeError as e:
+        # Handle unsupported concatenation
+        if all(shard.dtype == torch.float8_e4m3fn for shard in shards):
+            total_shape = list(shards[0].shape)
+            total_shape[dim] = sum(shard.shape[dim] for shard in shards)
+            combined = torch.zeros(
+                total_shape, dtype=shards[0].dtype, device=shards[0].device
+            )
+
+            shard_offset = 0
+            for shard in shards:
+                shard_size = shard.shape[dim]
+                combined.narrow(dim, shard_offset, shard_size).copy_(shard)
+                shard_offset += shard_size
+
+            return combined
+        else:
+            # Re-raise unexpected errors
+            raise e
