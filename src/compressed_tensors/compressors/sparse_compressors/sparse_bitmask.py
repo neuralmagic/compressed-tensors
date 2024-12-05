@@ -134,7 +134,13 @@ def bitmask_compress(tensor: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     bytemasks = tensor != 0
     row_counts = bytemasks.sum(dim=-1)
     row_offsets = torch.cumsum(row_counts, 0) - row_counts
-    values = tensor[bytemasks]
+
+    if tensor.dtype == torch.float8_e4m3fn:
+        tensor_view = tensor.view(torch.int8)
+        values = tensor_view[bytemasks]
+        values = values.view(torch.float8_e4m3fn)
+    else:
+        values = tensor[bytemasks]
     bitmasks_packed = pack_bitmasks(bytemasks)
 
     return values, bitmasks_packed, row_offsets
@@ -155,8 +161,13 @@ def bitmask_decompress(
     bytemasks_unpacked = unpack_bitmasks(bitmasks, original_shape)
 
     decompressed_tensor = torch.zeros(original_shape, dtype=values.dtype)
-    decompressed_tensor[bytemasks_unpacked] = values
-
+    if decompressed_tensor.dtype == torch.float8_e4m3fn:
+        decompressed_tensor_view = decompressed_tensor.view(torch.int8)
+        decompressed_tensor_view[bytemasks_unpacked] = values.view(torch.int8)
+        decompressed_tensor = decompressed_tensor_view.view(torch.float8_e4m3fn)
+        decompressed_tensor = decompressed_tensor.cuda()
+    else:
+        decompressed_tensor[bytemasks_unpacked] = values
     return decompressed_tensor
 
 

@@ -70,3 +70,29 @@ def test_inverse_property_from_dense_then_to_dense(dtype):
     assert torch.equal(
         dense_matrix, result
     ), f"Failed for dtype: {dense_matrix.dtype} and input: {dense_matrix}"
+
+
+@pytest.mark.parametrize("dtype", [torch.float8_e4m3fn])
+def test_bitmask_compress_decompress_fp8(dtype):
+    from compressed_tensors.compressors.sparse_compressors.sparse_bitmask import (
+        BitmaskTensor,
+    )
+
+    M, K = 1024, 1024
+    dense_matrix = generate_pruned_semi_structured_mat(M, K, dtype)
+
+    # run compression
+    bitmask_tensor = BitmaskTensor.from_dense(dense_matrix)
+
+    # run decompression
+    decompressed_tensor = bitmask_tensor.decompress()
+
+    assert (
+        dense_matrix.dtype == decompressed_tensor.dtype
+    ), f"Dtype Mis-match: {dense_matrix.dtype} and {decompressed_tensor.dtype}"
+    assert (
+        dense_matrix.shape == decompressed_tensor.shape
+    ), f"Shape Mis-match: {dense_matrix.shape} and {decompressed_tensor.shape}"
+    assert torch.equal(
+        dense_matrix, decompressed_tensor
+    ), f"Failed for dtype: {dense_matrix.dtype} and input: {dense_matrix}"
