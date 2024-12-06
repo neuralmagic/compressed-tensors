@@ -186,7 +186,7 @@ def update_offload_data(
 
         # for upstreaming, better to add write capabilities to weight map classes first
         if isinstance(weights_map, PrefixedDataset):
-            dataset = getattr_chain(module, "module._hf_hook.weights_map.dataset", None)
+            dataset = getattr(weights_map, "dataset", None)
             if dataset is not None:
                 prefix = module._hf_hook.weights_map.prefix
                 key = f"{prefix}{name}"
@@ -194,7 +194,7 @@ def update_offload_data(
                 offload_device = (
                     dataset[key].device
                     if key in dataset
-                    else next(dataset.values()).device
+                    else next(iter(dataset.values())).device
                 )
                 dataset[key] = data.to(device=offload_device)
 

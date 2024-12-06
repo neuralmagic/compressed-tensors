@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 
 import torch
 from compressed_tensors.utils import (
@@ -21,7 +22,12 @@ from compressed_tensors.utils import (
     register_offload_parameter,
     update_offload_data,
 )
-from tests.testing_utils import requires_accelerate
+from tests.testing_utils import requires_accelerate, _is_accelerate_available
+
+if _is_accelerate_available:
+    from accelerate.utils import PrefixedDataset
+else:
+    PrefixedDataset = ...
 
 
 class ExampleModule(torch.nn.Module):
@@ -35,7 +41,8 @@ class ExampleModule(torch.nn.Module):
 
 
 @requires_accelerate()
-def test_has_offloaded_params():
+@pytest.mark.parameterize("weights_map", [dict(), PrefixedDataset({}, "")])
+def test_has_offloaded_params(weights_map):
     from accelerate.big_modeling import cpu_offload_with_hook
     from accelerate.hooks import attach_align_device_hook, remove_hook_from_module
 
@@ -50,7 +57,7 @@ def test_has_offloaded_params():
     assert not has_offloaded_params(module)
 
     remove_hook_from_module(module)
-    attach_align_device_hook(module, offload=True)
+    attach_align_device_hook(module, offload=True, weights_map=weights_map)
     assert has_offloaded_params(module)
 
 
