@@ -19,6 +19,7 @@ from compressed_tensors.utils.semi_structured_conversions import (
     sparse_semi_structured_from_dense_cutlass,
     sparse_semi_structured_to_dense_cutlass,
 )
+from tests.testing_utils import generate_pruned_semi_structured_mat
 
 
 def supported_dtypes():
@@ -28,30 +29,6 @@ def supported_dtypes():
         if major > 9 or (major == 9 and minor >= 0):
             dtypes += [FP8_DTYPE]
     return dtypes
-
-
-def get_random_mat(M, K, dtype):
-    rand_tensor_dtype = dtype
-    if dtype in [torch.int8, FP8_DTYPE]:
-        rand_tensor_dtype = torch.float16
-    mat = torch.rand(M, K, dtype=rand_tensor_dtype).cuda()
-    mat = mat.masked_fill_(mat == 0, 1)
-    return mat.to(dtype)
-
-
-def generate_pruned_semi_structured_mat(M, K, dtype):
-    mask = torch.Tensor([0, 0, 1, 1]).tile((M, K // 4)).bool()
-    rand_tensor_dtype = dtype
-    if dtype in [torch.int8, FP8_DTYPE]:
-        rand_tensor_dtype = torch.float16
-    mat = torch.rand(M, K, dtype=rand_tensor_dtype)
-    mat = mat.masked_fill_(mat == 0, 1)
-    if dtype == FP8_DTYPE:
-        # some float8_e4m3fn operations are not supported on CPU
-        mat = mat.cuda()
-        mask = mask.cuda()
-    mat = mat * mask
-    return mat.to(dtype)
 
 
 @pytest.mark.parametrize("dtype", supported_dtypes())
@@ -69,30 +46,4 @@ def test_inverse_property_from_dense_then_to_dense(dtype):
     ), f"Shape Mis-match: {dense_matrix.shape} and {result.shape}"
     assert torch.equal(
         dense_matrix, result
-    ), f"Failed for dtype: {dense_matrix.dtype} and input: {dense_matrix}"
-
-
-@pytest.mark.parametrize("dtype", [torch.float8_e4m3fn])
-def test_bitmask_compress_decompress_fp8(dtype):
-    from compressed_tensors.compressors.sparse_compressors.sparse_bitmask import (
-        BitmaskTensor,
-    )
-
-    M, K = 1024, 1024
-    dense_matrix = generate_pruned_semi_structured_mat(M, K, dtype)
-
-    # run compression
-    bitmask_tensor = BitmaskTensor.from_dense(dense_matrix)
-
-    # run decompression
-    decompressed_tensor = bitmask_tensor.decompress()
-
-    assert (
-        dense_matrix.dtype == decompressed_tensor.dtype
-    ), f"Dtype Mis-match: {dense_matrix.dtype} and {decompressed_tensor.dtype}"
-    assert (
-        dense_matrix.shape == decompressed_tensor.shape
-    ), f"Shape Mis-match: {dense_matrix.shape} and {decompressed_tensor.shape}"
-    assert torch.equal(
-        dense_matrix, decompressed_tensor
     ), f"Failed for dtype: {dense_matrix.dtype} and input: {dense_matrix}"

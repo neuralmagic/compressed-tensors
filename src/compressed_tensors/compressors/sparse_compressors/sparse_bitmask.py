@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.sparse_compressors.base import BaseSparseCompressor
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.utils import merge_names
+from compressed_tensors.utils import ensure_output_ndim, merge_names, reduce_input_ndim
 from torch import Tensor
 
 
@@ -40,7 +40,13 @@ class BitmaskCompressor(BaseSparseCompressor):
     values tensor, with their locations stored in a 2d bitmask
     """
 
-    COMPRESSION_PARAM_NAMES = ["shape", "compressed", "bitmask", "row_offsets"]
+    COMPRESSION_PARAM_NAMES = [
+        "shape",
+        "compressed",
+        "bitmask",
+        "row_offsets",
+        "compressed_shape",
+    ]
 
     def compress_weight(self, name, value):
         bitmask_tensor = BitmaskTensor.from_dense(value)
@@ -70,11 +76,13 @@ class BitmaskTensor:
         compressed: Tensor,
         bitmask: Tensor,
         row_offsets: Tensor,
+        compressed_shape: Optional[Tensor] = None,
     ):
         self.shape = list(shape)
         self.compressed = compressed
         self.bitmask = bitmask
         self.row_offsets = row_offsets
+        self.compressed_shape = compressed_shape or compressed.shape
 
     @staticmethod
     def from_dense(tensor: Tensor) -> "BitmaskTensor":
@@ -106,6 +114,7 @@ class BitmaskTensor:
             sizeof_tensor(self.compressed)
             + sizeof_tensor(self.bitmask)
             + sizeof_tensor(self.row_offsets)
+            + sizeof_tensor(self.compressed_shape)
         )
 
     def dict(self, name_prefix: str, device: str = "cpu") -> Dict[str, Tensor]:
@@ -118,12 +127,16 @@ class BitmaskTensor:
             merge_names(name_prefix, "compressed"): self.compressed.to(device),
             merge_names(name_prefix, "bitmask"): self.bitmask.to(device),
             merge_names(name_prefix, "row_offsets"): self.row_offsets.to(device),
+            merge_names(name_prefix, "compressed_shape"): self.compressed_shape.to(
+                device
+            ),
         }
 
     def __repr__(self):
         return f"BitmaskTensor(shape={self.shape}, compressed=True)"
 
 
+@ensure_output_ndim(2)
 def bitmask_compress(tensor: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     """
     Compresses a dense tensor using bitmask compression
@@ -146,6 +159,7 @@ def bitmask_compress(tensor: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     return values, bitmasks_packed, row_offsets
 
 
+@reduce_input_ndim(1, ignore=["bitmasks"])
 def bitmask_decompress(
     values: Tensor, bitmasks: Tensor, original_shape: torch.Size
 ) -> Tensor:
