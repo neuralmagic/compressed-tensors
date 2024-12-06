@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import wraps
 from typing import Any, Callable, Optional
 
 import torch
@@ -47,7 +48,12 @@ __all__ = [
 def check_accelerate(fallback: Any):
     def decorator(func: Callable[[Any], Any]):
         if not _has_accelerate:
-            return lambda *args, **kwargs: fallback
+
+            @wraps(func)
+            def fallback_fn(*args, **kwargs):
+                return fallback
+
+            return fallback_fn
 
         return func
 
@@ -193,7 +199,7 @@ def update_offload_data(
 
 def delete_offload_parameter(module: torch.nn.Module, name: str):
     """
-    Delete a module from a module which may be offloaded
+    Delete a parameter from a module which may be offloaded
 
     :param module: maybe offloaded module
     :param name: name of parameter being deleted

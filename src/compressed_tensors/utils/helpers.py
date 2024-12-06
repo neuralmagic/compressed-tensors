@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import warnings
+from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
 import torch
@@ -174,6 +175,7 @@ def deprecated(future_name: Optional[str] = None, message: Optional[str] = None)
             if future_name is not None:
                 message += f". Please use {future_name} instead."
 
+        @wraps(func)
         def wrapped(*args, **kwargs):
             warnings.warn(message, DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
