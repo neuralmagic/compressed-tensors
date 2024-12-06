@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
+from functools import wraps
+from typing import Any, Callable, Optional
 
 import torch
 from transformers import AutoConfig
@@ -24,6 +25,8 @@ __all__ = [
     "tensor_follows_mask_structure",
     "replace_module",
     "is_compressed_tensors_config",
+    "ensure_output_ndim",
+    "reduce_input_ndim",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -119,3 +122,113 @@ def is_compressed_tensors_config(compression_config: Any) -> bool:
         return isinstance(compression_config, CompressedTensorsConfig)
     except ImportError:
         return False
+
+
+def ensure_output_ndim(ndim: int, ignore: Optional[list[str]] = None) -> Callable:
+    """
+    A decorator to ensure the outputs of a function have the specified
+    number of dimensions (ndim), while allowing certain outputs to be
+    ignored.
+
+    :param ndim: The number of dimensions the output(s) should have.
+    :param ignore: A list of indices (for tuples/lists) or
+        keys (for dicts) to ignore for dimension enforcement.
+    :return: The decorated function.
+    """
+    ignore = ignore or []
+
+    def wrapper_func(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapped(*args, **kwargs) -> Any:
+            result = func(*args, **kwargs)
+
+            def ensure_ndim(tensor: torch.Tensor) -> torch.Tensor:
+                if tensor.ndim != ndim:
+                    # Add singleton dimensions or reshape as necessary
+                    return tensor.view((-1,) + (1,) * (ndim - 1))
+                return tensor
+
+            # Process outputs based on their type
+            if isinstance(result, torch.Tensor):
+                # Single Tensor output
+                return ensure_ndim(result) if 0 not in ignore else result
+            elif isinstance(result, (list, tuple)):
+                # Tuple or list of Tensors
+                return type(result)(
+                    (
+                        ensure_ndim(x)
+                        if isinstance(x, torch.Tensor) and i not in ignore
+                        else x
+                    )
+                    for i, x in enumerate(result)
+                )
+            elif isinstance(result, dict):
+                # Dict of Tensors
+                return {
+                    key: (
+                        ensure_ndim(value)
+                        if isinstance(value, torch.Tensor) and key not in ignore
+                        else value
+                    )
+                    for key, value in result.items()
+                }
+            else:
+                raise TypeError(
+                    f"Unsupported return type: {type(result)}. "
+                    "Only Tensors, lists, tuples, or dicts are allowed."
+                )
+
+        return wrapped
+
+    return wrapper_func
+
+
+def reduce_input_ndim(ndim: int, ignore: Optional[list[str]] = None) -> Callable:
+    """
+    A decorator to ensure the inputs to a function are reduced to
+    the specified number of dimensions (ndim), while allowing
+    certain parameters to be ignored.
+
+    :param ndim: The maximum number of dimensions the input(s) should have.
+    :param ignore: A list of parameter names to ignore for dimension reduction.
+    :return: The decorated function.
+    """
+    ignore = ignore or []
+
+    def wrapper_func(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapped(*args, **kwargs) -> Any:
+            # Get function parameter names
+            func_params = func.__code__.co_varnames[: func.__code__.co_argcount]
+
+            def reduce_ndim(tensor: torch.Tensor) -> torch.Tensor:
+                if tensor.ndim > ndim:
+                    # Flatten extra dimensions
+                    return tensor.view(*tensor.shape[:ndim])
+                return tensor
+
+            # Process arguments, skipping ignored ones
+            reduced_args = tuple(
+                (
+                    reduce_ndim(arg)
+                    if isinstance(arg, torch.Tensor) and param not in ignore
+                    else arg
+                )
+                for arg, param in zip(args, func_params)
+            )
+
+            # Process keyword arguments, skipping ignored ones
+            reduced_kwargs = {
+                key: (
+                    reduce_ndim(value)
+                    if isinstance(value, torch.Tensor) and key not in ignore
+                    else value
+                )
+                for key, value in kwargs.items()
+            }
+
+            return func(*reduced_args, **reduced_kwargs)
+
+        return wrapped
+
+    return wrapper_func
