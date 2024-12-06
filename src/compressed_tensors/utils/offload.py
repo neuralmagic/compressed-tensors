@@ -257,7 +257,6 @@ def disable_hf_hook(module: torch.nn.Module, recurse: bool = False):
             remove_hook_from_module(module)
 
         for submodule in module.children():
-            print(submodule)
             collect_hooks(submodule)
 
     collect_hooks(module)
