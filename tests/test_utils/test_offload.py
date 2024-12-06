@@ -161,3 +161,23 @@ def test_disable_hf_hook():
 
     assert hasattr(module, "_hf_hook")
     assert module._old_forward == custom_forward
+
+
+@requires_accelerate()
+def test_disable_hf_hook_model_recurse():
+    from accelerate.hooks import attach_align_device_hook
+
+    module0 = ExampleModule()
+    module1 = ExampleModule()
+    module2 = ExampleModule()
+    model = torch.nn.Sequential(module0, torch.nn.Sequential(module1, module2))
+    attach_align_device_hook(model, offload=True, weights_map=model.state_dict())
+
+    with disable_hf_hook(model):
+        assert not hasattr(module0, "_hf_hook")
+        assert not hasattr(module1, "_hf_hook")
+        assert not hasattr(module2, "_hf_hook")
+
+    assert hasattr(module0, "_hf_hook")
+    assert hasattr(module1, "_hf_hook")
+    assert hasattr(module2, "_hf_hook")

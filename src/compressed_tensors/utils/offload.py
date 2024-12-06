@@ -249,15 +249,23 @@ def delete_offload_parameter(module: torch.nn.Module, name: str):
 @check_accelerate(fallback=contextlib.nullcontext())
 @contextlib.contextmanager
 def disable_hf_hook(module: torch.nn.Module, recurse: bool = False):
-    offloaded = has_offloaded_params(module)
-    if offloaded:
-        hook = module._hf_hook
-        remove_hook_from_module(module, recurse=recurse)
+    hooks = {}
+    def collect_hooks(module):
+        nonlocal hooks
+        if hasattr(module, "_hf_hook"):
+            hooks[module] = module._hf_hook
+            remove_hook_from_module(module)
+
+        for submodule in module.children():
+            print(submodule)
+            collect_hooks(submodule)
+
+    collect_hooks(module)
 
     yield
 
-    if offloaded:
-        add_hook_to_module(module, hook)
+    for submodule, hook in hooks.items():
+        add_hook_to_module(submodule, hook)
 
 
 """ Upstreamed Functions """
