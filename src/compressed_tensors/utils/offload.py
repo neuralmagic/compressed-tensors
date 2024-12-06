@@ -17,7 +17,6 @@ from functools import wraps
 from typing import Any, Callable, Optional
 
 import torch
-from compressed_tensors.utils.helpers import getattr_chain
 
 
 try:

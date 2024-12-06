@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import pytest
-
 import torch
 from compressed_tensors.utils import (
     align_module_device,
@@ -22,12 +20,7 @@ from compressed_tensors.utils import (
     register_offload_parameter,
     update_offload_data,
 )
-from tests.testing_utils import requires_accelerate, _is_accelerate_available
-
-if _is_accelerate_available:
-    from accelerate.utils import PrefixedDataset
-else:
-    PrefixedDataset = ...
+from tests.testing_utils import requires_accelerate
 
 
 class ExampleModule(torch.nn.Module):
@@ -41,8 +34,7 @@ class ExampleModule(torch.nn.Module):
 
 
 @requires_accelerate()
-@pytest.mark.parameterize("weights_map", [dict(), PrefixedDataset({}, "")])
-def test_has_offloaded_params(weights_map):
+def test_has_offloaded_params():
     from accelerate.big_modeling import cpu_offload_with_hook
     from accelerate.hooks import attach_align_device_hook, remove_hook_from_module
 
@@ -57,7 +49,7 @@ def test_has_offloaded_params(weights_map):
     assert not has_offloaded_params(module)
 
     remove_hook_from_module(module)
-    attach_align_device_hook(module, offload=True, weights_map=weights_map)
+    attach_align_device_hook(module, offload=True, weights_map=module.state_dict())
     assert has_offloaded_params(module)
 
 
@@ -73,7 +65,7 @@ def test_register_offload_parameter():
     assert hasattr(module, "c") and module.c == parameter
 
     # offloading, check that added param was offloaded
-    attach_align_device_hook(module, offload=True)
+    attach_align_device_hook(module, offload=True, weights_map=module.state_dict())
     assert "c" in module._hf_hook.weights_map
 
     # register a param after offloading, check that added param was offloaded
@@ -102,7 +94,7 @@ def test_update_offload_data():
     assert module.a == param_a
 
     # can update modules which are offloaded
-    attach_align_device_hook(module, offload=True)
+    attach_align_device_hook(module, offload=True, weights_map=module.state_dict())
     update_offload_data(module, "b", param_b)
     assert module.b.device == torch.device("meta")
     assert module._hf_hook.weights_map["b"] == param_b.data
@@ -140,7 +132,7 @@ def test_delete_offload_parameter():
     assert hasattr(module, "d")
 
     # parameters and their offload are deleted
-    attach_align_device_hook(module, offload=True)
+    attach_align_device_hook(module, offload=True, weights_map=module.state_dict())
     delete_offload_parameter(module, "b")
     delete_offload_parameter(module, "d")
     assert not hasattr(module, "a")
@@ -162,7 +154,7 @@ def test_disable_hf_hook():
     def custom_forward():
         pass
 
-    attach_align_device_hook(module, offload=True)
+    attach_align_device_hook(module, offload=True, weights_map=module.state_dict())
     with disable_hf_hook(module):
         assert not hasattr(module, "_hf_hook")
         module.forward = custom_forward
