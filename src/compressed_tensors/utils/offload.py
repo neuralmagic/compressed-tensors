@@ -195,7 +195,11 @@ def update_offload_parameter(
                     if key in dataset
                     else next(iter(dataset.values())).device
                 )
-                dataset[key] = data.to(device=offload_device)
+
+                if isinstance(dataset, OffloadedWeightsLoader):
+                    dataset.state_dict[key] = data.to(device=offload_device)
+                else:
+                    dataset[key] = data.to(device=offload_device)
 
         elif isinstance(weights_map, dict):
             offload_device = (
@@ -250,6 +254,7 @@ def delete_offload_parameter(module: torch.nn.Module, name: str):
 @contextlib.contextmanager
 def disable_hf_hook(module: torch.nn.Module, recurse: bool = False):
     hooks = {}
+
     def collect_hooks(module):
         nonlocal hooks
         if hasattr(module, "_hf_hook"):
