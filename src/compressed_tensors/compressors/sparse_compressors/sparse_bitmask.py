@@ -82,7 +82,7 @@ class BitmaskTensor:
         self.compressed = compressed
         self.bitmask = bitmask
         self.row_offsets = row_offsets
-        self.compressed_shape = compressed_shape or compressed.shape
+        self.compressed_shape = torch.tensor(compressed_shape or compressed.shape)
 
     @staticmethod
     def from_dense(tensor: Tensor) -> "BitmaskTensor":
