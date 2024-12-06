@@ -18,7 +18,7 @@ from compressed_tensors.utils import (
     disable_hf_hook,
     has_offloaded_params,
     register_offload_parameter,
-    update_offload_data,
+    update_offload_parameter,
 )
 from tests.testing_utils import requires_accelerate
 
@@ -82,7 +82,7 @@ def test_register_offload_parameter():
 
 
 @requires_accelerate()
-def test_update_offload_data():
+def test_update_offload_parameter():
     from accelerate.hooks import attach_align_device_hook
 
     module = ExampleModule()
@@ -90,12 +90,12 @@ def test_update_offload_data():
     param_b = torch.nn.Parameter(torch.tensor(2.0))
 
     # can update modules which are not offloaded
-    update_offload_data(module, "a", param_a)
+    update_offload_parameter(module, "a", param_a)
     assert module.a == param_a
 
     # can update modules which are offloaded
     attach_align_device_hook(module, offload=True, weights_map=module.state_dict())
-    update_offload_data(module, "b", param_b)
+    update_offload_parameter(module, "b", param_b)
     assert module.b.device == torch.device("meta")
     assert module._hf_hook.weights_map["b"] == param_b.data
 

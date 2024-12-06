@@ -43,7 +43,7 @@ __all__ = [
     "update_prefix_dict",
     "update_parameter_data",
     "register_offload_parameter",
-    "update_offload_data",
+    "update_offload_parameter",
     "delete_offload_parameter",
     "has_offloaded_params",
     "disable_hf_hook",
@@ -131,7 +131,7 @@ def update_parameter_data(
     :param new_param_data: tensor to update parameter with
     :param param_name: name of module parameter to update
     """
-    update_offload_data(module, param_name, new_param_data)
+    update_offload_parameter(module, param_name, new_param_data)
 
 
 """ Candidates for Upstreaming """
@@ -151,7 +151,7 @@ def register_offload_parameter(
     """
     if has_offloaded_params(module):
         module.register_parameter(name, parameter)
-        update_offload_data(module, name, parameter.data)
+        update_offload_parameter(module, name, parameter.data)
         set_module_tensor_to_device(module, name, "meta")
     else:
         device = next(module.parameters()).device
@@ -159,7 +159,7 @@ def register_offload_parameter(
         module.register_parameter(name, parameter)
 
 
-def update_offload_data(
+def update_offload_parameter(
     module: torch.nn.Module,
     name: str,
     data: Optional[torch.Tensor],
