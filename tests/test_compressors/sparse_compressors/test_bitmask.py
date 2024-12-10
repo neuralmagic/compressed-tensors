@@ -18,7 +18,13 @@ import shutil
 import pytest
 import torch
 from compressed_tensors import BitmaskCompressor, BitmaskConfig, BitmaskTensor
+from compressed_tensors.compressors.sparse_compressors.sparse_bitmask import (
+    _get_24_bytemasks,
+)
+from compressed_tensors.quantization import FP8_DTYPE
+from compressed_tensors.utils import combine_shards
 from safetensors.torch import save_file
+from tests.testing_utils import generate_pruned_semi_structured_mat
 
 
 @pytest.mark.parametrize(
@@ -118,3 +124,115 @@ def test_reload_match(sparsity, dtype, tmp_path):
         assert torch.equal(dense_tensor, reconstructed_tensor)
 
     shutil.rmtree(tmp_path)
+
+
+@pytest.mark.parametrize("dtype", [FP8_DTYPE])
+def test_bitmask_compress_decompress_fp8(dtype):
+    from compressed_tensors.compressors.sparse_compressors.sparse_bitmask import (
+        BitmaskTensor,
+    )
+
+    M, K = 1024, 1024
+    dense_matrix = generate_pruned_semi_structured_mat(M, K, dtype)
+
+    # run compression
+    bitmask_tensor = BitmaskTensor.from_dense(dense_matrix, sparsity_structure="2:4")
+
+    # run decompression
+    decompressed_tensor = bitmask_tensor.decompress()
+
+    dense_matrix = dense_matrix.to(decompressed_tensor.device)
+
+    assert (
+        dense_matrix.dtype == decompressed_tensor.dtype
+    ), f"Dtype Mis-match: {dense_matrix.dtype} and {decompressed_tensor.dtype}"
+    assert (
+        dense_matrix.shape == decompressed_tensor.shape
+    ), f"Shape Mis-match: {dense_matrix.shape} and {decompressed_tensor.shape}"
+    assert torch.equal(
+        dense_matrix, decompressed_tensor
+    ), f"Failed for dtype: {dense_matrix.dtype} and input: {dense_matrix}"
+
+
+@pytest.mark.parametrize("dtype", [torch.float8_e4m3fn])
+def test_bitmask_compress_decompress_sharded_sparse_dim0_fp8(dtype):
+    from compressed_tensors.compressors.sparse_compressors.sparse_bitmask import (
+        BitmaskTensor,
+    )
+
+    M, K = 1024, 1024  # Dimensions of the dense matrix
+    dense_matrix = generate_pruned_semi_structured_mat(M, K, dtype)
+
+    # Run compression
+    bitmask_tensor = BitmaskTensor.from_dense(dense_matrix)
+
+    # Extract compressed tensors
+    compressed_values = bitmask_tensor.compressed  # Shape: (num_of_non_zero_values, 1)
+    compressed_bitmask = bitmask_tensor.bitmask  # Shape: (M, K // 8)
+    compressed_row_offsets = bitmask_tensor.row_offsets  # Shape: (M, 1)
+
+    # Shard along dim=0 (rows of the dense matrix)
+    split_index = M // 2
+
+    # Compute the end index for `compressed_values` corresponding to the split
+    split_row_offset = compressed_row_offsets[split_index].item()
+
+    # Create the first shard
+    shard_1 = {
+        "shape": [split_index, K],
+        "compressed": compressed_values[:split_row_offset].contiguous(),
+        "bitmask": compressed_bitmask[:split_index, :].contiguous(),
+        "row_offsets": compressed_row_offsets[:split_index, :].contiguous(),
+    }
+
+    # Create the second shard
+    shard_2 = {
+        "shape": [M - split_index, K],
+        "compressed": compressed_values[split_row_offset:].contiguous(),
+        "bitmask": compressed_bitmask[split_index:, :].contiguous(),
+        "row_offsets": compressed_row_offsets[split_index:, :] - split_row_offset,
+    }
+
+    # Decompress full tensor
+    decompressed_full = bitmask_tensor.decompress()
+
+    # Decompress shards individually
+    decompressed_shard_1 = BitmaskTensor(**shard_1).decompress()
+    decompressed_shard_2 = BitmaskTensor(**shard_2).decompress()
+
+    # Combine decompressed shards along dim=0
+    decompressed_combined = combine_shards(
+        [decompressed_shard_1, decompressed_shard_2], dim=0
+    )
+
+    # Validate the results
+    assert (
+        dense_matrix.dtype == decompressed_full.dtype
+    ), f"Dtype mismatch: {dense_matrix.dtype} and {decompressed_full.dtype}"
+    assert (
+        dense_matrix.shape == decompressed_full.shape
+    ), f"Shape mismatch: {dense_matrix.shape} and {decompressed_full.shape}"
+    assert torch.equal(
+        dense_matrix, decompressed_full
+    ), "Decompression from full data failed."
+
+    assert (
+        decompressed_full.shape == decompressed_combined.shape
+    ), "Shape mismatch between full and combined shards: "
+    f"{decompressed_full.shape} and {decompressed_combined.shape}"
+    assert torch.equal(
+        decompressed_full, decompressed_combined
+    ), "Decompression from shards does not match full decompression."
+
+
+@pytest.mark.parametrize("dtype", [FP8_DTYPE])
+def test__get_24_bytemasks(dtype):
+    M, K = 1024, 1024  # Dimensions of the dense matrix
+    dense_matrix = generate_pruned_semi_structured_mat(M, K, dtype)
+    generated_mask = _get_24_bytemasks(dense_matrix)
+
+    # Validate the results
+    reshaped_mask = generated_mask.view(-1, 4)
+    true_counts = reshaped_mask.sum(dim=1)
+
+    assert torch.all(true_counts == 2), "Not all groups have exactly 2 True elements"
