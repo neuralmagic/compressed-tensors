@@ -11,6 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Utilities associated with offloading functionality provided by `accelerate`.
+
+| ----------------------------------------------------------------------------------------------------- | # noqa: E501
+| Operation | Without offloading support             | With offloading support                          | # noqa: E501
+| --------- | -------------------------------------- | ------------------------------------------------ | # noqa: E501
+| Add       | module.register_parameter(name, param) | register_offload_parameter(module, name, param)  | # noqa: E501
+| Check     | N/A                                    | has_offloaded_params(module)                     | # noqa: E501
+| Onload    | N/A                                    | with align_module_device(module)                 | # noqa: E501
+| Update    | module.name.data.copy_(new_data)       | update_offload_parameter(module, name, new_data) | # noqa: E501
+| Delete    | del module.name                        | delete_offload_parameter(module, name)           | # noqa: E501
+| ----------------------------------------------------------------------------------------------------- | # noqa: E501
+"""
 
 import contextlib
 from functools import wraps
