@@ -65,7 +65,7 @@ def compress_quantized_weights(module: Module):
         zero_point=zero_point,
         g_idx=g_idx,
         args=scheme.weights,
-        dtype=torch.int8,
+        dtype=scheme.weights.pytorch_dtype(),
     )
 
     module.quantization_status = QuantizationStatus.COMPRESSED

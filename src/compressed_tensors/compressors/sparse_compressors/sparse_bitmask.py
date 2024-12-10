@@ -130,7 +130,7 @@ class BitmaskTensor:
         if name_prefix.endswith(".weight"):
             name_prefix = name_prefix[: -len(".weight")]
         return {
-            merge_names(name_prefix, "shape"): torch.tensor(self.shape, device=device),
+            merge_names(name_prefix, "shape"): torch.tensor(self.shape, device=device).reshape(-1, 1),
             merge_names(name_prefix, "compressed"): self.compressed.to(device),
             merge_names(name_prefix, "bitmask"): self.bitmask.to(device),
             merge_names(name_prefix, "row_offsets"): self.row_offsets.to(device),
@@ -186,6 +186,7 @@ def bitmask_decompress(
 
     decompressed_tensor = torch.zeros(original_shape, dtype=values.dtype)
     if decompressed_tensor.dtype == FP8_DTYPE:
+        decompressed_tensor = decompressed_tensor.to(values.device)
         decompressed_tensor[bytemasks_unpacked] = values
         decompressed_tensor = decompressed_tensor.cuda()
     else:
@@ -216,7 +217,7 @@ def unpack_bitmasks(packed_bitmasks: Tensor, original_shape: torch.Size) -> Tens
     """
     # Unpack the bits
     unpacked_bits = numpy.unpackbits(
-        packed_bitmasks.numpy(), axis=-1, count=original_shape[-1], bitorder="little"
+        packed_bitmasks.cpu().numpy(), axis=-1, count=original_shape[-1], bitorder="little"
     )
 
     # Reshape to match the original shape
