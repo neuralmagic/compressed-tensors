@@ -27,6 +27,7 @@ __all__ = [
     "is_compressed_tensors_config",
     "ensure_output_ndim",
     "reduce_input_ndim",
+    "combine_shards",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -232,3 +233,36 @@ def reduce_input_ndim(ndim: int, ignore: Optional[list[str]] = None) -> Callable
         return wrapped
 
     return wrapper_func
+
+
+def combine_shards(shards, dim=0):
+    """
+    Combine decompressed shards along a given dimension without using torch.cat
+    for unsupported dtypes like float8_e4m3fn.
+
+    :param shards: List of decompressed shard tensors.
+    :param dim: Dimension to combine along (default: 0).
+    :return: Combined decompressed tensor.
+    """
+    try:
+        # Attempt regular concatenation
+        return torch.cat(shards, dim=dim)
+    except RuntimeError as e:
+        # Handle unsupported concatenation
+        if all(shard.dtype == torch.float8_e4m3fn for shard in shards):
+            total_shape = list(shards[0].shape)
+            total_shape[dim] = sum(shard.shape[dim] for shard in shards)
+            combined = torch.zeros(
+                total_shape, dtype=shards[0].dtype, device=shards[0].device
+            )
+
+            shard_offset = 0
+            for shard in shards:
+                shard_size = shard.shape[dim]
+                combined.narrow(dim, shard_offset, shard_size).copy_(shard)
+                shard_offset += shard_size
+
+            return combined
+        else:
+            # Re-raise unexpected errors
+            raise e

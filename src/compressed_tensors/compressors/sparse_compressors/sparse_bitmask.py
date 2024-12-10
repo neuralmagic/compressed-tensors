@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.sparse_compressors.base import BaseSparseCompressor
-from compressed_tensors.config import CompressionFormat
+from compressed_tensors.config import CompressionFormat, SparsityStructure
+from compressed_tensors.quantization import FP8_DTYPE
 from compressed_tensors.utils import ensure_output_ndim, merge_names, reduce_input_ndim
 from torch import Tensor
 
@@ -45,17 +46,17 @@ class BitmaskCompressor(BaseSparseCompressor):
         "compressed",
         "bitmask",
         "row_offsets",
-        "compressed_shape",
     ]
 
     def compress_weight(self, name, value):
-        bitmask_tensor = BitmaskTensor.from_dense(value)
+        bitmask_tensor = BitmaskTensor.from_dense(value, self.config.sparsity_structure)
         bitmask_dict = bitmask_tensor.dict(name_prefix=name, device="cpu")
         return bitmask_dict
 
     def decompress_weight(self, weight_data):
         data = BitmaskTensor(**weight_data)
         decompressed = data.decompress()
+        assert decompressed.dtype != torch.int8
         return decompressed
 
 
@@ -76,22 +77,27 @@ class BitmaskTensor:
         compressed: Tensor,
         bitmask: Tensor,
         row_offsets: Tensor,
-        compressed_shape: Optional[Tensor] = None,
     ):
         self.shape = list(shape)
         self.compressed = compressed
         self.bitmask = bitmask
         self.row_offsets = row_offsets
-        self.compressed_shape = torch.tensor(compressed_shape or compressed.shape)
 
     @staticmethod
-    def from_dense(tensor: Tensor) -> "BitmaskTensor":
+    def from_dense(
+        tensor: Tensor,
+        sparsity_structure: Union[
+            SparsityStructure, str
+        ] = SparsityStructure.UNSTRUCTURED,
+    ) -> "BitmaskTensor":
         """
         :param tensor: dense tensor to compress
         :return: instantiated compressed tensor
         """
         shape = tensor.shape
-        compressed, bitmask, row_offsets = bitmask_compress(tensor.cpu())
+        compressed, bitmask, row_offsets = bitmask_compress(
+            tensor.cpu(), sparsity_structure=sparsity_structure
+        )
         return BitmaskTensor(
             shape=shape, compressed=compressed, bitmask=bitmask, row_offsets=row_offsets
         )
@@ -114,7 +120,6 @@ class BitmaskTensor:
             sizeof_tensor(self.compressed)
             + sizeof_tensor(self.bitmask)
             + sizeof_tensor(self.row_offsets)
-            + sizeof_tensor(self.compressed_shape)
         )
 
     def dict(self, name_prefix: str, device: str = "cpu") -> Dict[str, Tensor]:
@@ -122,14 +127,13 @@ class BitmaskTensor:
         :name_prefix: name of original tensor to store compressed weight as
         :return: dict of compressed data for the stored weight
         """
+        if name_prefix.endswith(".weight"):
+            name_prefix = name_prefix[: -len(".weight")]
         return {
             merge_names(name_prefix, "shape"): torch.tensor(self.shape, device=device),
             merge_names(name_prefix, "compressed"): self.compressed.to(device),
             merge_names(name_prefix, "bitmask"): self.bitmask.to(device),
             merge_names(name_prefix, "row_offsets"): self.row_offsets.to(device),
-            merge_names(name_prefix, "compressed_shape"): self.compressed_shape.to(
-                device
-            ),
         }
 
     def __repr__(self):
@@ -137,21 +141,27 @@ class BitmaskTensor:
 
 
 @ensure_output_ndim(2)
-def bitmask_compress(tensor: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+def bitmask_compress(
+    tensor: Tensor,
+    sparsity_structure: Union[SparsityStructure, str] = SparsityStructure.UNSTRUCTURED,
+) -> Tuple[Tensor, Tensor, Tensor]:
     """
     Compresses a dense tensor using bitmask compression
 
     :param tensor: dense tensor to compress
+    :param sparsity_structure: structure of sparsity in the tensor, defaults
+        to unstructured, can also be set to `2:4`
     :return: tuple of compressed data representing tensor
     """
-    bytemasks = tensor != 0
+    bytemasks = get_bytemasks(tensor, sparsity_structure)
     row_counts = bytemasks.sum(dim=-1)
     row_offsets = torch.cumsum(row_counts, 0) - row_counts
 
-    if tensor.dtype == torch.float8_e4m3fn:
+    if tensor.dtype == FP8_DTYPE:
+        # acces raw bytes of the tensor
         tensor_view = tensor.view(torch.int8)
         values = tensor_view[bytemasks]
-        values = values.view(torch.float8_e4m3fn)
+        values = values.view(FP8_DTYPE)
     else:
         values = tensor[bytemasks]
     bitmasks_packed = pack_bitmasks(bytemasks)
@@ -175,10 +185,8 @@ def bitmask_decompress(
     bytemasks_unpacked = unpack_bitmasks(bitmasks, original_shape)
 
     decompressed_tensor = torch.zeros(original_shape, dtype=values.dtype)
-    if decompressed_tensor.dtype == torch.float8_e4m3fn:
-        decompressed_tensor_view = decompressed_tensor.view(torch.int8)
-        decompressed_tensor_view[bytemasks_unpacked] = values.view(torch.int8)
-        decompressed_tensor = decompressed_tensor_view.view(torch.float8_e4m3fn)
+    if decompressed_tensor.dtype == FP8_DTYPE:
+        decompressed_tensor[bytemasks_unpacked] = values
         decompressed_tensor = decompressed_tensor.cuda()
     else:
         decompressed_tensor[bytemasks_unpacked] = values
@@ -217,3 +225,81 @@ def unpack_bitmasks(packed_bitmasks: Tensor, original_shape: torch.Size) -> Tens
     )
 
     return unpacked_bitmasks_torch
+
+
+def get_bytemasks(
+    tensor: torch.Tensor, sparsity_structure: Union[SparsityStructure, str]
+) -> torch.Tensor:
+    """
+    Generate a bytemask for the given tensor based on the specified
+    sparsity structure.
+    Notes:
+        - The "two_four" sparsity structure assumes that the tensor
+        can be divided into groups of 4 elements. Within each group,
+        the 2 largest elements (by absolute magnitude) are preserved,
+        and the rest are pruned.
+
+    Example:
+        >>> import torch
+        >>> tensor = torch.tensor([1.0, 0.0, 2.0, 0.0, -3.0, 0.0, 0.0, 4.0])
+        >>> mask = get_bytemasks(tensor, '2:4')
+        >>> print(mask)
+        tensor([ True, False,  True, False,  True, False, False,  True])
+
+    :param tensor: The input tensor for which the bytemask is to be created.
+    :param sparsity_structure: The sparsity structure to enforce.
+            Supported values are:
+            - "unstructured": A mask where all non-zero elements are preserved.
+            - "two_four": A mask where exactly 2 non-zero elements (by magnitude)
+              are preserved in every group of 4 elements.
+
+    :return: A boolean tensor of the same shape as the input tensor, where
+        `True` indicates the preserved elements and `False` indicates the
+        pruned elements.
+    """
+    if isinstance(sparsity_structure, str):
+        sparsity_structure = SparsityStructure(sparsity_structure)
+
+    if sparsity_structure == SparsityStructure.UNSTRUCTURED:
+        return tensor != 0
+
+    if sparsity_structure == SparsityStructure.TWO_FOUR:
+        return _get_24_bytemasks(tensor)
+
+    raise ValueError(f"Unsupported sparsity structure: {sparsity_structure}")
+
+
+def _get_24_bytemasks(tensor):
+    """
+    Generate a 2:4 sparsity mask for the given tensor.
+
+    This function creates a mask where exactly 2 out of every 4 elements are
+    preserved based on their magnitudes. The preserved elements are the ones
+    with the highest absolute values in each group of 4 elements.
+
+    :param tensor: The input tensor for which the 2:4 sparsity mask is to be created.
+                   The tensor can be of any shape but its total number of elements
+                   must be a multiple of 4.
+    :return: A boolean tensor of the same shape as the input tensor, where `True`
+             indicates the preserved elements and `False` indicates the pruned elements.
+    :raises ValueError: If the total number of elements in the tensor is not a
+                        multiple of 4.
+    """
+    original_dtype = tensor.dtype
+    if tensor.dtype == FP8_DTYPE:
+        tensor = tensor.view(torch.int8)
+    original_shape = tensor.shape
+    num_elements = tensor.numel()
+
+    if num_elements % 4 != 0:
+        raise ValueError("Tensor size must be a multiple of 4 for TWO_FOUR sparsity")
+
+    reshaped_tensor = tensor.view(-1, 4)
+    abs_tensor = reshaped_tensor.abs()
+    topk_indices = abs_tensor.topk(2, dim=1).indices
+    mask = torch.zeros_like(reshaped_tensor, dtype=torch.bool)
+    mask.scatter_(1, topk_indices, True)
+    mask = mask.view(original_shape)
+    tensor = tensor.view(original_dtype)
+
+    return mask

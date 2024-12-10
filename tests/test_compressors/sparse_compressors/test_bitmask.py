@@ -18,7 +18,11 @@ import shutil
 import pytest
 import torch
 from compressed_tensors import BitmaskCompressor, BitmaskConfig, BitmaskTensor
+from compressed_tensors.compressors.sparse_compressors.sparse_bitmask import (
+    _get_24_bytemasks,
+)
 from compressed_tensors.quantization import FP8_DTYPE
+from compressed_tensors.utils import combine_shards
 from safetensors.torch import save_file
 from tests.testing_utils import generate_pruned_semi_structured_mat
 
@@ -132,10 +136,12 @@ def test_bitmask_compress_decompress_fp8(dtype):
     dense_matrix = generate_pruned_semi_structured_mat(M, K, dtype)
 
     # run compression
-    bitmask_tensor = BitmaskTensor.from_dense(dense_matrix)
+    bitmask_tensor = BitmaskTensor.from_dense(dense_matrix, sparsity_structure="2:4")
 
     # run decompression
     decompressed_tensor = bitmask_tensor.decompress()
+
+    dense_matrix = dense_matrix.to(decompressed_tensor.device)
 
     assert (
         dense_matrix.dtype == decompressed_tensor.dtype
@@ -219,34 +225,14 @@ def test_bitmask_compress_decompress_sharded_sparse_dim0_fp8(dtype):
     ), "Decompression from shards does not match full decompression."
 
 
-def combine_shards(shards, dim=0):
-    """
-    Combine decompressed shards along a given dimension without using torch.cat
-    for unsupported dtypes like float8_e4m3fn.
+@pytest.mark.parametrize("dtype", [FP8_DTYPE])
+def test__get_24_bytemasks(dtype):
+    M, K = 1024, 1024  # Dimensions of the dense matrix
+    dense_matrix = generate_pruned_semi_structured_mat(M, K, dtype)
+    generated_mask = _get_24_bytemasks(dense_matrix)
 
-    :param shards: List of decompressed shard tensors.
-    :param dim: Dimension to combine along (default: 0).
-    :return: Combined decompressed tensor.
-    """
-    try:
-        # Attempt regular concatenation
-        return torch.cat(shards, dim=dim)
-    except RuntimeError as e:
-        # Handle unsupported concatenation
-        if all(shard.dtype == torch.float8_e4m3fn for shard in shards):
-            total_shape = list(shards[0].shape)
-            total_shape[dim] = sum(shard.shape[dim] for shard in shards)
-            combined = torch.zeros(
-                total_shape, dtype=shards[0].dtype, device=shards[0].device
-            )
+    # Validate the results
+    reshaped_mask = generated_mask.view(-1, 4)
+    true_counts = reshaped_mask.sum(dim=1)
 
-            shard_offset = 0
-            for shard in shards:
-                shard_size = shard.shape[dim]
-                combined.narrow(dim, shard_offset, shard_size).copy_(shard)
-                shard_offset += shard_size
-
-            return combined
-        else:
-            # Re-raise unexpected errors
-            raise e
+    assert torch.all(true_counts == 2), "Not all groups have exactly 2 True elements"
