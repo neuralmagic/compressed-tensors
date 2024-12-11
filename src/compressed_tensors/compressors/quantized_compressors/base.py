@@ -82,11 +82,16 @@ class BaseQuantizationCompressor(BaseCompressor):
         """
         compressed_dict = {}
         weight_suffix = ".weight"
+        input_zp_suffix = ".input_zero_point"
+        weight_zp_suffix = ".weight_zero_point"
         _LOGGER.debug(
             f"Compressing model with {len(model_state)} parameterized layers..."
         )
 
         for name, value in tqdm(model_state.items(), desc="Quantized Compression"):
+            weight_zp = name.endswith(weight_zp_suffix)
+            input_zp = name.endswith(input_zp_suffix)
+
             if name.endswith(weight_suffix):
                 prefix = name[: -(len(weight_suffix))]
                 scale = model_state.get(merge_names(prefix, "weight_scale"), None)
@@ -94,7 +99,7 @@ class BaseQuantizationCompressor(BaseCompressor):
                 g_idx = model_state.get(merge_names(prefix, "weight_g_idx"), None)
                 if scale is not None:
                     # weight is quantized, compress it
-                    quant_args = names_to_scheme[prefix]
+                    quant_args = names_to_scheme[prefix][0]
                     compressed_data = self.compress_weight(
                         weight=value,
                         scale=scale,
@@ -107,7 +112,17 @@ class BaseQuantizationCompressor(BaseCompressor):
                         compressed_dict[merge_names(prefix, key)] = value
                 else:
                     compressed_dict[name] = value.to("cpu")
-            elif name.endswith("zero_point") and torch.all(value == 0):
+            elif (
+                weight_zp
+                and names_to_scheme.get(name[: -(len(weight_zp_suffix))])[0].symmetric
+            ):
+                print("skipping zp")
+                continue
+            elif (
+                input_zp
+                and names_to_scheme.get(name[: -(len(input_zp_suffix))])[1].symmetric
+            ):
+                print("skipping input zp")
                 continue
             elif name.endswith("g_idx") and torch.any(value <= -1):
                 continue

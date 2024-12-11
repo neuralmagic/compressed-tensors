@@ -534,7 +534,15 @@ def map_modules_to_quant_args(model: Module) -> Dict[str, QuantizationArgs]:
         if is_module_quantized(submodule):
             if submodule.quantization_scheme.weights is not None:
                 name = fix_fsdp_module_name(name)
-                quantized_modules_to_args[name] = submodule.quantization_scheme.weights
+                quantized_modules_to_args[name] = (
+                    submodule.quantization_scheme.weights,
+                )
+                if submodule.quantization_scheme.input_activations is not None:
+                    weight_args = quantized_modules_to_args.get(name)[0]
+                    quantized_modules_to_args[name] = (
+                        weight_args,
+                        submodule.quantization_scheme.input_activations,
+                    )
 
     return quantized_modules_to_args
 
