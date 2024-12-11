@@ -116,13 +116,11 @@ class BaseQuantizationCompressor(BaseCompressor):
                 weight_zp
                 and names_to_scheme.get(name[: -(len(weight_zp_suffix))])[0].symmetric
             ):
-                print("skipping zp")
                 continue
             elif (
                 input_zp
                 and names_to_scheme.get(name[: -(len(input_zp_suffix))])[1].symmetric
             ):
-                print("skipping input zp")
                 continue
             elif name.endswith("g_idx") and torch.any(value <= -1):
                 continue
