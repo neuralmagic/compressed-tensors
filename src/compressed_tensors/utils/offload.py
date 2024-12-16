@@ -257,6 +257,7 @@ def disable_hf_hook(module: torch.nn.Module, recurse: bool = False):
         add_hook_to_module(submodule, hook)
 
 
+@check_accelerate(fallback=None)
 def offload_to_weights_map(
     weights_map: Union[PrefixedDataset, Dict, OffloadedWeightsLoader],
     key: str,
