@@ -263,6 +263,17 @@ def offload_to_weights_map(
     value: torch.Tensor,
     default_device: torch.device = torch.device("cpu"),
 ):
+    """
+    Helper function which implements offloaded item assignment for PrefixedDataset,
+    OffloadedWeightsLoader, and Dict types.
+
+    :param weights_map: weight map to be updated with offload information
+    :param key: key used to identify weight location
+    :param value: weight being offloaded
+    :param default_device: in the event that the weights_map does already contain
+        offloaded weights or use disk offloading, the weight will be offloaded to the
+        `default_device`
+    """
     if isinstance(weights_map, PrefixedDataset):
         dataset = weights_map.dataset
         key = f"{weights_map.prefix}{key}"
