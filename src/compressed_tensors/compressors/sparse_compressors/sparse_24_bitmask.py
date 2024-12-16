@@ -19,46 +19,44 @@ from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.sparse_compressors.base import BaseSparseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityStructure
 from compressed_tensors.quantization import FP8_DTYPE
-from compressed_tensors.utils import merge_names
+from compressed_tensors.utils import merge_names, pack_into_bitmasks, unpack_bitmasks
 from torch import Tensor
 
 
 __all__ = [
-    "Sparse24ByteMaskCompressor",
-    "ByteMaskTensor",
-    "bytemask_compress",
-    "bytemask_decompress",
+    "Sparse24BitMaskCompressor",
+    "BitMaskTensor",
+    "bitmask_compress",
+    "bitmask_decompress",
     "get_24_bytemasks",
 ]
 
 
-@BaseCompressor.register(name=CompressionFormat.sparse_24_bytemask.value)
-class Sparse24ByteMaskCompressor(BaseSparseCompressor):
+@BaseCompressor.register(name=CompressionFormat.sparse_24_bitmask.value)
+class Sparse24BitMaskCompressor(BaseSparseCompressor):
     """
-    Compression for sparse models using bytemasks. Non-zero weights are stored in a 2d
-    values tensor, with their locations stored in a 2d bytemask
+    Compression for sparse models using bitmasks. Non-zero weights are stored in a 2d
+    values tensor, with their locations stored in a 2d bitmask
     """
 
     COMPRESSION_PARAM_NAMES = [
         "shape",
         "compressed",
-        "bytemask",
+        "bitmask",
     ]
 
     def compress_weight(self, name, value):
-        bitmask_tensor = ByteMaskTensor.from_dense(
-            value, self.config.sparsity_structure
-        )
+        bitmask_tensor = BitMaskTensor.from_dense(value, self.config.sparsity_structure)
         bitmask_dict = bitmask_tensor.dict(name_prefix=name, device="cpu")
         return bitmask_dict
 
     def decompress_weight(self, weight_data):
-        data = ByteMaskTensor(**weight_data)
+        data = BitMaskTensor(**weight_data)
         decompressed = data.decompress()
         return decompressed
 
 
-class ByteMaskTensor:
+class BitMaskTensor:
     """
     Owns compressions and decompression for a single bitmask compressed tensor.
     Adapted from: https://github.com/mgoin/torch_bitmask/tree/main
@@ -72,36 +70,36 @@ class ByteMaskTensor:
         self,
         shape: Union[torch.Size, List],
         compressed: Tensor,
-        bytemask: Tensor,
+        bitmask: Tensor,
     ):
         self.shape = list(shape)
         self.compressed = compressed
-        self.bytemask = bytemask
+        self.bitmask = bitmask
 
     @staticmethod
     def from_dense(
         tensor: Tensor,
         sparsity_structure: Union[SparsityStructure, str] = SparsityStructure.TWO_FOUR,
-    ) -> "ByteMaskTensor":
+    ) -> "BitMaskTensor":
         """
         :param tensor: dense tensor to compress
         :return: instantiated compressed tensor
         """
         shape = tensor.shape
-        compressed, bytemask = bytemask_compress(
+        compressed, bitmask = bitmask_compress(
             tensor.cpu(), sparsity_structure=sparsity_structure
         )
-        return ByteMaskTensor(
+        return BitMaskTensor(
             shape=shape,
             compressed=compressed,
-            bytemask=bytemask,
+            bitmask=bitmask,
         )
 
     def decompress(self) -> Tensor:
         """
         :return: reconstructed dense tensor
         """
-        return bytemask_decompress(self.compressed, self.bytemask, self.shape)
+        return bitmask_decompress(self.compressed, self.bitmask, self.shape)
 
     def curr_memory_size_bytes(self):
         """
@@ -111,10 +109,7 @@ class ByteMaskTensor:
         def sizeof_tensor(a):
             return a.element_size() * a.nelement()
 
-        return (
-            sizeof_tensor(self.compressed)
-            + sizeof_tensor(self.bytemask)
-        )
+        return sizeof_tensor(self.compressed) + sizeof_tensor(self.bitmask)
 
     def dict(self, name_prefix: str, device: str = "cpu") -> Dict[str, Tensor]:
         """
@@ -128,19 +123,19 @@ class ByteMaskTensor:
                 self.shape, device=device
             ).reshape(-1, 1),
             merge_names(name_prefix, "compressed"): self.compressed.to(device),
-            merge_names(name_prefix, "bytemask"): self.bytemask.to(device),
+            merge_names(name_prefix, "bitmask"): self.bitmask.to(device),
         }
 
     def __repr__(self):
-        return f"ByteMaskTensor(shape={self.shape}, compressed=True)"
+        return f"BitMaskTensor(shape={self.shape}, compressed=True)"
 
 
-def bytemask_compress(
+def bitmask_compress(
     tensor: Tensor,
     sparsity_structure: Union[SparsityStructure, str] = SparsityStructure.TWO_FOUR,
 ) -> Tuple[Tensor, Tensor, Tensor]:
     """
-    Compresses a dense tensor using bytemask compression
+    Compresses a dense tensor using bitmask compression
 
     :param tensor: dense 2D tensor to compress
     :param sparsity_structure: structure of sparsity in the tensor, defaults
@@ -164,22 +159,23 @@ def bytemask_compress(
 
     num_rows, num_cols = tensor.shape
     compressed_values = values.reshape(num_rows, num_cols // 2)
-    return compressed_values, bytemasks
+    bitmasks_packed = pack_into_bitmasks(bytemasks)
+    return compressed_values, bitmasks_packed
 
 
-def bytemask_decompress(
-    values: Tensor, bytemasks: Tensor, original_shape: torch.Size
+def bitmask_decompress(
+    values: Tensor, bitmasks: Tensor, original_shape: torch.Size
 ) -> Tensor:
     """
     Reconstructs a dense tensor from a compressed one
 
     :param values: 1d tensor of non-zero values
-    :param bytemasks: 2d int8 tensor flagging locations of non-zero values in the
+    :param bitmasks: 2d int8 tensor flagging locations of non-zero values in the
     tensors original shape
     :param original_shape: shape of the dense tensor
     :return: decompressed dense tensor
     """
-    bytemasks_unpacked = bytemasks
+    bytemasks_unpacked = unpack_bitmasks(bitmasks, original_shape)
 
     decompressed_tensor = torch.zeros(original_shape, dtype=values.dtype)
     decompressed_tensor = decompressed_tensor.to(values.device)

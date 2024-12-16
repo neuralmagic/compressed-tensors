@@ -14,6 +14,7 @@
 
 from typing import Any, List, Optional
 
+import numpy
 import torch
 from transformers import AutoConfig
 
@@ -26,6 +27,8 @@ __all__ = [
     "is_compressed_tensors_config",
     "combine_shards",
     "shard_tensor",
+    "pack_into_bitmasks",
+    "unpack_bitmasks",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -186,3 +189,43 @@ def combine_shards(shards, dim=0):
         else:
             # Re-raise unexpected errors
             raise e
+
+
+def pack_into_bitmasks(bytemasks: torch.Tensor) -> torch.Tensor:
+    """
+    Converts a bytemask tensor to a bitmask tensor to reduce memory. Shape RxC will be
+    compressed to R x ceil(C/8)
+
+    :param bytemasks: mask tensor where each byte corresponds to a weight
+    :return: mask tensor where each bit corresounds to a weight
+    """
+    packed_bits_numpy = numpy.packbits(bytemasks.numpy(), axis=-1, bitorder="little")
+    packed_bits_torch = torch.from_numpy(packed_bits_numpy)
+
+    return packed_bits_torch
+
+
+def unpack_bitmasks(
+    packed_bitmasks: torch.Tensor, original_shape: torch.Size
+) -> torch.Tensor:
+    """
+    Converts a bitmask tensor back to a bytemask tensor for use during decompression
+
+    :param packed_bitmasks: mask tensor where each bit corresponds to a weight
+    :param original_shape: dense shape to decompress to
+    :return: boolean mask of weights in the original dense shape
+    """
+    # Unpack the bits
+    unpacked_bits = numpy.unpackbits(
+        packed_bitmasks.cpu().numpy(),
+        axis=-1,
+        count=original_shape[-1],
+        bitorder="little",
+    )
+
+    # Reshape to match the original shape
+    unpacked_bitmasks_torch = torch.from_numpy(
+        unpacked_bits.reshape(original_shape).astype(bool)
+    )
+
+    return unpacked_bitmasks_torch

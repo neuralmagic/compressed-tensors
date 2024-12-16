@@ -24,7 +24,7 @@ from compressed_tensors.config import (
 __all__ = ["Sparse24ByteMaskConfig"]
 
 
-@SparsityCompressionConfig.register(name=CompressionFormat.sparse_24_bytemask.value)
+@SparsityCompressionConfig.register(name=CompressionFormat.sparse_24_bitmask.value)
 class Sparse24ByteMaskConfig(SparsityCompressionConfig):
     """
     Configuration for storing a 24 sparse model using
@@ -35,6 +35,6 @@ class Sparse24ByteMaskConfig(SparsityCompressionConfig):
         "2:4" for this compression format
     """
 
-    format: str = CompressionFormat.sparse_24_bytemask.value
+    format: str = CompressionFormat.sparse_24_bitmask.value
     global_sparsity: Optional[float] = 0.0
     sparsity_structure: Optional[str] = SparsityStructure.TWO_FOUR.value

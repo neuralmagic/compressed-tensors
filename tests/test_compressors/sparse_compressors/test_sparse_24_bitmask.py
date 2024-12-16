@@ -15,7 +15,7 @@
 
 import pytest
 import torch
-from compressed_tensors import ByteMaskTensor
+from compressed_tensors import BitMaskTensor
 from compressed_tensors.quantization import FP8_DTYPE
 from compressed_tensors.utils import combine_shards, shard_tensor
 from tests.testing_utils import generate_pruned_semi_structured_mat
@@ -39,8 +39,8 @@ def shard_validation():
                 shard_values.shape == expected_shape["compressed"]
             ), f"Shape mismatch: {shard_values.shape} != {expected_shape['compressed']}"
             assert (
-                shard_bitmask.shape == expected_shape["bytemask"]
-            ), f"Shape mismatch: {shard_bitmask.shape} != {expected_shape['bytemask']}"
+                shard_bitmask.shape == expected_shape["bitmask"]
+            ), f"Shape mismatch: {shard_bitmask.shape} != {expected_shape['bitmask']}"
 
     return _validate_shard_shapes
 
@@ -50,7 +50,7 @@ def test_bitmask_compress_decompress_fp8(dense_matrix_fixture, dtype):
     M, K = 1024, 1024
     dense_matrix = dense_matrix_fixture(M, K, dtype)
 
-    bitmask_tensor = ByteMaskTensor.from_dense(dense_matrix, sparsity_structure="2:4")
+    bitmask_tensor = BitMaskTensor.from_dense(dense_matrix, sparsity_structure="2:4")
     decompressed_tensor = bitmask_tensor.decompress()
 
     dense_matrix = dense_matrix.to(decompressed_tensor.device)
@@ -70,9 +70,9 @@ def test_bitmask_compress_decompress_fp8(dense_matrix_fixture, dtype):
             [2048, 256, 256],
             0,
             [
-                {"compressed": (2048, 1024), "bytemask": (2048, 2048)},
-                {"compressed": (256, 1024), "bytemask": (256, 2048)},
-                {"compressed": (256, 1024), "bytemask": (256, 2048)},
+                {"compressed": (2048, 1024), "bitmask": (2048, 2048 // 8)},
+                {"compressed": (256, 1024), "bitmask": (256, 2048 // 8)},
+                {"compressed": (256, 1024), "bitmask": (256, 2048 // 8)},
             ],
         ),
         (
@@ -82,8 +82,8 @@ def test_bitmask_compress_decompress_fp8(dense_matrix_fixture, dtype):
             [1024, 1024],
             1,
             [
-                {"compressed": (2048, 512), "bytemask": (2048, 1024)},
-                {"compressed": (2048, 512), "bytemask": (2048, 1024)},
+                {"compressed": (2048, 512), "bitmask": (2048, 1024 // 8)},
+                {"compressed": (2048, 512), "bitmask": (2048, 1024 // 8)},
             ],
         ),
     ],
@@ -100,9 +100,9 @@ def test_bitmask_compress_decompress_sharded(
 ):
     dense_matrix = dense_matrix_fixture(M, K, dtype)
 
-    bytemask_tensor = ByteMaskTensor.from_dense(dense_matrix)
-    compressed_values = bytemask_tensor.compressed
-    compressed_bitmask = bytemask_tensor.bytemask
+    bitmask_tensor = BitMaskTensor.from_dense(dense_matrix)
+    compressed_values = bitmask_tensor.compressed
+    compressed_bitmask = bitmask_tensor.bitmask
 
     if shard_dim == 1:
         compressed_shard_sizes = [size // 2 for size in shard_sizes]
@@ -121,10 +121,10 @@ def test_bitmask_compress_decompress_sharded(
     )
 
     decompressed_shards = [
-        ByteMaskTensor(
-            shape=expected_shape["bytemask"],
+        BitMaskTensor(
+            shape=expected_shape["bitmask"],
             compressed=shard_values,
-            bytemask=shard_bitmask,
+            bitmask=shard_bitmask,
         ).decompress()
         for shard_values, shard_bitmask, expected_shape in zip(
             sharded_compressed_values, sharded_compressed_bitmask, expected_shapes
