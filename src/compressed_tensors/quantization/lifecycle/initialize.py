@@ -140,7 +140,9 @@ def _initialize_scale_zero_point(
     if quantization_args.dynamic:
         return
 
-    # begin on the same device as other parameters or cpu if offloaded
+    # begin on the same device as other parameters or cpu if offloaded.
+    # in the offloaded case, there's no point moving tensors to the execution device
+    # if they're going to be immediately offloaded by `register_offload_parameter`
     params_device = next(module.parameters()).device
     device = "cpu" if has_offloaded_params(module) else params_device
 

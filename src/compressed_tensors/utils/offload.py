@@ -168,14 +168,11 @@ def register_offload_parameter(
     :param name: name of newly registered parameter
     :param parameter: parameter being registered
     """
+    module.register_parameter(name, parameter)
+
     if has_offloaded_params(module):
-        module.register_parameter(name, parameter)
         update_offload_parameter(module, name, parameter.data)
         set_module_tensor_to_device(module, name, "meta")
-    else:
-        device = next(module.parameters()).device
-        parameter = parameter.to(device)
-        module.register_parameter(name, parameter)
 
 
 def update_offload_parameter(
