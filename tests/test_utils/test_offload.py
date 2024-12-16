@@ -20,6 +20,7 @@ from compressed_tensors.utils import (
     register_offload_parameter,
     update_offload_parameter,
 )
+from compressed_tensors.utils.offload import offload_to_weights_map
 from tests.testing_utils import requires_accelerate
 
 
@@ -181,3 +182,53 @@ def test_disable_hf_hook_model_recurse():
     assert hasattr(module0, "_hf_hook")
     assert hasattr(module1, "_hf_hook")
     assert hasattr(module2, "_hf_hook")
+
+
+@requires_accelerate()
+def test_offload_to_weights_map():
+    from accelerate.utils import OffloadedWeightsLoader, PrefixedDataset
+
+    name = "name"
+    old_value = torch.tensor(0.0)
+    new_value = torch.tensor(1.0)
+    prefix = "prefix"
+
+    # Dict empty
+    weights_map = {}
+    offload_to_weights_map(weights_map, name, new_value)
+    assert weights_map[name] == new_value
+
+    # Dict populated
+    weights_map = {name: old_value}
+    offload_to_weights_map(weights_map, name, new_value)
+    assert weights_map[name] == new_value
+
+    # OffloadedWeightsLoader[Dict] empty
+    weights_map = OffloadedWeightsLoader({})
+    offload_to_weights_map(weights_map, name, new_value)
+    assert weights_map[name] == new_value
+
+    # OffloadedWeightsLoader[Dict] populated
+    weights_map = OffloadedWeightsLoader({name: old_value})
+    offload_to_weights_map(weights_map, name, new_value)
+    assert weights_map[name] == new_value
+
+    # PrefixedDataset[Dict] empty
+    weights_map = PrefixedDataset({}, prefix)
+    offload_to_weights_map(weights_map, name, new_value)
+    assert weights_map[name] == new_value
+
+    # PrefixedDataset[Dict] populated
+    weights_map = PrefixedDataset({name: old_value}, prefix)
+    offload_to_weights_map(weights_map, name, new_value)
+    assert weights_map[name] == new_value
+
+    # PrefixedDataset[OffloadedWeightsLoader[Dict]] empty
+    weights_map = PrefixedDataset(OffloadedWeightsLoader({}), prefix)
+    offload_to_weights_map(weights_map, name, new_value)
+    assert weights_map[name] == new_value
+
+    # PrefixedDataset[OffloadedWeightsLoader[Dict]] populated
+    weights_map = PrefixedDataset(OffloadedWeightsLoader({name: old_value}), prefix)
+    offload_to_weights_map(weights_map, name, new_value)
+    assert weights_map[name] == new_value
