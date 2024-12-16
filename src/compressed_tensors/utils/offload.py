@@ -27,7 +27,7 @@ Utilities associated with offloading functionality provided by `accelerate`.
 
 import contextlib
 from functools import wraps
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 
@@ -258,7 +258,7 @@ def disable_hf_hook(module: torch.nn.Module, recurse: bool = False):
 
 
 def offload_to_weights_map(
-    weights_map: Union[PrefixedDataset, dict, OffloadedWeightsLoader],
+    weights_map: Union[PrefixedDataset, Dict, OffloadedWeightsLoader],
     key: str,
     value: torch.Tensor,
     default_device: torch.device = torch.device("cpu"),
