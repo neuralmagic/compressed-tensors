@@ -16,4 +16,5 @@
 from .base import *
 from .dense import *
 from .sparse_24 import *
+from .sparse_24_bytemask import *
 from .sparse_bitmask import *
