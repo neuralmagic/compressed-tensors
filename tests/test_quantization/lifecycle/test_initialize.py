@@ -103,11 +103,10 @@ def test_initialize_module_for_quantization(
     ],
 )
 def test_initialize_module_for_quantization_offloaded(
-    create_quantization_scheme, weights, input_activations
+    create_quantization_scheme, weights, input_activations, layer
 ):
     from accelerate.hooks import attach_align_device_hook
 
-    layer = Linear(4, 4)
     attach_align_device_hook(layer, offload=True)
 
     test_initialize_module_for_quantization(
