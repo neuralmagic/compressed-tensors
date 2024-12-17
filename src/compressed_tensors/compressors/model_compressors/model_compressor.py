@@ -18,7 +18,7 @@ import operator
 import os
 import re
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Set, TypeVar, Union
 
 import compressed_tensors
 import torch
@@ -38,6 +38,7 @@ from compressed_tensors.quantization import (
     apply_quantization_config,
     load_pretrained_quantization,
 )
+from compressed_tensors.quantization.lifecycle import expand_sparse_target_names
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.utils import (
     is_module_quantized,
@@ -268,9 +269,9 @@ class ModelCompressor:
 
         compressed_state_dict = state_dict
 
-        quantized_modules_to_args: Dict[
-            str, QuantizationArgs
-        ] = map_modules_to_quant_args(model)
+        quantized_modules_to_args: Dict[str, QuantizationArgs] = (
+            map_modules_to_quant_args(model)
+        )
 
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(
@@ -282,8 +283,14 @@ class ModelCompressor:
                 )
 
         if self.sparsity_compressor is not None:
+            sparse_compression_targets: Set[str] = expand_sparse_target_names(
+                model=model,
+                targets=self.sparsity_config.targets,
+                ignore=self.sparsity_config.ignore,
+            )
             compressed_state_dict = self.sparsity_compressor.compress(
-                compressed_state_dict
+                compressed_state_dict,
+                compression_targets=sparse_compression_targets,
             )
 
         # HACK: Override the dtype_byte_size function in transformers to
