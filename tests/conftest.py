@@ -44,8 +44,6 @@ def mock_per_token_calibration():
         min_val = torch.amin(value, dim=dim, keepdims=True)
         max_val = torch.amax(value, dim=dim, keepdims=True)
         scale, zp = calculate_qparams(min_val, max_val, args)
-        scale = scale.reshape((1, 1))
-        zp = zp.reshape((1, 1))
         update_parameter_data(module, scale, f"{base_name}_scale")
         update_parameter_data(module, zp, f"{base_name}_zero_point")
 
@@ -129,6 +127,7 @@ def mock_per_tensor_calibration():
 
         # per tensor quantization just calls calculate_qparams directly
         min_val, max_val = torch.aminmax(value)
+        breakpoint()
         scale, zp = calculate_qparams(min_val, max_val, args)
         update_parameter_data(module, scale, f"{base_name}_scale")
         update_parameter_data(module, zp, f"{base_name}_zero_point")
