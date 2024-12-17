@@ -129,7 +129,8 @@ class BaseSparseCompressor(BaseCompressor):
     @staticmethod
     def should_compress(name: str, expanded_targets: Optional[Set[str]] = None) -> bool:
         """
-        Check if a parameter should be compressed
+        Check if a parameter should be compressed.
+        Currently, this only returns True for weight parameters.
 
         :param name: name of the parameter
         :param expanded_targets: set of layer prefixes to compress
