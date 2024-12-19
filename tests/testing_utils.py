@@ -52,3 +52,64 @@ def requires_accelerate():
         not _is_accelerate_available,
         reason="requires accelerate",
     )
+
+
+def get_random_mat(M, K, dtype):
+    import torch
+    from compressed_tensors.quantization import FP8_DTYPE
+
+    rand_tensor_dtype = dtype
+    if dtype in [torch.int8, FP8_DTYPE]:
+        rand_tensor_dtype = torch.float16
+    mat = torch.rand(M, K, dtype=rand_tensor_dtype).cuda()
+    mat = mat.masked_fill_(mat == 0, 1)
+    return mat.to(dtype)
+
+
+def generate_pruned_semi_structured_mat(M, K, dtype):
+    import torch
+    from compressed_tensors.quantization import FP8_DTYPE
+
+    mask = torch.Tensor([0, 0, 1, 1]).tile((M, K // 4)).bool()
+    rand_tensor_dtype = dtype
+    if dtype in [torch.int8, FP8_DTYPE]:
+        rand_tensor_dtype = torch.float16
+    mat = torch.rand(M, K, dtype=rand_tensor_dtype)
+    mat = mat.masked_fill_(mat == 0, 1)
+    if dtype == FP8_DTYPE:
+        # some float8_e4m3fn operations are not supported on CPU
+        mat = mat.cuda()
+        mask = mask.cuda()
+    mat = mat * mask
+    return mat.to(dtype)
+
+
+def induce_sparsity(tensor, sparsity_ratio):
+    """
+    Makes a tensor sparse by zeroing out a given fraction
+    of its smallest absolute values.
+
+    :param: weight_tensor (torch.Tensor): The input weight tensor.
+    :param: sparsity_ratio (float): Fraction of weights to be zeroed
+    (0 <= sparsity_ratio <= 1).
+
+    :returns: torch.Tensor: Sparse version of the input tensor.
+    """
+    import torch
+
+    if not (0 <= sparsity_ratio <= 1):
+        raise ValueError("Sparsity ratio must be between 0 and 1.")
+
+    # Flatten the tensor and compute the threshold for sparsity
+    flattened = tensor.view(-1)
+    k = int(sparsity_ratio * flattened.numel())
+
+    if k > 0:
+        threshold = torch.topk(flattened.abs(), k, largest=False).values.max()
+        sparse_tensor = torch.where(
+            tensor.abs() > threshold, tensor, torch.zeros_like(tensor)
+        )
+    else:
+        sparse_tensor = tensor
+
+    return sparse_tensor
