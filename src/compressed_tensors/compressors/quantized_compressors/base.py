@@ -12,19 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from typing import Dict, Generator, Tuple
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.quantization import QuantizationArgs
 from compressed_tensors.utils import get_nested_weight_mappings, merge_names
+from loguru import logger
 from safetensors import safe_open
 from torch import Tensor
 from tqdm import tqdm
 
-
-_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 __all__ = ["BaseQuantizationCompressor"]
 
@@ -77,7 +75,7 @@ class BaseQuantizationCompressor(BaseCompressor):
         """
         compressed_dict = {}
         weight_suffix = ".weight"
-        _LOGGER.debug(
+        logger.debug(
             f"Compressing model with {len(model_state)} parameterized layers..."
         )
 
