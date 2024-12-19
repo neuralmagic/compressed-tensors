@@ -92,7 +92,7 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
                 zero_point=zero_point,
                 g_idx=g_idx,
                 args=quantization_args,
-                dtype=torch.int8,
+                dtype=quantization_args.pytorch_dtype(),
             )
         else:
             quantized_weight = weight
