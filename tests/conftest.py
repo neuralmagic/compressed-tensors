@@ -127,7 +127,6 @@ def mock_per_tensor_calibration():
 
         # per tensor quantization just calls calculate_qparams directly
         min_val, max_val = torch.aminmax(value)
-        breakpoint()
         scale, zp = calculate_qparams(min_val, max_val, args)
         update_parameter_data(module, scale, f"{base_name}_scale")
         update_parameter_data(module, zp, f"{base_name}_zero_point")
