@@ -68,9 +68,9 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         self,
         weight: Tensor,
         scale: Tensor,
+        quantization_args: QuantizationArgs,
         zero_point: Optional[Tensor] = None,
         g_idx: Optional[torch.Tensor] = None,
-        quantization_args: Optional[QuantizationArgs] = None,
         device: Optional[torch.device] = None,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -92,7 +92,7 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
                 zero_point=zero_point,
                 g_idx=g_idx,
                 args=quantization_args,
-                dtype=torch.int8,
+                dtype=quantization_args.pytorch_dtype(),
             )
         else:
             quantized_weight = weight
