@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 import torch
 from compressed_tensors.utils import (
     align_module_device,
@@ -72,7 +73,7 @@ def test_register_offload_parameter():
     # register a param after offloading, check that added param was offloaded
     register_offload_parameter(module, "d", parameter)
     assert hasattr(module, "d") and module.d.device == torch.device("meta")
-    assert "d" in module._hf_hook.weights_map
+    assert module._hf_hook.weights_map["d"].device == torch.device("cpu")
 
     # added parameters can be onloaded and offloaded
     with align_module_device(module, execution_device="cpu"):
@@ -80,6 +81,18 @@ def test_register_offload_parameter():
         assert module.d.device == torch.device("cpu")
     assert module.c.device == torch.device("meta")
     assert module.d.device == torch.device("meta")
+
+    # parameters can be added during onload
+    with align_module_device(module, execution_device="cpu"):
+        register_offload_parameter(module, "e", parameter)
+        assert module.e.device == torch.device("cpu")
+
+    # parameters can be added before onload and with explicit offload
+    register_offload_parameter(module, "f", parameter, offload_device="cpu")
+    assert module._hf_hook.weights_map["f"].device == torch.device("cpu")
+    with align_module_device(module, execution_device="cpu"):
+        assert module.f.device == torch.device("cpu")
+    assert module._hf_hook.weights_map["f"].device == torch.device("cpu")
 
 
 @requires_accelerate()
@@ -195,7 +208,9 @@ def test_offload_to_weights_map():
 
     # Dict empty
     weights_map = {}
-    offload_to_weights_map(weights_map, name, new_value)
+    with pytest.raises(ValueError):
+        offload_to_weights_map(weights_map, name, new_value)
+    offload_to_weights_map(weights_map, name, new_value, offload_device="cpu")
     assert weights_map[name] == new_value
 
     # Dict populated
@@ -205,7 +220,9 @@ def test_offload_to_weights_map():
 
     # OffloadedWeightsLoader[Dict] empty
     weights_map = OffloadedWeightsLoader({})
-    offload_to_weights_map(weights_map, name, new_value)
+    with pytest.raises(ValueError):
+        offload_to_weights_map(weights_map, name, new_value)
+    offload_to_weights_map(weights_map, name, new_value, offload_device="cpu")
     assert weights_map[name] == new_value
 
     # OffloadedWeightsLoader[Dict] populated
@@ -215,7 +232,9 @@ def test_offload_to_weights_map():
 
     # PrefixedDataset[Dict] empty
     weights_map = PrefixedDataset({}, prefix)
-    offload_to_weights_map(weights_map, name, new_value)
+    with pytest.raises(ValueError):
+        offload_to_weights_map(weights_map, name, new_value)
+    offload_to_weights_map(weights_map, name, new_value, offload_device="cpu")
     assert weights_map[name] == new_value
 
     # PrefixedDataset[Dict] populated
@@ -225,7 +244,9 @@ def test_offload_to_weights_map():
 
     # PrefixedDataset[OffloadedWeightsLoader[Dict]] empty
     weights_map = PrefixedDataset(OffloadedWeightsLoader({}), prefix)
-    offload_to_weights_map(weights_map, name, new_value)
+    with pytest.raises(ValueError):
+        offload_to_weights_map(weights_map, name, new_value)
+    offload_to_weights_map(weights_map, name, new_value, offload_device="cpu")
     assert weights_map[name] == new_value
 
     # PrefixedDataset[OffloadedWeightsLoader[Dict]] populated
