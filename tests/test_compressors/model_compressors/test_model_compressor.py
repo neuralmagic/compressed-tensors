@@ -184,6 +184,7 @@ def get_quantization_config(bits=8, type="int", strategy="tensor"):
     "quantization_config",
     [
         get_quantization_config(bits=8, type="int", strategy="channel"),
+        get_quantization_config(bits=8, type="float", strategy="channel"),
     ],
 )
 def test_composability(
