@@ -235,7 +235,7 @@ def delete_offload_parameter(module: torch.nn.Module, name: str):
 
 @check_accelerate(fallback=contextlib.nullcontext())
 @contextlib.contextmanager
-def disable_hf_hook(module: torch.nn.Module, recurse: bool = False):
+def disable_hf_hook(module: torch.nn.Module):
     hooks = {}
 
     def collect_hooks(module):
@@ -244,10 +244,7 @@ def disable_hf_hook(module: torch.nn.Module, recurse: bool = False):
             hooks[module] = module._hf_hook
             remove_hook_from_module(module)
 
-        for submodule in module.children():
-            collect_hooks(submodule)
-
-    collect_hooks(module)
+    module.apply(collect_hooks)
 
     yield
 
