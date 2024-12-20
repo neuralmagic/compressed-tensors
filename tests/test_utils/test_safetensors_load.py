@@ -38,6 +38,12 @@ def mock_get_weight_mappings():
 
 @pytest.mark.usefixtures("mock_get_weight_mappings")
 class TestGetNestedWeightMappings:
+    """
+    Tests for the get_nested_weight_mappings function
+    in different scenarios, such as single and multiple
+    parameters to nest, and returning other parameters
+    """
+
     def test_single_param(self):
         params_to_nest = ["weight"]
         result = get_nested_weight_mappings("dummy_path", params_to_nest)

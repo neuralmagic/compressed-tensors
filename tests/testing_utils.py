@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+# flake8: noqa
 import pytest
 
 
@@ -54,7 +54,13 @@ def requires_accelerate():
     )
 
 
-def get_random_mat(M, K, dtype):
+def get_random_mat(M, K, dtype) -> "torch.Tensor":
+    """
+    :param M: number of rows
+    :param K: number of columns
+    :param dtype: data type of the matrix
+    :return: random matrix of shape (M, K) with non-zero values
+    """
     import torch
     from compressed_tensors.quantization import FP8_DTYPE
 
@@ -66,7 +72,13 @@ def get_random_mat(M, K, dtype):
     return mat.to(dtype)
 
 
-def generate_pruned_semi_structured_mat(M, K, dtype):
+def generate_pruned_semi_structured_mat(M, K, dtype) -> "torch.Tensor":
+    """
+    :param M: number of rows
+    :param K: number of columns
+    :param dtype: data type of the matrix
+    :return: random matrix of shape (M, K) with 2:4 sparsity pattern
+    """
     import torch
     from compressed_tensors.quantization import FP8_DTYPE
 
@@ -84,15 +96,14 @@ def generate_pruned_semi_structured_mat(M, K, dtype):
     return mat.to(dtype)
 
 
-def induce_sparsity(tensor, sparsity_ratio):
+def induce_sparsity(tensor, sparsity_ratio) -> "torch.Tensor":
     """
     Makes a tensor sparse by zeroing out a given fraction
     of its smallest absolute values.
 
     :param: weight_tensor (torch.Tensor): The input weight tensor.
     :param: sparsity_ratio (float): Fraction of weights to be zeroed
-    (0 <= sparsity_ratio <= 1).
-
+        (0 <= sparsity_ratio <= 1).
     :returns: torch.Tensor: Sparse version of the input tensor.
     """
     import torch
