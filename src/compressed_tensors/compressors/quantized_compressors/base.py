@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, Generator, Tuple, Union
 
 import torch
@@ -117,7 +118,7 @@ class BaseQuantizationCompressor(BaseCompressor):
 
     def decompress(
         self,
-        path_to_model_or_tensors: Union[str, Dict[str, Any]],
+        path_to_model_or_tensors: Union[str, Path, Dict[str, Any]],
         names_to_scheme: Dict[str, QuantizationArgs],
         device: str = "cpu",
     ) -> Generator[Tuple[str, Tensor], None, None]:
@@ -131,7 +132,7 @@ class BaseQuantizationCompressor(BaseCompressor):
         :param device: optional device to load intermediate weights into
         :return: compressed state dict
         """
-        if isinstance(path_to_model_or_tensors, str):
+        if isinstance(path_to_model_or_tensors, (str, Path)):
             yield from self._decompress_from_path(
                 path_to_model_or_tensors, names_to_scheme, device
             )
