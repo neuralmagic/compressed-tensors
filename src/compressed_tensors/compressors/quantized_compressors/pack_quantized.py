@@ -68,9 +68,9 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         self,
         weight: Tensor,
         scale: Tensor,
+        quantization_args: QuantizationArgs,
         zero_point: Optional[Tensor] = None,
         g_idx: Optional[torch.Tensor] = None,
-        quantization_args: Optional[QuantizationArgs] = None,
         device: Optional[torch.device] = None,
     ) -> Dict[str, torch.Tensor]:
         """
