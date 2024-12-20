@@ -78,7 +78,8 @@ class BaseSparseCompressor(BaseCompressor):
             f"Compressing model with {len(model_state)} parameterized layers..."
         )
         for name, value in tqdm(model_state.items(), desc="Compressing model"):
-            if not self.should_compress(name, compression_targets):
+            ignored = not self.should_compress(name, compression_targets)
+            if ignored:
                 compressed_dict[name] = value
                 continue
             prefix = name
