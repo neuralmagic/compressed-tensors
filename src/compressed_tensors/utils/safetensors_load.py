@@ -188,7 +188,7 @@ def get_nested_weight_mappings(
     each layer's compression parameters.
 
     Example of the nested mapping:
-    layer.weight: {
+    layer: {
         bitmask: file_location,
         row_offsets: file_location,
         shape: file_location,
@@ -247,6 +247,23 @@ def get_nested_weight_mappings(
 
 
 def get_nested_mappings_from_state_dict(state_dict, params_to_nest):
+    """
+    Takes a state dict and returns a nested mapping from uncompressed
+    parameterized layer names to the value of
+    each layer's compression parameters.
+
+    Example of the nested mapping:
+    layer: {
+        weight_scale: ...,
+        weight: ...,
+        zero_point: ...,
+    }
+
+    :param state_dict: state dict of the model
+    :param params_to_nest: List of parameter names to nest.
+    :return: Nested mapping of parameterized layer names to the value of
+        each layer's compression parameters.
+    """
     nested_weight_mappings = {}
     for key in state_dict.keys():
         for param_name in params_to_nest:

@@ -157,7 +157,7 @@ def get_bitmask_sparsity_config():
     )
 
 
-def get_quantization_config(bits=8, type="int", strategy="tensor"):
+def create_quantization_config(bits=8, type="int", strategy="tensor"):
 
     config_dict = {
         "format": "int-quantized",
@@ -183,8 +183,8 @@ def get_quantization_config(bits=8, type="int", strategy="tensor"):
 @pytest.mark.parametrize(
     "quantization_config",
     [
-        get_quantization_config(bits=8, type="int", strategy="channel"),
-        get_quantization_config(bits=8, type="float", strategy="channel"),
+        create_quantization_config(bits=8, type="int", strategy="channel"),
+        create_quantization_config(bits=8, type="float", strategy="channel"),
     ],
 )
 def test_composability(
@@ -211,12 +211,15 @@ def test_composability(
         args=quantization_args,
     )
 
-    model = fake_model_class(quantized_weights, scale, zero_point)
-    model.linear.quantization_scheme = quantization_config.config_groups["group_0"]
+    fake_oneshot_model = fake_model_class(quantized_weights, scale, zero_point)
+    fake_oneshot_model.linear.quantization_scheme = quantization_config.config_groups[
+        "group_0"
+    ]
     model_compressor = ModelCompressor(
         sparsity_config=sparsity_config, quantization_config=quantization_config
     )
-    compressed_state_dict = model_compressor.compress(model)
+    # does both sparse and quantization compression
+    compressed_state_dict = model_compressor.compress(fake_oneshot_model)
 
     save_dir = tmp_path / "model"
     save_dir = _create_dummy_checkpoint(
@@ -227,7 +230,7 @@ def test_composability(
     model_compressor.decompress(model=decompressed_model, model_path=save_dir)
 
     # check that the decompressed model is the same as the original model
-    _check_state_dicts(model.state_dict(), decompressed_model.state_dict())
+    _check_state_dicts(fake_oneshot_model.state_dict(), decompressed_model.state_dict())
 
 
 def _create_dummy_checkpoint(state_dict, save_dir, model_compressor):
