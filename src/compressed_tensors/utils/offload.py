@@ -26,6 +26,7 @@ Utilities associated with offloading functionality provided by `accelerate`.
 """
 
 import contextlib
+import warnings
 from functools import wraps
 from typing import Any, Callable, Dict, Literal, Optional, Union
 
@@ -200,10 +201,15 @@ def update_offload_parameter(
     """
     param = getattr(module, name)
     data = data.to(param.dtype)
+    if param.data.shape != data.shape:
+        warnings.warn(
+            f"Shape of parameter being updated {param.data.shape} does not match shape "
+            f"of update data {data.shape}"
+        )
 
     # copy data into onloaded parameter if applicable
     if param.device != torch.device("meta"):
-        param.data = data
+        param.data.copy_(data)
 
     # update offload dict
     if has_offloaded_params(module):
