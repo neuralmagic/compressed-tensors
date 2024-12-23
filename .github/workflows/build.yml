@@ -79,7 +79,6 @@ jobs:
             - name: create testmo run
               id: create_testmo_run
               uses: neuralmagic/nm-actions/actions/testmo-run-create@v1.11.0
-              if: success()
               with:
                 testmo_url: https://neuralmagic.testmo.net
                 testmo_token: ${{ secrets.TESTMO_TEST_TOKEN }}
