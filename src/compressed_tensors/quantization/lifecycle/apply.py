@@ -53,7 +53,7 @@ __all__ = [
     "apply_quantization_status",
     "find_name_or_class_matches",
     "expand_sparse_target_names",
-    "is_target",
+    "is_sparse_target",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -265,11 +265,11 @@ def expand_sparse_target_names(
     return {
         name
         for name, module in iter_named_leaf_modules(model)
-        if is_target(name, module, targets, ignore)
+        if is_sparse_target(name, module, targets, ignore)
     }
 
 
-def is_target(
+def is_sparse_target(
     name: str, module: Module, targets: Iterable[str], ignore: Iterable[str]
 ) -> bool:
     """
