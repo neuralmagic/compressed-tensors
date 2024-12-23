@@ -202,8 +202,8 @@ def update_offload_parameter(
     data = data.to(param.dtype)
 
     # copy data into onloaded parameter if applicable
-    if param.device != "meta":
-        param.data.copy_(data)
+    if param.device != torch.device("meta"):
+        param.data = data
 
     # update offload dict
     if has_offloaded_params(module):
