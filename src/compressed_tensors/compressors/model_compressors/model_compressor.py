@@ -392,12 +392,28 @@ class ModelCompressor:
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)
 
-    def _replace_weights(self, dense_weight_generator, model):
+    def _replace_weights(self, dense_weight_generator, model: Module):
+        """
+        Replace the weights of the model with the
+        provided dense weights.
+
+        This method iterates over the dense_weight_generator and
+        updates the corresponding weights in the model. If a parameter
+        name does not exist in the model, it will be skipped.
+
+        :param dense_weight_generator (generator): A generator that yields
+            tuples of (name, data), where 'name' is the parameter name and
+            'data' is the updated param data
+        :param model: The model whose weights are to be updated.
+        """
         for name, data in tqdm(dense_weight_generator, desc="Decompressing model"):
             split_name = name.split(".")
             prefix, param_name = ".".join(split_name[:-1]), split_name[-1]
             module = operator.attrgetter(prefix)(model)
-            update_parameter_data(module, data, param_name)
+            if hasattr(module, param_name):
+                update_parameter_data(
+                    module=module, new_param_data=data, param_name=param_name
+                )
 
 
 def map_modules_to_quant_args(model: Module) -> Dict[str, QuantizationArgs]:

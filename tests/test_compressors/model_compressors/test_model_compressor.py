@@ -198,7 +198,7 @@ def test_composability(
     quantization_args = quantization_config.config_groups["group_0"].weights
 
     if quantization_args.strategy == "channel":
-        scale = torch.tensor([1.0] * weights.shape[1])
+        scale = torch.ones((weights.shape[0], 1))
     elif quantization_args.strategy == "tensor":
         scale = torch.tensor([1.0])
 

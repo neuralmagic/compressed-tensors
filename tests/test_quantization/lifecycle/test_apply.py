@@ -28,7 +28,7 @@ from compressed_tensors.quantization.lifecycle import (
     apply_quantization_config,
     apply_quantization_status,
     expand_sparse_target_names,
-    is_target,
+    is_sparse_target,
 )
 from compressed_tensors.quantization.utils import iter_named_leaf_modules
 from tests.testing_utils import requires_accelerate
@@ -361,5 +361,5 @@ def test_expand_targets_with_llama_stories(
     ],
 )
 def test_is_target_with_mock(mock_module, name, targets, ignore, expected):
-    result = is_target(name, mock_module, targets, ignore)
+    result = is_sparse_target(name, mock_module, targets, ignore)
     assert result == expected
