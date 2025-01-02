@@ -222,7 +222,7 @@ def test_composability(
     compressed_state_dict = model_compressor.compress(fake_oneshot_model)
 
     save_dir = tmp_path / "model"
-    save_dir = _create_dummy_checkpoint(
+    _create_dummy_checkpoint(
         compressed_state_dict, save_dir, model_compressor
     )
 
