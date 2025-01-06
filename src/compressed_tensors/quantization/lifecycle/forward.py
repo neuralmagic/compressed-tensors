@@ -82,7 +82,7 @@ def quantize(
 def dequantize(
     x_q: torch.Tensor,
     scale: torch.Tensor,
-    zero_point: torch.Tensor = None,
+    zero_point: Optional[torch.Tensor] = None,
     args: Optional[QuantizationArgs] = None,
     dtype: Optional[torch.dtype] = None,
     g_idx: Optional[torch.Tensor] = None,

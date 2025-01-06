@@ -69,8 +69,8 @@ class BaseSparseCompressor(BaseCompressor):
         Compresses a dense state dict using bitmask compression
 
         :param model_state: state dict of uncompressed model
-        :param compression_targets: optional set of layer prefixes to compress, if None
-            compress all layers (for backwards compatibility)
+        :param compression_targets: optional set of layer prefixes to compress,
+            otherwise compress all layers (for backwards compatibility)
         :return: compressed state dict
         """
         compressed_dict = {}
@@ -78,8 +78,7 @@ class BaseSparseCompressor(BaseCompressor):
             f"Compressing model with {len(model_state)} parameterized layers..."
         )
         for name, value in tqdm(model_state.items(), desc="Compressing model"):
-            ignored = not self.should_compress(name, compression_targets)
-            if ignored:
+            if not self.should_compress(name, compression_targets):
                 compressed_dict[name] = value
                 continue
             prefix = name

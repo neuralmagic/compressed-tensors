@@ -246,7 +246,9 @@ def get_nested_weight_mappings(
     return nested_weight_mappings
 
 
-def get_nested_mappings_from_state_dict(state_dict, params_to_nest):
+def get_nested_mappings_from_state_dict(
+    state_dict, params_to_nest
+) -> NestedWeightMappingType:
     """
     Takes a state dict and returns a nested mapping from uncompressed
     parameterized layer names to the value of

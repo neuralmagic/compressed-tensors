@@ -411,9 +411,7 @@ class ModelCompressor:
             prefix, param_name = ".".join(split_name[:-1]), split_name[-1]
             module = operator.attrgetter(prefix)(model)
             if hasattr(module, param_name):
-                update_parameter_data(
-                    module=module, new_param_data=data, param_name=param_name
-                )
+                update_parameter_data(module, data, param_name)
 
 
 def map_modules_to_quant_args(model: Module) -> Dict[str, QuantizationArgs]:
