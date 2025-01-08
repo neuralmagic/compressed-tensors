@@ -14,7 +14,7 @@
 
 import warnings
 from enum import Enum
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 import torch
 from compressed_tensors.utils import Aliasable
@@ -103,6 +103,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     num_bits: int = 8
     type: QuantizationType = QuantizationType.INT
     symmetric: bool = True
+    transform: Optional[List[str]] = None
     group_size: Optional[int] = None
     strategy: Optional[QuantizationStrategy] = None
     block_structure: Optional[str] = None
@@ -174,6 +175,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         actorder = model.actorder
         dynamic = model.dynamic
         observer = model.observer
+        transforms = model.transform
 
         # infer strategy
         if strategy is None:
@@ -231,6 +233,12 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         elif observer is None:
             # default to minmax for non-dynamic cases
             observer = "minmax"
+
+        if transforms is not None:
+            new_transform = {}
+            for t in transforms: 
+                new_transform[t] = None
+            model.transform = new_transform
 
         # write back modified values
         model.strategy = strategy
