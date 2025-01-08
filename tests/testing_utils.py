@@ -130,7 +130,7 @@ def induce_sparsity(tensor, sparsity_ratio) -> "torch.Tensor":
 
 def is_gpu_available():
     """
-    Check for GPU and warn if not found
+    :return: True if a GPU is available, False otherwise
     """
     try:
         import torch  # noqa: F401
