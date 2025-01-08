@@ -19,7 +19,7 @@ from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.sparse_compressors.base import BaseSparseCompressor
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import FP8_DTYPE
-from compressed_tensors.utils import merge_names, pack_into_bitmasks, unpack_bitmasks
+from compressed_tensors.utils import merge_names, pack_bitmasks, unpack_bitmasks
 from torch import Tensor
 
 
@@ -139,7 +139,7 @@ def bitmask_compress(tensor: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         values = values.view(FP8_DTYPE)
     else:
         values = tensor[bytemasks]
-    bitmasks_packed = pack_into_bitmasks(bytemasks)
+    bitmasks_packed = pack_bitmasks(bytemasks)
     return values, bitmasks_packed, row_offsets
 
 

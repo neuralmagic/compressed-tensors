@@ -32,7 +32,7 @@ __all__ = [
     "Aliasable",
     "combine_shards",
     "shard_tensor",
-    "pack_into_bitmasks",
+    "pack_bitmasks",
     "unpack_bitmasks",
 ]
 
@@ -286,7 +286,7 @@ def combine_shards(shards, dim=0):
     return combined
 
 
-def pack_into_bitmasks(bytemasks: torch.Tensor) -> torch.Tensor:
+def pack_bitmasks(bytemasks: torch.Tensor) -> torch.Tensor:
     """
     Converts a bytemask tensor to a bitmask tensor to reduce memory. Shape RxC will be
     compressed to R x ceil(C/8)

@@ -20,7 +20,7 @@ from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.sparse_compressors.base import BaseSparseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityStructure
 from compressed_tensors.quantization import FP8_DTYPE
-from compressed_tensors.utils import merge_names, pack_into_bitmasks, unpack_bitmasks
+from compressed_tensors.utils import merge_names, pack_bitmasks, unpack_bitmasks
 from torch import Tensor
 
 
@@ -173,7 +173,7 @@ def sparse24_bitmask_compress(
 
     num_rows, num_cols = tensor.shape
     compressed_values = values.reshape(num_rows, num_cols // 2)
-    bitmasks_packed = pack_into_bitmasks(bytemasks)
+    bitmasks_packed = pack_bitmasks(bytemasks)
     return compressed_values, bitmasks_packed
 
 
