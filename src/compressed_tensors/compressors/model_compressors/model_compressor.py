@@ -269,9 +269,9 @@ class ModelCompressor:
 
         compressed_state_dict = state_dict
 
-        quantized_modules_to_args: Dict[
-            str, QuantizationArgs
-        ] = map_modules_to_quant_args(model)
+        quantized_modules_to_args: Dict[str, QuantizationArgs] = (
+            map_modules_to_quant_args(model)
+        )
 
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(
@@ -310,7 +310,10 @@ class ModelCompressor:
         model_path = get_safetensors_folder(model_path)
         sparse_decompressed = False
 
-        if self.sparsity_compressor is not None:
+        if (
+            self.sparsity_compressor is not None
+            and self.sparsity_config.format != "dense"
+        ):
             # Sparse decompression is applied on the model_path
             dense_gen = self.sparsity_compressor.decompress(model_path)
             self._replace_weights(dense_gen, model)
