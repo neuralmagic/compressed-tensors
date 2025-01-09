@@ -254,7 +254,7 @@ def _process_quantization(
     return output
 
 
-def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
+def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme = None, r1 = None):
     # expects a module already initialized and injected with the parameters in
     # initialize_module_for_quantization
     if hasattr(module.forward, "__func__"):
@@ -264,6 +264,17 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
 
     @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
     def wrapped_forward(self, *args, **kwargs):
+        if r1 is not None:
+            output = forward_func_orig.__get__(module, module.__class__)(
+                args[0], *args[1:], **kwargs
+            )
+            transform = r1.to(output.dtype)
+            if isinstance(module, torch.nn.modules.container.ModuleList):
+                breakpoint()
+                return output @ transform.T
+            
+            return output @ transform
+
         if not getattr(module, "quantization_enabled", True):
             # quantization is disabled on forward passes, return baseline
             # forward call

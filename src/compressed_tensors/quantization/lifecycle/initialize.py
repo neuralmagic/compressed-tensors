@@ -15,7 +15,7 @@
 
 import logging
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any
 
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
@@ -160,6 +160,7 @@ def initialize_module_for_quantization(
     module: Module,
     scheme: Optional[QuantizationScheme] = None,
     force_zero_point: bool = True,
+    r1: Optional[Any]= None
 ):
     """
     attaches appropriate scales, zero points, and observers to a layer
@@ -177,6 +178,12 @@ def initialize_module_for_quantization(
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:
         # no scheme passed and layer not targeted for quantization - skip
+        if isinstance(module, torch.nn.modules.sparse.Embedding) and r1 is not None:
+            wrap_module_forward_quantized(module, r1=r1)
+        
+        if isinstance(module, torch.nn.modules.container.ModuleList) and r1 is not None:
+            breakpoint()
+            wrap_module_forward_quantized(module, r1=r1)
         return
 
     if is_attention_module(module):
@@ -199,6 +206,8 @@ def initialize_module_for_quantization(
 
                 if scheme.weights.transform is not None:
                     for t, v in scheme.weights.transform.items():
+                        if t == "r1" and v is None:
+                            scheme.weights.transform["r1"] = r1
                         if t == "r2" and v is None:
                             r2 = random_hadamard_matrix(module.weight.shape[0], module.weight.device)
                             scheme.weights.transform["r2"] = r2

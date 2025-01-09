@@ -27,6 +27,7 @@ from compressed_tensors.quantization.lifecycle.compressed import (
 )
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
+    random_hadamard_matrix,
 )
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import (
@@ -138,6 +139,7 @@ def apply_quantization_config(
 
     # list of submodules to ignore
     ignored_submodules = defaultdict(list)
+    r1 = random_hadamard_matrix(2048, "cuda")
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in iter_named_quantizable_modules(
         model,
@@ -185,7 +187,8 @@ def apply_quantization_config(
             )
 
     # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
+    apply_quantization_status(model, config.quantization_status, r1=r1)
+    
     return names_to_scheme
 
 
@@ -225,7 +228,7 @@ def process_kv_cache_config(
     return config
 
 
-def apply_quantization_status(model: Module, status: QuantizationStatus):
+def apply_quantization_status(model: Module, status: QuantizationStatus, r1=None):
     """
     Applies in place the quantization lifecycle up to the given status
 
@@ -237,9 +240,10 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
+        # hardcode from now, uses model hidden size
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init
+                module, force_zero_point=force_zero_point_init, r1=r1
             )
         )
 
