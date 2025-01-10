@@ -31,8 +31,9 @@ from compressed_tensors.quantization.lifecycle import (
     is_sparse_target,
 )
 from compressed_tensors.quantization.utils import iter_named_leaf_modules
+from packaging import version
 from tests.testing_utils import requires_accelerate
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, __version__
 
 
 @pytest.fixture
@@ -138,7 +139,12 @@ def test_apply_quantization_config_tinyllama():
     # sanity check correct number of layers targeted
     assert num_linears == 154  # 155 Linear layers - 1 that gets ignored
     assert num_embeddings == 1
-    assert num_rotary_embeddings == 23  # model updated, now has model.rotary_embedding
+
+    # Handle num_rotary_embeddings based on transformers version
+    if version.parse(__version__) < version.parse("4.48"):
+        assert num_rotary_embeddings == 23
+    else:
+        assert num_rotary_embeddings == 1
 
     # test quantization compression
     # sample forward pass to fill scales, zps
