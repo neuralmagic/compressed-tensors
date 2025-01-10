@@ -125,6 +125,9 @@ def test_apply_quantization_config_tinyllama():
         if module_type in count_layer_names:
             count_layer_num[module_type] += 1
 
+    assert len(count_layer_num) > 0, f"None of {count_layer_names} found in model"
+    assert all(value > 0 for value in count_layer_num.values()),
+
     # apply quant config to model
     apply_quantization_config(model, quant_config)
 
