@@ -312,7 +312,7 @@ class ModelCompressor:
 
         if (
             self.sparsity_compressor is not None
-            and self.sparsity_config.format != "dense"
+            and self.sparsity_config.format != CompressionFormat.dense.value
         ):
             # Sparse decompression is applied on the model_path
             dense_gen = self.sparsity_compressor.decompress(model_path)
