@@ -26,8 +26,7 @@ from compressed_tensors.quantization.lifecycle.compressed import (
     compress_quantized_weights,
 )
 from compressed_tensors.quantization.lifecycle.initialize import (
-    initialize_module_for_quantization,
-    random_hadamard_matrix,
+    initialize_module_for_quantization
 )
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import (
@@ -106,7 +105,7 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
 
 
 def apply_quantization_config(
-    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
+    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False, transforms: Optional[Dict] = None
 ) -> OrderedDict:
     """
     Initializes the model for quantization in-place based on the given config.
@@ -139,7 +138,6 @@ def apply_quantization_config(
 
     # list of submodules to ignore
     ignored_submodules = defaultdict(list)
-    r1 = random_hadamard_matrix(2048, "cuda")
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in iter_named_quantizable_modules(
         model,
@@ -186,11 +184,30 @@ def apply_quantization_config(
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
 
+    if transforms:
+        model.apply(add_transform_args)
     # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status, r1=r1)
+    apply_quantization_status(model, config.quantization_status)
     
     return names_to_scheme
 
+def transform_registry(transform: Union[str, Callable], value: torch.Tensor):
+    if isinstance(transform, Callable):
+        return transform
+    else:
+        if transform == "identical":
+            return torch.ones(value.shape[0], value.shape[1])
+
+
+def apply_transform_args(module: torch.nn.Module, transforms: dict):
+    weight_transforms = transforms.get("weights")
+    match = find_name_or_class_matches(module.__class__.__name__, module, weight_transforms.get("targets"))
+    if len(match) > 0:
+        weight_transform = transform_registry(weight_transforms.get("type"), module.weight)
+        weight_transpose = weight_transforms.get("transpose")
+        # should be attached as transform_args
+        setattr(module, "weight_transpose", weight_transpose)
+        setattr(module, "weight_transform", weight_transform)
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
     """
@@ -228,7 +245,7 @@ def process_kv_cache_config(
     return config
 
 
-def apply_quantization_status(model: Module, status: QuantizationStatus, r1=None):
+def apply_quantization_status(model: Module, status: QuantizationStatus, transforms: Optional[Dict] = None):
     """
     Applies in place the quantization lifecycle up to the given status
 
@@ -237,13 +254,14 @@ def apply_quantization_status(model: Module, status: QuantizationStatus, r1=None
     """
 
     current_status = infer_quantization_status(model)
+    
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
         # hardcode from now, uses model hidden size
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init, r1=r1
+                module, force_zero_point=force_zero_point_init, transforms=transforms
             )
         )
 
