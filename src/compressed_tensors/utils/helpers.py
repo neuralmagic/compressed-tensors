@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+import warnings
+from functools import wraps
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
+import numpy
 import torch
 from transformers import AutoConfig
 
@@ -28,7 +31,13 @@ __all__ = [
     "tensor_follows_mask_structure",
     "replace_module",
     "is_compressed_tensors_config",
+    "getattr_chain",
+    "deprecated",
     "Aliasable",
+    "combine_shards",
+    "shard_tensor",
+    "pack_bitmasks",
+    "unpack_bitmasks",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -126,6 +135,65 @@ def is_compressed_tensors_config(compression_config: Any) -> bool:
         return False
 
 
+def getattr_chain(obj: Any, chain_str: str, *args, **kwargs) -> Any:
+    """
+    Chain multiple getattr calls, separated by `.`
+
+    :param obj: base object whose attributes are being retrieved
+    :param chain_str: attribute names separated by `.`
+    :param default: default value, throw error otherwise
+    """
+    if len(args) >= 1:
+        has_default = True
+        default = args[0]
+    elif "default" in kwargs:
+        has_default = True
+        default = kwargs["default"]
+    else:
+        has_default = False
+
+    attr_names = chain_str.split(".")
+
+    res = obj
+    for attr_name in attr_names:
+        if not hasattr(res, attr_name):
+            if has_default:
+                return default
+            else:
+                raise AttributeError(f"{res} object has no attribute {attr_name}")
+        res = getattr(res, attr_name)
+
+    return res
+
+
+def deprecated(future_name: Optional[str] = None, message: Optional[str] = None):
+    """
+    Decorator to mark functions as deprecated
+
+    :param new_function: Function called in place of depreciated function
+    :param message: Depreciation message, replaces default depreciation message
+    """
+
+    def decorator(func: Callable[[Any], Any]):
+        nonlocal message
+
+        if message is None:
+            message = (
+                f"{func.__name__} is deprecated and will be removed in a future release"
+            )
+            if future_name is not None:
+                message += f". Please use {future_name} instead."
+
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
+
+
 class Aliasable:
     """
     A mixin for enums to allow aliasing of enum members
@@ -155,3 +223,108 @@ class Aliasable:
     def __hash__(self):
         canonical_value = self.aliases.get(self.value, self.value)
         return hash(canonical_value)
+
+
+def shard_tensor(
+    tensor: torch.Tensor, shard_sizes: List[int], dim: int = 0
+) -> List[torch.Tensor]:
+    """
+    Shards a tensor into a list of tensors along a given dimension.
+
+    raises: ValueError: If the sum of shard_sizes does not match the
+        size of the tensor along the given dimension.
+
+    :param tensor: The input tensor to shard.
+    :param shard_sizes : List of sizes for each shard along the specified dimension.
+    :param dim : The dimension along which to shard the tensor.
+    :returns: A list of tensors sharded along the specified dimension.
+    """
+    if sum(shard_sizes) != tensor.size(dim):
+        raise ValueError(
+            "Sum of shard_sizes must equal the size of the tensor "
+            "along the specified dimension."
+        )
+
+    shards = []
+    start_idx = 0
+
+    for size in shard_sizes:
+        end_idx = start_idx + size
+        shard = tensor.narrow(dim, start_idx, size)
+        shards.append(shard)
+        start_idx = end_idx
+
+    return shards
+
+
+def combine_shards(shards, dim=0):
+    """
+    Combine decompressed shards along a given dimension using `narrow`.
+
+    :param shards: List of decompressed shard tensors.
+    :param dim: Dimension to combine along (default: 0).
+    :return: Combined decompressed tensor.
+    """
+    if not shards:
+        raise ValueError("The list of shards is empty.")
+
+    # Assert that all shards have the same dtype
+    shard_dtypes = {shard.dtype for shard in shards}
+    if len(shard_dtypes) > 1:
+        raise ValueError("All shards must have the same dtype.")
+
+    # Determine the total shape of the combined tensor
+    total_shape = list(shards[0].shape)
+    total_shape[dim] = sum(shard.shape[dim] for shard in shards)
+
+    # Create the combined tensor
+    combined = torch.zeros(total_shape, dtype=shards[0].dtype, device=shards[0].device)
+
+    # Fill the combined tensor using narrow
+    shard_offset = 0
+    for shard in shards:
+        shard_size = shard.shape[dim]
+        combined.narrow(dim, shard_offset, shard_size).copy_(shard)
+        shard_offset += shard_size
+
+    return combined
+
+
+def pack_bitmasks(bytemasks: torch.Tensor) -> torch.Tensor:
+    """
+    Converts a bytemask tensor to a bitmask tensor to reduce memory. Shape RxC will be
+    compressed to R x ceil(C/8)
+
+    :param bytemasks: mask tensor where each byte corresponds to a weight
+    :return: mask tensor where each bit corresounds to a weight
+    """
+    packed_bits_numpy = numpy.packbits(bytemasks.numpy(), axis=-1, bitorder="little")
+    packed_bits_torch = torch.from_numpy(packed_bits_numpy)
+
+    return packed_bits_torch
+
+
+def unpack_bitmasks(
+    packed_bitmasks: torch.Tensor, original_shape: torch.Size
+) -> torch.Tensor:
+    """
+    Converts a bitmask tensor back to a bytemask tensor for use during decompression
+
+    :param packed_bitmasks: mask tensor where each bit corresponds to a weight
+    :param original_shape: dense shape to decompress to
+    :return: boolean mask of weights in the original dense shape
+    """
+    # Unpack the bits
+    unpacked_bits = numpy.unpackbits(
+        packed_bitmasks.cpu().numpy(),
+        axis=-1,
+        count=original_shape[-1],
+        bitorder="little",
+    )
+
+    # Reshape to match the original shape
+    unpacked_bitmasks_torch = torch.from_numpy(
+        unpacked_bits.reshape(original_shape).astype(bool)
+    )
+
+    return unpacked_bitmasks_torch
