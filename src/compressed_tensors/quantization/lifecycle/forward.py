@@ -254,7 +254,7 @@ def _process_quantization(
     return output
 
 
-def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme = None):
+def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
     # expects a module already initialized and injected with the parameters in
     # initialize_module_for_quantization
     if hasattr(module.forward, "__func__"):
