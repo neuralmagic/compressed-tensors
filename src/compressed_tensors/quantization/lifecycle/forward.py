@@ -288,9 +288,9 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme = N
                 weight_transform = weight_transform.to(self.weight.device)
 
                 if getattr(module, "weight_transpose", False):
-                    new_data = weight_transform.T * self.weight
+                    new_data = weight_transform.T @ self.weight
                 else:
-                    new_data = self.weight * weight_transform
+                    new_data = self.weight @ weight_transform
                 
                 self.weight.data.copy_(new_data)
                 

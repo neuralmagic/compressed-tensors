@@ -16,7 +16,7 @@ import logging
 import re
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Any
 from typing import OrderedDict as OrderedDictType
 from typing import Set, Union
 
@@ -175,6 +175,18 @@ def apply_quantization_config(
             )
 
             names_to_scheme[name] = submodule.quantization_scheme.weights
+        
+        # Assuming module with "weight" parmaeters
+        if transforms:
+            for config_group, group in transforms.items():
+                weight_transforms = group.get("weights") # extend to multiple groups 
+                match = find_name_or_class_matches(name, submodule, weight_transforms.get("targets"))
+                if len(match) > 0:
+                    weight_transform = transform_registry(weight_transforms.get("type"), submodule.weight)
+                    weight_transpose = weight_transforms.get("transpose")
+                    # should be attached as transform_args
+                    setattr(submodule, "weight_transpose", weight_transpose)
+                    setattr(submodule, "weight_transform", weight_transform)
 
     if config.ignore is not None and ignored_submodules is not None:
         if set(config.ignore) - set(ignored_submodules):
@@ -184,30 +196,17 @@ def apply_quantization_config(
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
 
-    if transforms:
-        model.apply(add_transform_args)
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
     
     return names_to_scheme
 
-def transform_registry(transform: Union[str, Callable], value: torch.Tensor):
-    if isinstance(transform, Callable):
+def transform_registry(transform: Union[str, Any], value: torch.Tensor):
+    if type(transform) != str:
         return transform
-    else:
-        if transform == "identical":
-            return torch.ones(value.shape[0], value.shape[1])
 
-
-def apply_transform_args(module: torch.nn.Module, transforms: dict):
-    weight_transforms = transforms.get("weights")
-    match = find_name_or_class_matches(module.__class__.__name__, module, weight_transforms.get("targets"))
-    if len(match) > 0:
-        weight_transform = transform_registry(weight_transforms.get("type"), module.weight)
-        weight_transpose = weight_transforms.get("transpose")
-        # should be attached as transform_args
-        setattr(module, "weight_transpose", weight_transpose)
-        setattr(module, "weight_transform", weight_transform)
+    if transform == "identical":
+        return torch.ones(value.shape[0], value.shape[1])
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
     """
@@ -245,7 +244,7 @@ def process_kv_cache_config(
     return config
 
 
-def apply_quantization_status(model: Module, status: QuantizationStatus, transforms: Optional[Dict] = None):
+def apply_quantization_status(model: Module, status: QuantizationStatus):
     """
     Applies in place the quantization lifecycle up to the given status
 
@@ -261,7 +260,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus, transfo
         # hardcode from now, uses model hidden size
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init, transforms=transforms
+                module, force_zero_point=force_zero_point_init
             )
         )
 
