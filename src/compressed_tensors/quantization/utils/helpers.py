@@ -39,7 +39,7 @@ __all__ = [
     "get_torch_bit_depth",
     "infer_quantization_status",
     "is_kv_cache_quant_scheme",
-    "is_model_path_quantized",
+    "is_model_quantized_from_path",
     "is_model_quantized",
     "is_submodule_quantized",
     "iter_named_leaf_modules",
@@ -208,7 +208,7 @@ def is_model_quantized(model: Module) -> bool:
     return False
 
 
-def is_model_path_quantized(path: str) -> bool:
+def is_model_quantized_from_path(path: str) -> bool:
     """
     Determine if model stub or path is quantized based
     on the config
