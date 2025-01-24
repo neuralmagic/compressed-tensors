@@ -172,22 +172,17 @@ def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]: 
 def is_module_quantized(module: Module) -> bool:
     """
     Check if a module is quantized, based on the existence of a non-empty quantization
-    scheme
+    scheme.
 
-    :param module: pytorch module to check
+    :param module: PyTorch module to check
     :return: True if module is quantized, False otherwise
     """
     if not hasattr(module, "quantization_scheme"):
         return False
 
-    if module.quantization_scheme.weights is not None:
-        return True
-
-    if module.quantization_scheme.input_activations is not None:
-        return True
-
-    if module.quantization_scheme.output_activations is not None:
-        return True
+    for attr in ("weights", "input_activations", "output_activations"):
+        if getattr(module.quantization_scheme, attr, None) is not None:
+            return True
 
     return False
 
@@ -352,10 +347,7 @@ def calculate_compression_ratio(model: Module) -> float:
         for parameter in model.parameters():
             uncompressed_bits = get_torch_bit_depth(parameter)
             compressed_bits = uncompressed_bits
-            if (
-                is_module_quantized(submodule)
-                and submodule.quantization_scheme.weights
-            ):
+            if is_module_quantized(submodule) and submodule.quantization_scheme.weights:
                 compressed_bits = submodule.quantization_scheme.weights.num_bits
 
             num_weights = parameter.numel()
