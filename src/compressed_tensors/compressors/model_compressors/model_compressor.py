@@ -42,7 +42,7 @@ from compressed_tensors.quantization import (
 from compressed_tensors.quantization.lifecycle import expand_sparse_target_names
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.utils import (
-    is_submodule_quantized,
+    is_module_quantized,
     iter_named_leaf_modules,
 )
 from compressed_tensors.utils import get_safetensors_folder, update_parameter_data
@@ -426,7 +426,7 @@ def map_modules_to_quant_args(model: Module) -> Dict[str, QuantizationArgs]:
     """
     quantized_modules_to_args = {}
     for name, submodule in iter_named_leaf_modules(model):
-        if is_submodule_quantized(submodule):
+        if is_module_quantized(submodule):
             if submodule.quantization_scheme.weights is not None:
                 name = fix_fsdp_module_name(name)
                 quantized_modules_to_args[name] = submodule.quantization_scheme.weights

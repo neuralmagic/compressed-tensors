@@ -56,7 +56,7 @@ __all__ = [
     "is_sparse_target",
 ]
 
-from compressed_tensors.quantization.utils.helpers import is_submodule_quantized
+from compressed_tensors.quantization.utils.helpers import is_module_quantized
 from compressed_tensors.utils.safetensors_load import get_quantization_state_dict
 
 
@@ -76,7 +76,7 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
     state_dict = get_quantization_state_dict(model_path)
 
     for name, submodule in iter_named_leaf_modules(model):
-        if not is_submodule_quantized(submodule):
+        if not is_module_quantized(submodule):
             continue
         if submodule.quantization_scheme.weights is not None:
             base_name = "weight"

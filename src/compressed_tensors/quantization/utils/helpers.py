@@ -41,7 +41,7 @@ __all__ = [
     "is_kv_cache_quant_scheme",
     "is_model_quantized",
     "is_model_quantized_from_path",
-    "is_submodule_quantized",
+    "is_module_quantized",
     "iter_named_leaf_modules",
     "iter_named_quantizable_modules",
     "module_type",
@@ -169,7 +169,7 @@ def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]: 
     return None
 
 
-def is_submodule_quantized(module: Module) -> bool:
+def is_module_quantized(module: Module) -> bool:
     """
     Check if a module is quantized, based on the existence of a non-empty quantization
     scheme
@@ -202,7 +202,7 @@ def is_model_quantized(model: Module) -> bool:
     """
 
     for _, submodule in iter_named_leaf_modules(model):
-        if is_submodule_quantized(submodule):
+        if is_module_quantized(submodule):
             return True
 
     return False
@@ -353,7 +353,7 @@ def calculate_compression_ratio(model: Module) -> float:
             uncompressed_bits = get_torch_bit_depth(parameter)
             compressed_bits = uncompressed_bits
             if (
-                is_submodule_quantized(submodule)
+                is_module_quantized(submodule)
                 and submodule.quantization_scheme.weights
             ):
                 compressed_bits = submodule.quantization_scheme.weights.num_bits

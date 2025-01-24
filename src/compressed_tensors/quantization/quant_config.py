@@ -23,7 +23,7 @@ from compressed_tensors.quantization.quant_scheme import (
 )
 from compressed_tensors.quantization.utils import (
     calculate_compression_ratio,
-    is_submodule_quantized,
+    is_module_quantized,
     iter_named_quantizable_modules,
     module_type,
     parse_out_kv_cache_args,
@@ -181,7 +181,7 @@ class QuantizationConfig(BaseModel):
             model, include_children=True, include_attn=True
         ):
             layer_type = module_type(submodule)
-            if not is_submodule_quantized(submodule):
+            if not is_module_quantized(submodule):
                 if layer_type not in ignore:
                     ignore[layer_type] = []
                 ignore[layer_type].append(name)
