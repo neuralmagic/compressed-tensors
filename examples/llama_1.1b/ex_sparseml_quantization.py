@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from sparseml.transformers import oneshot, SparseAutoModelForCausalLM
-from sparseml.transformers.finetune.data.data_args import DataTrainingArguments
-from sparseml.transformers.finetune.data.base import TextGenerationDataset
-from transformers import AutoTokenizer
 import torch
+from sparseml.transformers import SparseAutoModelForCausalLM, oneshot
+from sparseml.transformers.finetune.data.base import TextGenerationDataset
+from sparseml.transformers.finetune.data.data_args import DataTrainingArguments
+from transformers import AutoTokenizer
+
 
 recipe = "example_quant_recipe.yaml"
 model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
@@ -28,7 +29,9 @@ pad_to_max_length = False
 output_dir = "./llama1.1b_old_quant_out"
 device = "cuda:0" if torch.cuda_is_available() else "cpu"
 
-model = SparseAutoModelForCausalLM.from_pretrained(model_name, device_map=device, torch_dtype="auto")
+model = SparseAutoModelForCausalLM.from_pretrained(
+    model_name, device_map=device, torch_dtype="auto"
+)
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 data_args = DataTrainingArguments(
@@ -42,17 +45,15 @@ dataset_manager = TextGenerationDataset.load_from_registry(
     split=split,
     tokenizer=tokenizer,
 )
-calib_dataset = dataset_manager.tokenize_and_process(
-    dataset_manager.get_raw_dataset()
-)
+calib_dataset = dataset_manager.tokenize_and_process(dataset_manager.get_raw_dataset())
 
 oneshot(
     model=model_name,
     dataset=dataset_name,
     output_dir=output_dir,
     overwrite_output_dir=True,
-    max_seq_length = max_seq_length,
+    max_seq_length=max_seq_length,
     num_calibration_samples=num_calibration_samples,
     recipe=recipe,
-    pad_to_max_length=pad_to_max_length
+    pad_to_max_length=pad_to_max_length,
 )

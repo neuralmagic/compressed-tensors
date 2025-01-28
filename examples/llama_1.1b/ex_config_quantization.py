@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tqdm import tqdm
-from torch.utils.data import RandomSampler
+import torch
 from compressed_tensors.quantization import (
-    apply_quantization_config,
-    freeze_module_quantization,
     QuantizationConfig,
     QuantizationStatus,
+    apply_quantization_config,
+    freeze_module_quantization,
 )
-from sparseml.transformers.finetune.data.data_args import DataTrainingArguments
-from sparseml.transformers.finetune.data.base import TextGenerationDataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, DefaultDataCollator
-from torch.utils.data import DataLoader
 from sparseml.pytorch.utils import tensors_to_device
-import torch
+from sparseml.transformers.finetune.data.base import TextGenerationDataset
+from sparseml.transformers.finetune.data.data_args import DataTrainingArguments
+from torch.utils.data import DataLoader, RandomSampler
+from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer, DefaultDataCollator
+
 
 config_file = "example_quant_config.json"
 model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
@@ -37,7 +37,9 @@ pad_to_max_length = False
 output_dir = "./llama1.1b_new_quant_out"
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-model = AutoModelForCausalLM.from_pretrained(model_name, device_map=device, torch_dtype="auto")
+model = AutoModelForCausalLM.from_pretrained(
+    model_name, device_map=device, torch_dtype="auto"
+)
 model.eval()  # no grad or updates needed for base model
 config = QuantizationConfig.parse_file(config_file)
 
@@ -60,11 +62,12 @@ dataset_manager = TextGenerationDataset.load_from_registry(
     split=split,
     tokenizer=tokenizer,
 )
-calib_dataset = dataset_manager.tokenize_and_process(
-    dataset_manager.get_raw_dataset()
-)
+calib_dataset = dataset_manager.tokenize_and_process(dataset_manager.get_raw_dataset())
 data_loader = DataLoader(
-    calib_dataset, batch_size=1, collate_fn=DefaultDataCollator(), sampler=RandomSampler(calib_dataset)
+    calib_dataset,
+    batch_size=1,
+    collate_fn=DefaultDataCollator(),
+    sampler=RandomSampler(calib_dataset),
 )
 
 # run calibration
@@ -83,5 +86,7 @@ model.apply(freeze_module_quantization)
 from sparseml.transformers.sparsification.compressed_tensors_utils import (
     modify_save_pretrained,
 )
+
+
 modify_save_pretrained(model)
 model.save_pretrained(output_dir)
