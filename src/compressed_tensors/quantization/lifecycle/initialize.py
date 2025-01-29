@@ -35,12 +35,14 @@ from compressed_tensors.utils import (
     register_offload_parameter,
 )
 from torch.nn import Module, Parameter
+from compressed_tensors.utils.offload import update_parameter_data
 
 
 __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
     "KVCacheScaleType",
+    "TransformModule"
 ]
 
 
@@ -51,6 +53,50 @@ class KVCacheScaleType(Enum):
     KEY = "k_scale"
     VALUE = "v_scale"
 
+class TransformModule(Module):
+    def __init__(self, module: Module, transforms: dict):
+        super(TransformModule, self).__init__()
+        self.current_module = module
+        self.transforms = transforms
+    
+    def forward(self, *args, **kwargs):
+        input_ = args[0]
+
+        weight_transform = self.transforms.get("weight")
+        input_transform = self.transforms.get("input_activations")
+        output_transform = self.transforms.get("output_activations")
+        
+        # TODO: do we apply this just once and then keep a copy of the transforms weight?
+        # Note: weights currently do not require calibration data and are updated upfront
+        # do we do it in here?
+        if weight_transform:
+            untransformed_weight = self.current_module.weight.data.clone()
+            transformed_weight = weight_transform(self.current_module.weight)
+            self.current_module.weight.data.copy_(transformed_weight)
+        
+        if input_transform:
+            input_ = input_transform(input_)
+
+        # Generic parameter transform updates
+        for name, parameter in self.current_module.named_parameters():
+            if name == "weight":
+                continue
+            elif name in self.transforms:
+                param_transform = self.transform.get(name)
+                updated_param = param_transform(parameter)
+                update_parameter_data(self.current_module, updated_param, name)
+    
+        x = self.current_module(input_, *args[1:], **kwargs)
+
+        if output_transform:
+            x = output_transform(x)
+
+        if weight_transform:
+            self.current_module.weight.data.copy_(untransformed_weight)
+
+        return x
+
+# Alternate? Hooks? Would it work? Check vs LayerCompressor Style
 
 def initialize_module_for_quantization(
     module: Module,

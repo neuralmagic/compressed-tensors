@@ -27,6 +27,7 @@ from compressed_tensors.quantization.lifecycle.compressed import (
 )
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
+    TransformModule
 )
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import (
@@ -105,7 +106,7 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
 
 
 def apply_quantization_config(
-    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
+    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False, transforms: Optional[Dict] = None
 ) -> OrderedDict:
     """
     Initializes the model for quantization in-place based on the given config.
@@ -185,7 +186,18 @@ def apply_quantization_config(
             )
 
     # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
+    apply_quantization_status(model, config.quantization_status) 
+    for name, submodule in iter_named_quantizable_modules(
+        model,
+        include_children=True,
+        include_attn=True
+    ): 
+        targets = find_name_or_class_matches(name, submodule, transforms.keys())
+        if targets:
+            print(name, targets[0])
+            valid_transforms = transforms.get(targets[0])
+            transformed_module = TransformModule(submodule, transforms=valid_transforms)
+            replace_module(model, name, transformed_module)
     return names_to_scheme
 
 

@@ -243,7 +243,7 @@ def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None
 
 
 def iter_named_quantizable_modules(
-    model: Module, include_children: bool = True, include_attn: bool = False
+    model: Module, include_children: bool = True, include_attn: bool = False, include_decoder: bool = False
 ) -> Generator[Tuple[str, Module], None, None]:
     """
     Yield name and submodule of
@@ -276,6 +276,10 @@ def iter_named_quantizable_modules(
         if include_attn:
             if name.endswith("self_attn"):
                 yield name, submodule
+        if include_decoder:
+            if len(name) > 0 and name[-1].isdigit():
+                yield name, submodule
+        
 
 
 def get_torch_bit_depth(value: torch.Tensor) -> int:
