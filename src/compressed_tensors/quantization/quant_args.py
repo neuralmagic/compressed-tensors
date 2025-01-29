@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional, Union
 
 import torch
 from compressed_tensors.utils import Aliasable
+from compressed_tensors.utils.helpers import deprecated
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -244,11 +245,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         else:
             raise ValueError(f"Invalid quantization type {self.type}")
 
+    @deprecated("QuantizationArgs.observer")
     def get_observer(self) -> str:
-        warnings.warn(
-            "`get_observer` is depreciated, please use `observer` attribute instead",
-            DeprecationWarning,
-        )
         return self.observer
 
 
