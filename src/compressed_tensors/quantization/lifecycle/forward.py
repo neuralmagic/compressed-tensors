@@ -270,7 +270,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
 
         input_ = args[0]
-
+        #print("inside forward")
         compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
         if scheme.input_activations is not None:

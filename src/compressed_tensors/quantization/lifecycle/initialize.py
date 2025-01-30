@@ -15,7 +15,7 @@
 
 import logging
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any
 
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
@@ -53,50 +53,106 @@ class KVCacheScaleType(Enum):
     KEY = "k_scale"
     VALUE = "v_scale"
 
+
+"""
+Pros:
+- Same interface for quantized layer vs not quantized layers
+- Easy to understand graph
+- Allows easy way to manipulate forward pass 
+- Easy to target non-weight parameters with transforms
+
+Cons:
+- Wrapping is annoying when it comes to overall module handling
+- We will still need to add a specific transform check/using the TransformData 
+when applying transforms to weights during weight-only quantization 
+"""
 class TransformModule(Module):
     def __init__(self, module: Module, transforms: dict):
         super(TransformModule, self).__init__()
-        self.current_module = module
         self.transforms = transforms
+        self.module = module
     
     def forward(self, *args, **kwargs):
+        # TODO: need a way to remove transformable layers at the end/folding in/applying the compressor
+        current_module = self.module
         input_ = args[0]
 
-        weight_transform = self.transforms.get("weight")
+        #weight_transform = self.transforms.get("weight")
         input_transform = self.transforms.get("input_activations")
         output_transform = self.transforms.get("output_activations")
         
         # TODO: do we apply this just once and then keep a copy of the transforms weight?
+        # Generically, are parameters updated in place or is a copy used? both options?
         # Note: weights currently do not require calibration data and are updated upfront
-        # do we do it in here?
+        """
         if weight_transform:
-            untransformed_weight = self.current_module.weight.data.clone()
-            transformed_weight = weight_transform(self.current_module.weight)
-            self.current_module.weight.data.copy_(transformed_weight)
-        
+            untransformed_weight = current_module.weight.data.clone()
+            transformed_weight = weight_transform(current_module.weight)
+            current_module.weight.data.copy_(transformed_weight)
+        """
+
         if input_transform:
             input_ = input_transform(input_)
 
         # Generic parameter transform updates
-        for name, parameter in self.current_module.named_parameters():
+        for name, parameter in current_module.named_parameters():
             if name == "weight":
                 continue
             elif name in self.transforms:
                 param_transform = self.transform.get(name)
                 updated_param = param_transform(parameter)
-                update_parameter_data(self.current_module, updated_param, name)
+                update_parameter_data(current_module, updated_param, name)
     
-        x = self.current_module(input_, *args[1:], **kwargs)
+        x = current_module(input_, *args[1:], **kwargs)
 
         if output_transform:
             x = output_transform(x)
 
-        if weight_transform:
-            self.current_module.weight.data.copy_(untransformed_weight)
+        #if weight_transform:
+        #    current_module.weight.data.copy_(untransformed_weight)
 
         return x
 
-# Alternate? Hooks? Would it work? Check vs LayerCompressor Style
+
+from dataclasses import dataclass
+
+# For both methods, we would still apply this as a way to target the weights
+@dataclass
+class TransformData:
+    transforms: dict
+
+"""
+Pros
+- Simplicity when it comes to the modules as the module remains the same, no wrapping
+- Hooks are easy to remove/disable, unlike wrappers, which makes compressing easy
+
+Cons:
+- Less clarity in terms of the graph
+- Harder to target non-weight parameter with transforms 
+- Variation between quantized layers (where we have hooks) and layers we do not quantize (we have no hooks/control over their fwd pass)
+"""
+
+def transform_pre_hook(module: Module, args: Any):
+    args = args[0] if isinstance(args, tuple) else args
+    transforms = getattr(module, "transforms", None)
+    input_ = args
+    if transforms:
+        input_transform = transforms.transforms.get("input_activations")
+        if input_transform:
+            input_ = input_transform(input_)
+    
+    return input_ 
+
+def transform_post_hook(module: Module, _args: Any, output: torch.Tensor):
+    transforms = getattr(module, "transforms", None)
+    output_ = output
+    if transforms:
+        output_transform = transforms.transforms.get("output_activations")
+        if output_transform:
+            output_ = output_transform(output_)
+    return output_ 
+
+# Alternate - Hooks?
 
 def initialize_module_for_quantization(
     module: Module,

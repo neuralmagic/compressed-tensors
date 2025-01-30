@@ -279,7 +279,6 @@ def iter_named_quantizable_modules(
         if include_decoder:
             if len(name) > 0 and name[-1].isdigit():
                 yield name, submodule
-        
 
 
 def get_torch_bit_depth(value: torch.Tensor) -> int:

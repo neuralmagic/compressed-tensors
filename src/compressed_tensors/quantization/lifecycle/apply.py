@@ -27,7 +27,10 @@ from compressed_tensors.quantization.lifecycle.compressed import (
 )
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
-    TransformModule
+    TransformModule,
+    TransformData,
+    transform_pre_hook,
+    transform_post_hook
 )
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import (
@@ -103,7 +106,6 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
                 module=submodule,
                 state_dict=state_dict,
             )
-
 
 def apply_quantization_config(
     model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False, transforms: Optional[Dict] = None
@@ -190,15 +192,44 @@ def apply_quantization_config(
     for name, submodule in iter_named_quantizable_modules(
         model,
         include_children=True,
-        include_attn=True
+        include_attn=True,
+        include_decoder=True,
     ): 
         targets = find_name_or_class_matches(name, submodule, transforms.keys())
         if targets:
-            print(name, targets[0])
             valid_transforms = transforms.get(targets[0])
+            transform_data = TransformData(transforms=valid_transforms)
+            submodule.transforms = transform_data
+
+            # Method 1: Hooks
+            # We do not have to add another hook if already a target for quantization
+            scheme = getattr(submodule, "quantization_scheme", None)
+            if scheme:
+                if scheme.input_activations is None:
+                    submodule.register_forward_pre_hook(transform_pre_hook)
+                if scheme.output_activations is None:
+                    submodule.register_forward_hook(transform_post_hook)
+            else:
+                submodule.register_forward_pre_hook(transform_pre_hook)
+                submodule.register_forward_hook(transform_post_hook)
+
+            
+            # Method 2: TransformModule
             transformed_module = TransformModule(submodule, transforms=valid_transforms)
-            replace_module(model, name, transformed_module)
-    return names_to_scheme
+            try:
+                replace_module(model, name, transformed_module)
+            except:
+                # hacks
+                leaf_name = name.split(".")[-1] 
+                original_parent_name = ".".join(name.split(".")[:-1])
+                split_name = original_parent_name.split(".")
+                pre = ".".join(split_name[0:-1])
+                end = split_name[-1]
+                # need a better way to get the new parent name, if the parent is being targeted with transforms
+                # or keep track of it as it changes while the layers are created (i.e if it has children, store it's new name)
+                name = f"{pre}.module.{end}.{leaf_name}"
+                replace_module(model, name, transformed_module)
+    return names_to_scheme  
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
