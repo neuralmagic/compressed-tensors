@@ -50,7 +50,7 @@ config.quantization_status = QuantizationStatus.CALIBRATION
 apply_quantization_config(model, config)
 
 # create dataset
-dataset = load_dataset(dataset_name, split="train[:128]")
+dataset = load_dataset(dataset_name, split=f"train[:{num_calibration_samples}]")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 
@@ -65,8 +65,6 @@ tokenized_dataset = dataset.map(tokenize_function, batched=True)
 data_loader = DataLoader(
     tokenized_dataset,
     batch_size=1,
-    collate_fn=DefaultDataCollator(),
-    sampler=RandomSampler(tokenized_dataset),
 )
 
 # run calibration
