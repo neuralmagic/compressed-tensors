@@ -13,23 +13,21 @@
 # limitations under the License.
 
 import torch
+from compressed_tensors.compressors import ModelCompressor
 from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationStatus,
     apply_quantization_config,
-    freeze_module_quantization,
 )
-from sparseml.pytorch.utils import tensors_to_device
-from sparseml.transformers.finetune.data.base import TextGenerationDataset
-from sparseml.transformers.finetune.data.data_args import DataTrainingArguments
+from datasets import load_dataset
 from torch.utils.data import DataLoader, RandomSampler
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, DefaultDataCollator
+from pathlib import Path
 
-
-config_file = "example_quant_config.json"
+config_file = Path(__file__).parent /"example_quant_config.json"
 model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
-dataset_name = "open_platypus"
+dataset_name = "garage-bAInd/Open-Platypus"
 split = "train"
 num_calibration_samples = 512
 max_seq_length = 1024
@@ -41,7 +39,7 @@ model = AutoModelForCausalLM.from_pretrained(
     model_name, device_map=device, torch_dtype="auto"
 )
 model.eval()  # no grad or updates needed for base model
-config = QuantizationConfig.parse_file(config_file)
+config = QuantizationConfig.model_validate_json(config_file.read_text())
 
 # set status to calibration
 config.quantization_status = QuantizationStatus.CALIBRATION
@@ -50,43 +48,38 @@ config.quantization_status = QuantizationStatus.CALIBRATION
 apply_quantization_config(model, config)
 
 # create dataset
+dataset = load_dataset(dataset_name, split="train[:128]")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-data_args = DataTrainingArguments(
-    dataset=dataset_name,
-    max_seq_length=max_seq_length,
-    pad_to_max_length=pad_to_max_length,
-)
-dataset_manager = TextGenerationDataset.load_from_registry(
-    data_args.dataset,
-    data_args=data_args,
-    split=split,
-    tokenizer=tokenizer,
-)
-calib_dataset = dataset_manager.tokenize_and_process(dataset_manager.get_raw_dataset())
+
+
+def tokenize_function(examples):
+    return tokenizer(
+        examples["output"], padding=False, truncation=True, max_length=1024
+    )
+
+
+tokenized_dataset = dataset.map(tokenize_function, batched=True)
 data_loader = DataLoader(
-    calib_dataset,
+    tokenized_dataset,
     batch_size=1,
     collate_fn=DefaultDataCollator(),
-    sampler=RandomSampler(calib_dataset),
+    sampler=RandomSampler(tokenized_dataset),
 )
 
 # run calibration
 with torch.no_grad():
     for idx, sample in tqdm(enumerate(data_loader), desc="Running calibration"):
-        sample = tensors_to_device(sample, "cuda:0")
+        sample = {k: v.to(model.device) for k, v in sample.items()}
         _ = model(**sample)
 
         if idx >= num_calibration_samples:
             break
 
-# freeze params after calibration
-model.apply(freeze_module_quantization)
+# apply compression
+#TODO this line fails because "fakequant" format is not found in registry
+compressor = ModelCompressor(quantization_config=config)
+compressed_state_dict = compressor.compress(model)
 
 # save quantized model
-from sparseml.transformers.sparsification.compressed_tensors_utils import (
-    modify_save_pretrained,
-)
-
-
-modify_save_pretrained(model)
-model.save_pretrained(output_dir)
+model.save_pretrained(output_dir, state_dict=compressed_state_dict)
+compressor.update_config(output_dir)

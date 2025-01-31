@@ -41,8 +41,7 @@ model = AutoModelForCausalLM.from_pretrained(
     model_name, device_map=device, torch_dtype="auto"
 )
 model.eval()  # no grad or updates needed for base model
-with open(config_file) as f:
-    config = QuantizationConfig.model_validate_json(f)
+config = QuantizationConfig.model_validate_json(config_file.read_text())
 
 # set status to calibration
 config.quantization_status = QuantizationStatus.CALIBRATION
@@ -86,5 +85,7 @@ with torch.no_grad():
 # apply compression
 compressor = ModelCompressor(quantization_config=config)
 compressed_state_dict = compressor.compress(model)
+
+# save quantized model
 model.save_pretrained(output_dir, state_dict=compressed_state_dict)
 compressor.update_config(output_dir)

@@ -12,24 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+####
+#
+# The following example shows how the example in `ex_config_quantization.py`
+# Can be done with the llm-compressor package in the vllm project
+# Be sure to `pip install llmcompressor` before running
+# See https://github.com/vllm-project/llm-compressor for more information
+#
+####
+
 import torch
-from sparseml.transformers import SparseAutoModelForCausalLM, oneshot
-from sparseml.transformers.finetune.data.base import TextGenerationDataset
-from sparseml.transformers.finetune.data.data_args import DataTrainingArguments
-from transformers import AutoTokenizer
+from llmcompressor.transformers import oneshot
+from llmcompressor.transformers.finetune.data.base import TextGenerationDataset
+from llmcompressor.transformers.finetune.data.data_args import DataTrainingArguments
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
 recipe = "example_quant_recipe.yaml"
 model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
-dataset_name = "open_platypus"
+dataset_name = "garage-bAInd/Open-Platypus"
 split = "train"
 num_calibration_samples = 512
 max_seq_length = 1024
 pad_to_max_length = False
-output_dir = "./llama1.1b_old_quant_out"
+output_dir = "./llama1.1b_llmcompressor_quant_out"
 device = "cuda:0" if torch.cuda_is_available() else "cpu"
 
-model = SparseAutoModelForCausalLM.from_pretrained(
+model = AutoModelForCausalLM.from_pretrained(
     model_name, device_map=device, torch_dtype="auto"
 )
 
