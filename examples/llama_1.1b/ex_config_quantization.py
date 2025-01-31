@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 import torch
 from compressed_tensors.compressors import ModelCompressor
 from compressed_tensors.quantization import (
@@ -23,9 +25,9 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader, RandomSampler
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, DefaultDataCollator
-from pathlib import Path
 
-config_file = Path(__file__).parent /"example_quant_config.json"
+
+config_file = Path(__file__).parent / "example_quant_config.json"
 model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
 dataset_name = "garage-bAInd/Open-Platypus"
 split = "train"
@@ -76,7 +78,7 @@ with torch.no_grad():
             break
 
 # apply compression
-#TODO this line fails because "fakequant" format is not found in registry
+# TODO this line fails because "fakequant" format is not found in registry
 compressor = ModelCompressor(quantization_config=config)
 compressed_state_dict = compressor.compress(model)
 

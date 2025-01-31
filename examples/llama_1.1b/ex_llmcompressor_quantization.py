@@ -15,46 +15,27 @@
 ####
 #
 # The following example shows how the example in `ex_config_quantization.py`
-# Can be done with the llm-compressor package in the vllm project
+# can be done within vllm's llm-compressor project
 # Be sure to `pip install llmcompressor` before running
 # See https://github.com/vllm-project/llm-compressor for more information
 #
 ####
 
+from pathlib import Path
+
 import torch
 from llmcompressor.transformers import oneshot
-from llmcompressor.transformers.finetune.data.base import TextGenerationDataset
-from llmcompressor.transformers.finetune.data.data_args import DataTrainingArguments
-from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
-recipe = "example_quant_recipe.yaml"
+recipe = str(Path(__file__).parent / "example_quant_recipe.yaml")
 model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
-dataset_name = "garage-bAInd/Open-Platypus"
+dataset_name = "open_platypus"
 split = "train"
 num_calibration_samples = 512
 max_seq_length = 1024
 pad_to_max_length = False
 output_dir = "./llama1.1b_llmcompressor_quant_out"
-device = "cuda:0" if torch.cuda_is_available() else "cpu"
-
-model = AutoModelForCausalLM.from_pretrained(
-    model_name, device_map=device, torch_dtype="auto"
-)
-
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-data_args = DataTrainingArguments(
-    dataset=dataset_name,
-    max_seq_length=max_seq_length,
-    pad_to_max_length=pad_to_max_length,
-)
-dataset_manager = TextGenerationDataset.load_from_registry(
-    data_args.dataset,
-    data_args=data_args,
-    split=split,
-    tokenizer=tokenizer,
-)
-calib_dataset = dataset_manager.tokenize_and_process(dataset_manager.get_raw_dataset())
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 oneshot(
     model=model_name,
