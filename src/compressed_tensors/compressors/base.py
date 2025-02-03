@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Dict, Generator, Optional, Tuple, Union
+from typing import Dict, Generator, List, Optional, Tuple, Union
 
 import torch
 from compressed_tensors.config import SparsityCompressionConfig
@@ -74,6 +74,15 @@ class BaseCompressor(RegistryMixin, ABC):
         :param weight_shape: uncompressed weight shape
         :param quantization_args: quantization parameters for the weight
         :return: dictionary mapping compressed parameter names to shape and dtype
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def compression_param_names(self) -> List[str]:
+        """
+        Returns a list of compression parameter names introduced by
+        the compressor during compression
         """
         raise NotImplementedError()
 

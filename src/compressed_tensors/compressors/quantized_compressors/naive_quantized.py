@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
@@ -47,6 +47,14 @@ class NaiveQuantizationCompressor(BaseQuantizationCompressor):
         "weight_zero_point",
         "weight_g_idx",
     ]
+
+    @property
+    def compression_param_names(self) -> List[str]:
+        """
+        Returns a list of compression parameter names introduced by
+        the compressor during compression
+        """
+        return self.COMPRESSION_PARAM_NAMES
 
     def compression_param_info(
         self,

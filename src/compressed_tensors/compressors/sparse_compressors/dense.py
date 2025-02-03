@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, List, Tuple
 
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.config import CompressionFormat
@@ -24,6 +24,14 @@ class DenseCompressor(BaseCompressor):
     """
     Identity compressor for dense models, returns the original state_dict
     """
+
+    @property
+    def compression_param_names(self) -> List[str]:
+        """
+        Returns a list of compression parameter names introduced by
+        the compressor during compression
+        """
+        return []
 
     def compress(self, model_state: Dict[str, Tensor], **kwargs) -> Dict[str, Tensor]:
         return model_state

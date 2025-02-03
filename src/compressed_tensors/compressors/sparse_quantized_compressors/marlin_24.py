@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import logging
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, List, Tuple
 
 import numpy as np
 import torch
@@ -104,6 +104,14 @@ class Marlin24Compressor(BaseCompressor):
             )
 
         return True
+
+    @property
+    def compression_param_names(self) -> List[str]:
+        """
+        Returns a list of compression parameter names introduced by
+        the compressor during compression
+        """
+        return self.COMPRESSION_PARAM_NAMES
 
     def compress(
         self,

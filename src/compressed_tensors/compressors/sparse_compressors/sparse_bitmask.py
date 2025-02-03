@@ -40,6 +40,14 @@ class BitmaskCompressor(BaseSparseCompressor):
 
     COMPRESSION_PARAM_NAMES = ["shape", "compressed", "bitmask", "row_offsets"]
 
+    @property
+    def compression_param_names(self) -> List[str]:
+        """
+        Returns a list of compression parameter names introduced by
+        the compressor during compression
+        """
+        return self.COMPRESSION_PARAM_NAMES
+
     def compress_weight(self, name, value):
         bitmask_tensor = BitmaskTensor.from_dense(value)
         bitmask_dict = bitmask_tensor.dict(name_prefix=name, device="cpu")

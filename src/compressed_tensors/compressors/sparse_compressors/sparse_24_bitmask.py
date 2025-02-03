@@ -46,6 +46,14 @@ class Sparse24BitMaskCompressor(BaseSparseCompressor):
         "bitmask",
     ]
 
+    @property
+    def compression_param_names(self) -> List[str]:
+        """
+        Returns a list of compression parameter names introduced by
+        the compressor during compression
+        """
+        return self.COMPRESSION_PARAM_NAMES
+
     def compress_weight(self, name, value):
         bitmask_tensor = Sparse24BitMaskTensor.from_dense(
             value, self.config.sparsity_structure

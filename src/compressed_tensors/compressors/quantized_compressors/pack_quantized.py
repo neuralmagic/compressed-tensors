@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -43,6 +43,14 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         "weight_g_idx",
         "weight_shape",
     ]
+
+    @property
+    def compression_param_names(self) -> List[str]:
+        """
+        Returns a list of compression parameter names introduced by
+        the compressor during compression
+        """
+        return self.COMPRESSION_PARAM_NAMES
 
     def compression_param_info(
         self,
