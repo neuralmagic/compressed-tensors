@@ -77,7 +77,6 @@ data_loader = DataLoader(
     batch_size=1,
 )
 
-# run calibration
 with torch.no_grad():
     for idx, sample in tqdm(enumerate(data_loader), desc="Running calibration"):
         sample = {k: v.to(model.device) for k, v in sample.items()}
@@ -86,10 +85,10 @@ with torch.no_grad():
         if idx >= num_calibration_samples:
             break
 
-# apply compression
+# convert model to QDQ model
 compressor = ModelCompressor(quantization_config=config)
 compressed_state_dict = compressor.compress(model)
 
-# save quantized model
+# save QDQ model
 model.save_pretrained(output_dir, state_dict=compressed_state_dict)
 compressor.update_config(output_dir)

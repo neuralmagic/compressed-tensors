@@ -113,7 +113,7 @@ data_loader = DataLoader(
     sampler=RandomSampler(tokenized_dataset),
 )
 
-# run calibration, hook will add scale and zero point where appropriate
+# run calibration, hook will update scales and zero points where applicable
 with torch.no_grad():
     for idx, sample in tqdm(enumerate(data_loader), desc="Running calibration"):
         sample = {k: v.to(model.device) for k, v in sample.items()}
