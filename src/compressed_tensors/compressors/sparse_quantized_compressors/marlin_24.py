@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import logging
-from typing import Dict, Generator, List, Tuple
+from typing import Dict, Generator, Tuple
 
 import numpy as np
 import torch
@@ -41,8 +41,6 @@ class Marlin24Compressor(BaseCompressor):
     Compresses a quantized model with 2:4 sparsity structure for inference with the
     Marlin24 kernel. Decompression is not implemented for this compressor.
     """
-
-    COMPRESSION_PARAM_NAMES = ["weight_packed", "scale_packed", "meta"]
 
     @staticmethod
     def validate_quant_compatability(
@@ -106,12 +104,12 @@ class Marlin24Compressor(BaseCompressor):
         return True
 
     @property
-    def compression_param_names(self) -> List[str]:
+    def compression_param_names(self) -> Tuple[str]:
         """
-        Returns a list of compression parameter names introduced by
+        Returns a tuple of compression parameter names introduced by
         the compressor during compression
         """
-        return self.COMPRESSION_PARAM_NAMES
+        return ("weight_packed", "scale_packed", "meta")
 
     def compress(
         self,

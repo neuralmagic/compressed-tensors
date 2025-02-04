@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -36,21 +36,19 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
     Compresses a quantized model by packing every eight 4-bit weights into an int32
     """
 
-    COMPRESSION_PARAM_NAMES = [
-        "weight_packed",
-        "weight_scale",
-        "weight_zero_point",
-        "weight_g_idx",
-        "weight_shape",
-    ]
-
     @property
-    def compression_param_names(self) -> List[str]:
+    def compression_param_names(self) -> Tuple[str]:
         """
-        Returns a list of compression parameter names introduced by
+        Returns a tuple of compression parameter names introduced by
         the compressor during compression
         """
-        return self.COMPRESSION_PARAM_NAMES
+        return (
+            "weight_packed",
+            "weight_scale",
+            "weight_zero_point",
+            "weight_g_idx",
+            "weight_shape",
+        )
 
     def compression_param_info(
         self,

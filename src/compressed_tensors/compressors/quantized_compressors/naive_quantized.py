@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
@@ -41,20 +41,18 @@ class NaiveQuantizationCompressor(BaseQuantizationCompressor):
     type to the type specified by the layer's QuantizationArgs.
     """
 
-    COMPRESSION_PARAM_NAMES = [
-        "weight",
-        "weight_scale",
-        "weight_zero_point",
-        "weight_g_idx",
-    ]
-
     @property
-    def compression_param_names(self) -> List[str]:
+    def compression_param_names(self) -> Tuple[str]:
         """
-        Returns a list of compression parameter names introduced by
+        Returns a tuple of compression parameter names introduced by
         the compressor during compression
         """
-        return self.COMPRESSION_PARAM_NAMES
+        return (
+            "weight",
+            "weight_scale",
+            "weight_zero_point",
+            "weight_g_idx",
+        )
 
     def compression_param_info(
         self,

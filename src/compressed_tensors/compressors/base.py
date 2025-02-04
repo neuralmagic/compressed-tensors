@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Dict, Generator, List, Optional, Tuple, Union
+from typing import Dict, Generator, Optional, Tuple, Union
 
 import torch
 from compressed_tensors.config import SparsityCompressionConfig
@@ -79,9 +79,9 @@ class BaseCompressor(RegistryMixin, ABC):
 
     @property
     @abstractmethod
-    def compression_param_names(self) -> List[str]:
+    def compression_param_names(self) -> Tuple[str]:
         """
-        Returns a list of compression parameter names introduced by
+        Returns a tuple of compression parameter names introduced by
         the compressor during compression
         """
         raise NotImplementedError()

@@ -40,19 +40,17 @@ class Sparse24BitMaskCompressor(BaseSparseCompressor):
     values tensor, with their locations stored in a 2d bitmask
     """
 
-    COMPRESSION_PARAM_NAMES = [
-        "shape",
-        "compressed",
-        "bitmask",
-    ]
-
     @property
-    def compression_param_names(self) -> List[str]:
+    def compression_param_names(self) -> Tuple[str]:
         """
-        Returns a list of compression parameter names introduced by
+        Returns a tuple of compression parameter names introduced by
         the compressor during compression
         """
-        return self.COMPRESSION_PARAM_NAMES
+        return (
+            "shape",
+            "compressed",
+            "bitmask",
+        )
 
     def compress_weight(self, name, value):
         bitmask_tensor = Sparse24BitMaskTensor.from_dense(
