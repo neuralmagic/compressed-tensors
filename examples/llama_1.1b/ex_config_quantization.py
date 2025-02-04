@@ -95,7 +95,7 @@ def update_scale_zp_hook(
 model.apply(lambda module: module.register_forward_hook(update_scale_zp_hook))
 
 # create dataset
-dataset = load_dataset(dataset_name, split="train[:128]")
+dataset = load_dataset(dataset_name, split=f"train[:num_calibration_samples]")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 
