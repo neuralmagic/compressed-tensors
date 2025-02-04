@@ -12,6 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+####
+#
+# The following example shows how a model can be calibrated and
+# compressed entirely with primitives within `compressed-tensors`
+# using PyTorch hooks.
+# The resulting model's .safetensors file should be 1.2GB,
+# whereas the original model's .safetensors file is 4.1GB.
+# See `./ex_llmcompressor_quantization.py` for how this can be
+# simplified using the vllm's `llm-compressor` package
+#
+####
+
 from pathlib import Path
 
 import torch
@@ -49,6 +61,39 @@ config.quantization_status = QuantizationStatus.CALIBRATION
 # initialize quantization
 apply_quantization_config(model, config)
 
+
+# create hook to keep track of scales and zero points on each module with a quantization_scheme
+def update_scale_zp_hook(
+    module: torch.nn.Module, input: torch.Tensor, _output: torch.Tensor
+):
+    from compressed_tensors.quantization.utils import calculate_qparams
+    from compressed_tensors.utils import update_parameter_data
+
+    quantization_scheme = getattr(module, "quantization_scheme", None)
+    if not quantization_scheme:
+        # no quantization scheme nothing to do
+        return
+
+    # update weight scale / zero-point
+    quantization_args = getattr(quantization_scheme, "weights", None)
+    min_val, max_val = torch.aminmax(module.weight.data)
+    scale, zp = calculate_qparams(min_val, max_val, quantization_args)
+    update_parameter_data(module, scale, "weight_scale")
+    update_parameter_data(module, zp, "weight_zero_point")
+
+    # update input_activations scale / zero-point
+    quantization_args = getattr(quantization_scheme, "input_activations", None)
+    min_val, max_val = torch.aminmax(input[0])
+    scale, zp = calculate_qparams(min_val, max_val, quantization_args)
+    update_parameter_data(module, scale, "input_scale")
+    update_parameter_data(module, zp, "input_zero_point")
+
+    return
+
+
+# register hook on each submodule in model (recursively)
+model.apply(lambda module: module.register_forward_hook(update_scale_zp_hook))
+
 # create dataset
 dataset = load_dataset(dataset_name, split="train[:128]")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -68,7 +113,7 @@ data_loader = DataLoader(
     sampler=RandomSampler(tokenized_dataset),
 )
 
-# run calibration
+# run calibration, hook will add scale and zero point where appropriate
 with torch.no_grad():
     for idx, sample in tqdm(enumerate(data_loader), desc="Running calibration"):
         sample = {k: v.to(model.device) for k, v in sample.items()}
@@ -78,7 +123,6 @@ with torch.no_grad():
             break
 
 # apply compression
-# TODO this line fails because "fakequant" format is not found in registry
 compressor = ModelCompressor(quantization_config=config)
 compressed_state_dict = compressor.compress(model)
 

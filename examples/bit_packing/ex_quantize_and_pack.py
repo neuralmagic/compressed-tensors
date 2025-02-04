@@ -12,6 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+####
+#
+# The following example shows how to run QDQ inside `compressed-tensors`
+# QDQ (quantize & de-quantize) is a way to evaluate quantized model
+# accuracy but will not lead to a runtime speedup.
+# See `../llama_1.1b/ex_config_quantization.py` to go beyond QDQ
+# and quantize models that will run more performantly.
+#
+####
+
 from pathlib import Path
 
 import torch
@@ -22,9 +32,9 @@ from compressed_tensors.quantization import (
     apply_quantization_config,
 )
 from datasets import load_dataset
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, DefaultDataCollator
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 config_file = Path(__file__).parent / "int4_config.json"
@@ -75,10 +85,6 @@ with torch.no_grad():
 
         if idx >= num_calibration_samples:
             break
-
-# TODO check with team -- move code back from llmcompressor or drop?
-# freeze params after calibration
-# model.apply(freeze_module_quantization)
 
 # apply compression
 compressor = ModelCompressor(quantization_config=config)
