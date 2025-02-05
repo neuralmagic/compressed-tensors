@@ -19,7 +19,7 @@ import os
 import re
 from contextlib import contextmanager
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Dict, Optional, Set, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, TypeVar, Union
 
 import compressed_tensors
 import torch
@@ -253,6 +253,54 @@ class ModelCompressor:
             self.quantization_compressor = BaseCompressor.load_from_registry(
                 quantization_config.format, config=quantization_config
             )
+
+    def missing_keys(self):
+        """
+        Get the expected missing keys for the model during weight loading
+
+        :return: list of missing keys
+        """
+
+        missing_keys = set()
+
+        # We expect the weights to be missing for
+        # pack-quantized/sparse-compresed models
+
+        if self.sparsity_compressor is not None:
+            missing_keys.add(".weight")
+
+        if (
+            self.quantization_compressor is not None
+            and self.quantization_config.format
+            == CompressionFormat.pack_quantized.value
+        ):
+            missing_keys.add(".weight")
+
+        return list(missing_keys)
+
+    def unexpected_keys(self) -> List[str]:
+        """
+        Get a list of keys in model safetensors file that are not expected
+        during weight loading
+
+        :return: list of unexpected keys
+        """
+        unexpected_keys = []
+        if self.sparsity_compressor is not None:
+            unexpected_keys += self.sparsity_compressor.compression_param_names
+
+        if self.quantization_compressor is not None:
+            unexpected_q_params = [
+                key
+                for key in self.quantization_compressor.compression_param_names
+                if not any(
+                    key.endswith(q_param)
+                    for q_param in ("scale", "zero_point", "g_idx")
+                )
+            ]
+            unexpected_keys += unexpected_q_params
+
+        return unexpected_keys
 
     def compress(
         self, model: Module, state_dict: Optional[Dict[str, Tensor]] = None
