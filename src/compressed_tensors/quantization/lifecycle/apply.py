@@ -215,6 +215,7 @@ def apply_quantization_config(
 
             
             # Method 2: TransformModule
+          
             transformed_module = TransformModule(submodule, transforms=valid_transforms)
             try:
                 replace_module(model, name, transformed_module)
@@ -229,6 +230,8 @@ def apply_quantization_config(
                 # or keep track of it as it changes while the layers are created (i.e if it has children, store it's new name)
                 name = f"{pre}.module.{end}.{leaf_name}"
                 replace_module(model, name, transformed_module)
+            
+    breakpoint()
     return names_to_scheme  
 
 

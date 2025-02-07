@@ -77,19 +77,18 @@ class TransformModule(Module):
         current_module = self.module
         input_ = args[0]
 
-        #weight_transform = self.transforms.get("weight")
+        weight_transform = self.transforms.get("weight")
         input_transform = self.transforms.get("input_activations")
         output_transform = self.transforms.get("output_activations")
         
         # TODO: do we apply this just once and then keep a copy of the transforms weight?
         # Generically, are parameters updated in place or is a copy used? both options?
         # Note: weights currently do not require calibration data and are updated upfront
-        """
+        
         if weight_transform:
             untransformed_weight = current_module.weight.data.clone()
             transformed_weight = weight_transform(current_module.weight)
             current_module.weight.data.copy_(transformed_weight)
-        """
 
         if input_transform:
             input_ = input_transform(input_)
@@ -108,8 +107,10 @@ class TransformModule(Module):
         if output_transform:
             x = output_transform(x)
 
-        #if weight_transform:
-        #    current_module.weight.data.copy_(untransformed_weight)
+        if weight_transform:
+            current_module.weight.data.copy_(untransformed_weight)
+
+        # - Need to apply the inverse transformation
 
         return x
 
@@ -132,6 +133,7 @@ Cons:
 - Variation between quantized layers (where we have hooks) and layers we do not quantize (we have no hooks/control over their fwd pass)
 """
 
+# TODO: would have to update to apply the weight transform as well
 def transform_pre_hook(module: Module, args: Any):
     args = args[0] if isinstance(args, tuple) else args
     transforms = getattr(module, "transforms", None)
