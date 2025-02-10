@@ -39,13 +39,17 @@ from compressed_tensors.quantization import (
     apply_quantization_config,
     load_pretrained_quantization,
 )
-from compressed_tensors.quantization.lifecycle import expand_sparse_target_names
+from compressed_tensors.quantization.lifecycle import expand_target_names
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
 )
-from compressed_tensors.utils import get_safetensors_folder, update_parameter_data
+from compressed_tensors.utils import (
+    get_safetensors_folder,
+    merge_names,
+    update_parameter_data,
+)
 from compressed_tensors.utils.helpers import (
     fix_fsdp_module_name,
     is_compressed_tensors_config,
@@ -254,10 +258,11 @@ class ModelCompressor:
                 quantization_config.format, config=quantization_config
             )
 
-    def missing_keys(self):
+    def missing_keys(self, model: Module) -> List[str]:
         """
         Get the expected missing keys for the model during weight loading
 
+        :param model: model to check for missing keys
         :return: list of missing keys
         """
 
@@ -266,19 +271,37 @@ class ModelCompressor:
         # We expect the weights to be missing for
         # pack-quantized/sparse-compresed models
 
-        if self.sparsity_compressor is not None:
-            missing_keys.add(".weight")
+        if (
+            self.sparsity_compressor is not None
+            and self.sparsity_config.format != CompressionFormat.dense.value
+        ):
+            sparse_compression_targets: Set[str] = expand_target_names(
+                model=model,
+                targets=self.sparsity_config.targets,
+                ignore=self.sparsity_config.ignore,
+            )
+            missing_keys |= set(
+                merge_names(target, "weight") for target in sparse_compression_targets
+            )
 
         if (
             self.quantization_compressor is not None
             and self.quantization_config.format
             == CompressionFormat.pack_quantized.value
         ):
-            missing_keys.add(".weight")
+            for group_name, scheme in self.quantization_config.config_groups:
+                compression_targets = expand_target_names(
+                    model=model,
+                    targets=scheme.targets,
+                    ignore=scheme.ignore,
+                )
+                missing_keys |= set(
+                    merge_names(target, "weight") for target in compression_targets
+                )
 
         return list(missing_keys)
 
-    def unexpected_keys(self) -> List[str]:
+    def unexpected_keys(self, model) -> List[str]:
         """
         Get a list of keys in model safetensors file that are not expected
         during weight loading
@@ -331,7 +354,7 @@ class ModelCompressor:
                 )
 
         if self.sparsity_compressor is not None:
-            sparse_compression_targets: Set[str] = expand_sparse_target_names(
+            sparse_compression_targets: Set[str] = expand_target_names(
                 model=model,
                 targets=self.sparsity_config.targets,
                 ignore=self.sparsity_config.ignore,

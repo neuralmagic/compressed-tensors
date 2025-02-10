@@ -52,8 +52,8 @@ __all__ = [
     "apply_quantization_config",
     "apply_quantization_status",
     "find_name_or_class_matches",
-    "expand_sparse_target_names",
-    "is_sparse_target",
+    "expand_target_names",
+    "is_target",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -247,7 +247,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         model.apply(compress_quantized_weights)
 
 
-def expand_sparse_target_names(
+def expand_target_names(
     model: Module, targets: Iterable[str], ignore: Iterable[str]
 ) -> Set[str]:
     """
@@ -265,11 +265,11 @@ def expand_sparse_target_names(
     return {
         name
         for name, module in iter_named_leaf_modules(model)
-        if is_sparse_target(name, module, targets, ignore)
+        if is_target(name, module, targets, ignore)
     }
 
 
-def is_sparse_target(
+def is_target(
     name: str, module: Module, targets: Iterable[str], ignore: Iterable[str]
 ) -> bool:
     """
