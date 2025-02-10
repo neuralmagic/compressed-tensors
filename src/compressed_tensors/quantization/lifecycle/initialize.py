@@ -77,7 +77,7 @@ def initialize_module_for_quantization(
 
     if is_attention_module(module):
         # quantized actions based on calltime status
-        _initialize_attn_scales(module)
+        _initialize_attn_scales(module, quant_args=scheme.output_activations)
 
     else:
 
@@ -109,8 +109,11 @@ def initialize_module_for_quantization(
 
         if scheme.output_activations is not None:
             if not is_kv_cache_quant_scheme(scheme):
+                weight_shape = None
+                if isinstance(module, torch.nn.Linear) and hasattr(module, "weight"):
+                    weight_shape = module.weight.shape
                 _initialize_scale_zero_point(
-                    module, "output", scheme.output_activations
+                    module, "output", scheme.output_activations, weight_shape=weight_shape
                 )
 
         module.quantization_scheme = scheme
@@ -152,13 +155,22 @@ def _initialize_scale_zero_point(
     else:
         expected_shape = 1
 
-    if base_name == "weight" and weight_shape is not None:
+    if quantization_args.strategy in (QuantizationStrategy.CHANNEL, QuantizationStrategy.GROUP):
+        assert weight_shape is not None 
+        # only supported atm for weight quant, output_activations
+        assert base_name in ("weight", "output")
+        print("weight_shape", weight_shape)
+
         if quantization_args.strategy == QuantizationStrategy.CHANNEL:
             # (output_channels, 1)
             expected_shape = (weight_shape[0], 1)
         elif quantization_args.strategy == QuantizationStrategy.GROUP:
             num_groups = weight_shape[1] // quantization_args.group_size
             expected_shape = (weight_shape[0], max(num_groups, 1))
+
+        if base_name == "output":
+            expected_shape = tuple(reversed(expected_shape))
+        print("expected_shape", base_name, expected_shape)
 
     scale_dtype = module.weight.dtype
     if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
@@ -190,10 +202,26 @@ def _initialize_scale_zero_point(
         register_offload_parameter(module, f"{base_name}_g_idx", init_g_idx)
 
 
-def _initialize_attn_scales(module: Module) -> None:
+def _initialize_attn_scales(module: Module, quant_args: QuantizationArgs) -> None:
     """Initlaize k_scale, v_scale for  self_attn"""
 
-    expected_shape = 1  # per tensor
+    strategy = quant_args.strategy
+    # (1024, 1) - v_scale,
+    # (1024, 1) - q_scale
+
+    """
+    - We want channelwise scales for on output activations of k/q/v
+    - Requires num_heads_k scales (num_key_value_heads scales?)
+    - So the expected shape is (1024, 1) --> (8, 128) where 8 is the number of kv heads
+    """
+
+    # we get access to this after the k_proj and v_proj have been restructured already (reshaped)
+    if strategy == QuantizationStrategy.CHANNEL:
+        #expected_shape = (module.v_proj.weight.shape[0], 1)
+        #expected_shape = (8, 128) # num heads * head_dim
+        expected_shape = 1
+    else:
+        expected_shape = 1  # per tensor
 
     param = next(module.parameters())
     scale_dtype = param.dtype

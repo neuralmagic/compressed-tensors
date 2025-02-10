@@ -152,7 +152,6 @@ def apply_quantization_config(
             continue  # layer matches ignore list, continue
 
         targets = find_name_or_class_matches(name, submodule, target_to_scheme)
-
         if targets:
             # mark modules to be quantized by adding
             # quant scheme to the matching layers
