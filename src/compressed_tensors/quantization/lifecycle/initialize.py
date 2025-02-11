@@ -159,18 +159,23 @@ def _initialize_scale_zero_point(
         assert weight_shape is not None 
         # only supported atm for weight quant, output_activations
         assert base_name in ("weight", "output")
-        print("weight_shape", weight_shape)
+        #print("weight_shape", weight_shape)
 
         if quantization_args.strategy == QuantizationStrategy.CHANNEL:
             # (output_channels, 1)
             expected_shape = (weight_shape[0], 1)
-        elif quantization_args.strategy == QuantizationStrategy.GROUP:
-            num_groups = weight_shape[1] // quantization_args.group_size
-            expected_shape = (weight_shape[0], max(num_groups, 1))
 
-        if base_name == "output":
-            expected_shape = tuple(reversed(expected_shape))
-        print("expected_shape", base_name, expected_shape)
+            if base_name == "output":
+                expected_shape = tuple(reversed(expected_shape))
+
+        elif quantization_args.strategy == QuantizationStrategy.GROUP:
+            #num_groups = weight_shape[1] // quantization_args.group_size
+            #expected_shape = (weight_shape[0], max(num_groups, 1))
+
+            num_groups = weight_shape[0] // quantization_args.group_size
+            expected_shape = (1, num_groups)
+
+        #print("expected_shape", base_name, expected_shape)
 
     scale_dtype = module.weight.dtype
     if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
