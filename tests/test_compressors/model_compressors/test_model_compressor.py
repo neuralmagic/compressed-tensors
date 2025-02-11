@@ -251,7 +251,7 @@ class TwoLayerModel(nn.Module):
     [
         (
             TwoLayerModel(),
-            get_bitmask_sparsity_config(),
+            get_bitmask_sparsity_config(targets=["re:.*layer1$"]),
             create_quantization_config(bits=8, type="int", strategy="channel"),
             {"layer1.weight"},
         )

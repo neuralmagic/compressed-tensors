@@ -308,10 +308,14 @@ class ModelCompressor:
         :param model: The PyTorch model to check for unexpected keys.
         :return: A list of extra keys introduced by the compression process.
         """
+
         unexpected_keys = set()
 
         # Identify unexpected keys from sparsity compression
-        if self.sparsity_compressor:
+        if (
+            self.sparsity_compressor
+            and self.sparsity_config.format != CompressionFormat.dense.value
+        ):
             sparse_targets: Set[str] = expand_target_names(
                 model=model,
                 targets=self.sparsity_config.targets,

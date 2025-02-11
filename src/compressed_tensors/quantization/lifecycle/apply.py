@@ -248,7 +248,9 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
 
 def expand_target_names(
-    model: Module, targets: Iterable[str], ignore: Iterable[str]
+    model: Module,
+    targets: Optional[Iterable[str]] = None,
+    ignore: Optional[Iterable[str]] = None,
 ) -> Set[str]:
     """
     Finds all unique module names in the model that match the given
@@ -257,8 +259,8 @@ def expand_target_names(
     Note: Targets must be regexes, layer types, or full layer names.
 
     :param model: model to search for targets in
-    :param targets: list of targets to search for
-    :param ignore: list of targets to ignore
+    :param targets: Iterable of targets to search for
+    :param ignore: Iterable of targets to ignore
     :return: set of all targets that match the given targets and should
         not be ignored
     """
@@ -270,7 +272,10 @@ def expand_target_names(
 
 
 def is_target(
-    name: str, module: Module, targets: Iterable[str], ignore: Iterable[str]
+    name: str,
+    module: Module,
+    targets: Optional[Iterable[str]] = None,
+    ignore: Optional[Iterable[str]] = None,
 ) -> bool:
     """
     Determines if a module should be included in the targets based on the
@@ -280,12 +285,12 @@ def is_target(
 
     :param name: name of the module
     :param module: the module itself
-    :param targets: list of targets to search for
-    :param ignore: list of targets to ignore
+    :param targets: Iterable of targets to search for
+    :param ignore: Iterable of targets to ignore
     :return: True if the module is a target and not ignored, False otherwise
     """
     return bool(
-        find_name_or_class_matches(name, module, targets)
+        find_name_or_class_matches(name, module, targets or [])
         and not find_name_or_class_matches(name, module, ignore or [])
     )
 
