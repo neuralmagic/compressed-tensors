@@ -56,18 +56,6 @@ def quantization_config():
     }
 
 
-def _get_combined_config(s_config, q_config):
-    combined = {}
-
-    if q_config is not None:
-        combined = deepcopy(q_config)
-
-    if s_config is not None:
-        combined["sparsity_config"] = s_config
-
-    return combined
-
-
 @pytest.mark.parametrize("s_config", [sparsity_config(), None])
 @pytest.mark.parametrize("q_config", [quantization_config(), None])
 def test_config_format(s_config, q_config):
@@ -207,56 +195,43 @@ def test_composability(tmp_path, sparsity_config, quantization_config):
     _check_state_dicts(fake_oneshot_model.state_dict(), decompressed_model.state_dict())
 
 
-def _create_dummy_checkpoint(state_dict, save_dir, model_compressor):
-    save_dir = Path(save_dir)
-    save_dir.mkdir(parents=True, exist_ok=True)
-    save_file(state_dict, save_dir / "model.safetensors")
+@pytest.mark.parametrize(
+    "sparsity_config, quantization_config, missing, unexpected",
+    [
+        (
+            get_bitmask_sparsity_config(),
+            create_quantization_config(bits=8, type="int", strategy="channel"),
+            {"linear.weight"},
+            {
+                "linear.bitmask",
+                "linear.compressed",
+                "linear.row_offsets",
+                "linear.shape",
+                "linear.weight_scale",
+            },
+        )
+    ],
+)
+def test_missing_and_unexpected_keys_on_compression(
+    tmp_path, sparsity_config, quantization_config, missing, unexpected
+):
 
-    config_file_path = save_dir / "config.json"
-    with open(config_file_path, "w") as config_file:
-        json.dump({}, config_file, indent=2, sort_keys=True)
-
-    model_compressor.update_config(save_dir)
-    return save_dir
-
-
-def _check_state_dicts(state_dict1, state_dict2):
-    for key in state_dict1.keys():
-        assert key in state_dict2, f"Missing tensor: {key}"
-        if key.endswith("weight"):
-            original_tensor = state_dict1[key]
-            decompressed_tensor = state_dict2[key].to(original_tensor.dtype)
-            diff = torch.abs(original_tensor - decompressed_tensor)
-            assert not torch.any(diff > 0.01), f"Max diff: {torch.max(diff)}"
-
-
-def _get_fake_oneshot_sparse_quantized_model(quantization_config, sparsity_config):
-    from compressed_tensors.quantization.lifecycle.forward import quantize
-
-    weights = torch.rand(10, 5)
-    sparse_weights = induce_sparsity(weights, sparsity_config.global_sparsity)
-
-    quantization_args = quantization_config.config_groups["group_0"].weights
-
-    if quantization_args.strategy == "channel":
-        scale = torch.ones((weights.shape[0], 1))
-    elif quantization_args.strategy == "tensor":
-        scale = torch.tensor([1.0])
-
-    zero_point = torch.zeros_like(scale)
-
-    quantized_weights = quantize(
-        sparse_weights,
-        scale=scale,
-        zero_point=zero_point,
-        args=quantization_args,
+    model_compressor = ModelCompressor(
+        sparsity_config=sparsity_config, quantization_config=quantization_config
+    )
+    fake_oneshot_model: DummyLinearModel = _get_fake_oneshot_sparse_quantized_model(
+        sparsity_config=sparsity_config, quantization_config=quantization_config
     )
 
-    fake_oneshot_model = DummyLinearModel(quantized_weights, scale, zero_point)
-    fake_oneshot_model.linear.quantization_scheme = quantization_config.config_groups[
-        "group_0"
-    ]
-    return fake_oneshot_model
+    og_state_dict_keys = set(
+        DummyLinearModel(weights=torch.randn(10, 5)).state_dict().keys()
+    )
+    compressed_state_dict_keys = set(
+        model_compressor.compress(fake_oneshot_model).keys()
+    )
+
+    assert og_state_dict_keys - compressed_state_dict_keys == missing
+    assert compressed_state_dict_keys - og_state_dict_keys == unexpected
 
 
 class TwoLayerModel(nn.Module):
@@ -326,40 +301,65 @@ def test_get_unexpected_keys(model, sparsity_config, quantization_config, expect
     assert len(actual) == len(expected) and all(key in actual for key in expected)
 
 
-@pytest.mark.parametrize(
-    "sparsity_config, quantization_config, missing, unexpected",
-    [
-        (
-            get_bitmask_sparsity_config(),
-            create_quantization_config(bits=8, type="int", strategy="channel"),
-            {"linear.weight"},
-            {
-                "linear.bitmask",
-                "linear.compressed",
-                "linear.row_offsets",
-                "linear.shape",
-                "linear.weight_scale",
-            },
-        )
-    ],
-)
-def test_missing_and_unexpected_keys_on_compression(
-    tmp_path, sparsity_config, quantization_config, missing, unexpected
-):
+def _create_dummy_checkpoint(state_dict, save_dir, model_compressor):
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_file(state_dict, save_dir / "model.safetensors")
 
-    model_compressor = ModelCompressor(
-        sparsity_config=sparsity_config, quantization_config=quantization_config
-    )
-    fake_oneshot_model: DummyLinearModel = _get_fake_oneshot_sparse_quantized_model(
-        sparsity_config=sparsity_config, quantization_config=quantization_config
+    config_file_path = save_dir / "config.json"
+    with open(config_file_path, "w") as config_file:
+        json.dump({}, config_file, indent=2, sort_keys=True)
+
+    model_compressor.update_config(save_dir)
+    return save_dir
+
+
+def _check_state_dicts(state_dict1, state_dict2):
+    for key in state_dict1.keys():
+        assert key in state_dict2, f"Missing tensor: {key}"
+        if key.endswith("weight"):
+            original_tensor = state_dict1[key]
+            decompressed_tensor = state_dict2[key].to(original_tensor.dtype)
+            diff = torch.abs(original_tensor - decompressed_tensor)
+            assert not torch.any(diff > 0.01), f"Max diff: {torch.max(diff)}"
+
+
+def _get_fake_oneshot_sparse_quantized_model(quantization_config, sparsity_config):
+    from compressed_tensors.quantization.lifecycle.forward import quantize
+
+    weights = torch.rand(10, 5)
+    sparse_weights = induce_sparsity(weights, sparsity_config.global_sparsity)
+
+    quantization_args = quantization_config.config_groups["group_0"].weights
+
+    if quantization_args.strategy == "channel":
+        scale = torch.ones((weights.shape[0], 1))
+    elif quantization_args.strategy == "tensor":
+        scale = torch.tensor([1.0])
+
+    zero_point = torch.zeros_like(scale)
+
+    quantized_weights = quantize(
+        sparse_weights,
+        scale=scale,
+        zero_point=zero_point,
+        args=quantization_args,
     )
 
-    og_state_dict_keys = set(
-        DummyLinearModel(weights=torch.randn(10, 5)).state_dict().keys()
-    )
-    compressed_state_dict_keys = set(
-        model_compressor.compress(fake_oneshot_model).keys()
-    )
+    fake_oneshot_model = DummyLinearModel(quantized_weights, scale, zero_point)
+    fake_oneshot_model.linear.quantization_scheme = quantization_config.config_groups[
+        "group_0"
+    ]
+    return fake_oneshot_model
 
-    assert og_state_dict_keys - compressed_state_dict_keys == missing
-    assert compressed_state_dict_keys - og_state_dict_keys == unexpected
+
+def _get_combined_config(s_config, q_config):
+    combined = {}
+
+    if q_config is not None:
+        combined = deepcopy(q_config)
+
+    if s_config is not None:
+        combined["sparsity_config"] = s_config
+
+    return combined
