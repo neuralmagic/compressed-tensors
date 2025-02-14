@@ -260,8 +260,13 @@ class ModelCompressor:
 
     def get_missing_module_keys(self, model: Module) -> List[str]:
         """
-        Identifies the expected missing keys in the compressed state_dict
-        based on the model structure and applied compression techniques.
+        Identifies the expected missing weight keys in the compressed state_dict.
+
+        When a model undergoes sparsity or quantization compression, certain
+        weight tensors may be absent from the checkpoint by virtue of compression.
+        This function determines which weight keys are missing based on the
+        applied compression techniques.
+
 
         :param model: The PyTorch model to check for missing keys.
         :return: A list of missing keys expected in the compressed state_dict.
@@ -302,11 +307,21 @@ class ModelCompressor:
 
     def get_unexpected_file_keys(self, model: Module) -> List[str]:
         """
-        Identifies extra keys introduced by the compressor(s) in the
+        Identifies extra keys introduced by the compression process in the
         compressed state_dict that are not expected by the model graph.
 
+        During sparsity or quantization compression, additional metadata or
+        auxiliary parameters may be stored in the checkpoint, which do not
+        correspond to any parameter in the original model. These keys are
+        typically introduced to support the reconstruction of compressed weights.
+
+        For example, Sparse24Bitmask compression may introduce keys such as
+        'compressed', 'bitmask', and 'shape' in the checkpoint, which are
+        not part of the original model parameters.
+
         :param model: The PyTorch model to check for unexpected keys.
-        :return: A list of extra keys introduced by the compression process.
+        :return: A list of extra keys introduced by the compression process
+                that are not expected by the model.
         """
 
         unexpected_keys = set()
