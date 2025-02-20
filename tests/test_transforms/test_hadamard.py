@@ -15,9 +15,8 @@
 import pytest
 import torch
 from compressed_tensors.transforms import Transforms
-from compressed_tensors.transforms.hadamard import Hadamard
-from compressed_tensors.transforms.matrix_multiply import MatrixMultiply
 from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
+
 
 @pytest.mark.parametrize(
     "size,dtype",
@@ -31,7 +30,9 @@ from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
     ],
 )
 def test_hadamard_transform(size: int, dtype: torch.dtype):
-    hadamard_transform = Hadamard(size=size, dtype=dtype)
+    hadamard_transform = Transforms.load_from_registry(
+        "hadamard", size=size, dtype=dtype
+    )
     # check initialize
     assert hadamard_transform.transform is not None
 
@@ -56,8 +57,8 @@ def test_hadamard_transform(size: int, dtype: torch.dtype):
 )
 def test_hadamard_rotation(size: int, dtype: torch.dtype):
     rotation = random_hadamard_matrix(size=size).to(dtype)
-    hadamard_transform = Hadamard(transform=rotation)
-    
+    hadamard_transform = Transforms.load_from_registry("hadamard", transform=rotation)
+
     # check initialize
     assert torch.equal(hadamard_transform.transform, rotation)
 
@@ -78,7 +79,9 @@ def test_hadamard_rotation(size: int, dtype: torch.dtype):
 )
 def test_multiplier_transform(size: int, dtype: torch.dtype):
     multiplier = torch.eye((size), dtype=dtype)
-    multiplier_transform = MatrixMultiply(transform=multiplier)
+    multiplier_transform = Transforms.load_from_registry(
+        "matrix_mul", transform=multiplier
+    )
     assert multiplier_transform.transform is not None
     assert torch.equal(multiplier_transform.transform, multiplier)
 

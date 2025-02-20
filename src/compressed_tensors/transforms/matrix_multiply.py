@@ -12,20 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch
 from compressed_tensors.transforms import Transforms
 
 
 @Transforms.register("matrix_mul")
 class MatrixMultiply(Transforms):
     def __call__(
-        self, input_tensor: torch.Tensor, transpose: bool = False
+        self, input_tensor: torch.Tensor, transpose: bool = False, first: bool = False
     ) -> torch.Tensor:
         """
         :param input_tensor: tensor to which the transformation is applied
         :param transpose: whether or not the transformation is transposed before
             being applied.
+        :param first: if the multiplier matrix will be the first or second matrix to be
+            multiplied
         """
-
         if transpose:
-            return torch.matmul(input_tensor, self.transform.T)
-        return torch.matmul(input_tensor, self.transform)
+            return (
+                torch.matmul(self.transform.T, input_tensor)
+                if first
+                else torch.matmul(input_tensor, self.transform.T)
+            )
+
+        return (
+            torch.matmul(self.transform, input_tensor)
+            if first
+            else torch.matmul(input_tensor, self.transform)
+        )

@@ -21,13 +21,18 @@ from compressed_tensors.registry.registry import RegistryMixin
 __all__ = ["Transforms"]
 
 
+# TODO: We don't need to save all the __call__ args for serialization or even have
+# them defined by a recipe. Some of them, such as if the transformation should be the
+# first or second matirx in torch.matmul depending on dimensions, can be inferred
+# by the layer time likely.
+
+
 class Transforms(RegistryMixin):
     def __init__(self, transform: Optional[Any] = None, *args, **kwargs):
         """
         :param transform: transform (e.g. matrix, scalar) to be applied
         """
-
-        if transform:
+        if transform is not None:
             self.transform = transform
 
     def __call__(self, input_tensor: torch.Tensor, *args, **kwargs) -> torch.Tensor:

@@ -13,3 +13,5 @@
 # limitations under the License.
 
 from .base import Transforms
+from .hadamard import Hadamard
+from .matrix_multiply import MatrixMultiply
