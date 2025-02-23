@@ -39,6 +39,8 @@ def random_hadamard_matrix(size: int) -> torch.Tensor:
     """
     # TODO: potentially update to add "seed" as an arugment, to allow
     # the matrix generated to be reproducible
+
+    # Benefits: support other shapes / non powers of 2, support randomization
     Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float64)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
@@ -102,9 +104,13 @@ def _get_hadK(n, transpose=False):
 
 def _matmul_hadU(X, transpose=False):
     n = X.shape[-1]
+    # Check if we have the determined hadamard matrix
     hadK, K = _get_hadK(n, transpose)
+    # Reshape diag matrix with randomized -1/+1
     input = X.clone().view(-1, n, 1)
     output = input.clone()
+
+    # for cases when hadK is not predetermined, determine hadamard matrix
     while input.shape[1] > K:
         input = input.view(input.shape[0], input.shape[1] // 2, 2, input.shape[2])
         output = output.view(input.shape)
@@ -122,8 +128,11 @@ def _matmul_hadU(X, transpose=False):
         # input = torch.bmm(
         #     hadK.repeat(len(input), 1, 1).to(input.device).to(input.dtype), input)
         # Use bcast instead
+
+        # for cases when hadK is pre-determined
         input = hadK.view(1, K, K).to(input) @ input
 
+    # normalize
     return input.view(X.shape) / torch.tensor(n).sqrt()
 
 

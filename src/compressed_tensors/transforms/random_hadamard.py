@@ -19,8 +19,8 @@ from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
 
 
-@Transforms.register("hadamard")
-class Hadamard(Transforms):
+@Transforms.register("random_hadamard")
+class RandomHadamard(Transforms):
     def __init__(
         self,
         size: Optional[int] = None,
@@ -29,8 +29,11 @@ class Hadamard(Transforms):
     ):
         """
         Produces a randomly generated matrix with dims (size, size), with values
-        between -1 and 1, and the property HH.T == nI i.e the transformation
-        matrix when multiplied by its transpose, is a multiple of the identity.
+        between -1 and 1, and the property HH.T == I i.e the transformation
+        matrix when multiplied by its transpose is the identity.
+        All rows and columns are orthonormal. The matrix returned
+        is normalized and has the form (1/sqrt(size)) * M where all elements
+        of M are -1 or +1.
 
         :param size: size of the matrix, if generating a new Hadamard matrix.
             The generated matrix will have dimensions (size, size)
@@ -54,7 +57,7 @@ class Hadamard(Transforms):
             assert size is not None
             # Note: scipy's hadamard method seems faster however
             # has more restrictions on the dimensions (must be power of 2)/conflicts
-            # with what is needed for model dimensions
+            # with what is needed for model dimensions and is deterministic
             self.transform = random_hadamard_matrix(size=size).to(dtype)
 
     def __call__(

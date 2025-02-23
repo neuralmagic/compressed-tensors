@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
 import pytest
 import torch
 from compressed_tensors.transforms import Transforms
@@ -31,15 +33,19 @@ from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
 )
 def test_hadamard_transform(size: int, dtype: torch.dtype):
     hadamard_transform = Transforms.load_from_registry(
-        "hadamard", size=size, dtype=dtype
+        "random_hadamard", size=size, dtype=dtype
     )
     # check initialize
     assert hadamard_transform.transform is not None
 
     val_1 = torch.round(hadamard_transform.transform @ hadamard_transform.transform.T)
-    max_val = torch.max(val_1)
-    # check creation; HH.T == nI
-    assert torch.equal(val_1 / max_val, torch.eye(size))
+
+    # output will be normalized, multiply by sqrt(size) to ensure form
+    normalized = math.sqrt(size) * hadamard_transform.transform
+    # all values should be -1 or +1
+    assert torch.all(torch.isin(normalized, torch.Tensor([-1, +1])))
+    # check creation; HH.T == I
+    assert torch.equal(val_1, torch.eye(size))
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
@@ -57,7 +63,9 @@ def test_hadamard_transform(size: int, dtype: torch.dtype):
 )
 def test_hadamard_rotation(size: int, dtype: torch.dtype):
     rotation = random_hadamard_matrix(size=size).to(dtype)
-    hadamard_transform = Transforms.load_from_registry("hadamard", transform=rotation)
+    hadamard_transform = Transforms.load_from_registry(
+        "random_hadamard", transform=rotation
+    )
 
     # check initialize
     assert torch.equal(hadamard_transform.transform, rotation)
