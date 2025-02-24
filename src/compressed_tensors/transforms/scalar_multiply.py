@@ -12,8 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .base import Transforms
-from .hadamard import Hadamard
-from .matrix_multiply import MatrixMultiply
-from .random_hadamard import RandomHadamard
-from .scalar_multiply import ScalarMultiply
+import torch
+from compressed_tensors.transforms import Transforms
+
+
+@Transforms.register("scalar_mul")
+class ScalarMultiply(Transforms):
+    def __call__(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        """
+        :param input_tensor: tensor to which the transformation is applied
+        """
+        return input_tensor * self.transform

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import math
+from typing import Union
 
 import pytest
 import torch
@@ -31,7 +32,7 @@ from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
         [8192, torch.bfloat16],
     ],
 )
-def test_hadamard_transform(size: int, dtype: torch.dtype):
+def test_random_hadamard_transform(size: int, dtype: torch.dtype):
     hadamard_transform = Transforms.load_from_registry(
         "random_hadamard", size=size, dtype=dtype
     )
@@ -61,7 +62,7 @@ def test_hadamard_transform(size: int, dtype: torch.dtype):
         [2048, torch.float16],
     ],
 )
-def test_hadamard_rotation(size: int, dtype: torch.dtype):
+def test_random_hadamard_rotation(size: int, dtype: torch.dtype):
     rotation = random_hadamard_matrix(size=size).to(dtype)
     hadamard_transform = Transforms.load_from_registry(
         "random_hadamard", transform=rotation
@@ -69,6 +70,33 @@ def test_hadamard_rotation(size: int, dtype: torch.dtype):
 
     # check initialize
     assert torch.equal(hadamard_transform.transform, rotation)
+
+    # check apply
+    x = torch.rand((size, size), dtype=dtype)
+    transformed_value = hadamard_transform(x)
+    # TODO: check to make sure the matrix was applied correctly?
+    assert transformed_value.shape == (size, size)
+
+
+@pytest.mark.parametrize(
+    "size,dtype",
+    [
+        [1024, torch.bfloat16],
+        [2048, torch.float16],
+    ],
+)
+def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
+    hadamard_transform = Transforms.load_from_registry(
+        "hadamard", size=size, dtype=dtype
+    )
+
+    # check initialize
+    assert hadamard_transform.transform is not None
+    assert torch.all(torch.isin(hadamard_transform.transform, torch.Tensor([-1, +1])))
+
+    val_1 = hadamard_transform.transform @ hadamard_transform.transform.T
+    # check creation; HH.T == nI
+    assert torch.equal(val_1 / size, torch.eye(size))
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
@@ -96,3 +124,23 @@ def test_multiplier_transform(size: int, dtype: torch.dtype):
     x = torch.rand((size, size), dtype=dtype)
     transformed_value = multiplier_transform(x)
     assert torch.equal(transformed_value, x)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        2,
+        0.5,
+    ],
+)
+def test_scalar_transform(scalar: Union[int, float]):
+    size = 1024
+    dtype = torch.float16
+    scalar = torch.Tensor([scalar])
+    scalar_transform = Transforms.load_from_registry("scalar_mul", transform=scalar)
+    assert scalar_transform.transform is not None
+    assert torch.equal(scalar_transform.transform, scalar)
+
+    x = torch.rand((size, size), dtype=dtype)
+    transformed_value = scalar_transform(x)
+    assert torch.equal(transformed_value, x * scalar)
