@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 from compressed_tensors.transforms import Transforms
@@ -25,6 +25,7 @@ class Hadamard(Transforms):
         self,
         size: Optional[int] = None,
         transform: Optional[torch.Tensor] = None,
+        device: Optional[Union[str, torch.device]] = None,
         dtype: Optional[torch.dtype] = torch.bfloat16,
     ):
         """
@@ -42,13 +43,12 @@ class Hadamard(Transforms):
         :param dtype: type to cast the rotation matrix to
 
         """
-
-        if transform is not None:
-            super().__init__(transform=transform)
-        else:
+        if transform is None:
             assert size is not None
             # TODO: this is deterministic; we should just serialize the size
-            self.transform = torch.Tensor(hadamard(n=size)).to(dtype)
+            transform = torch.Tensor(hadamard(n=size)).to(dtype)
+
+        super().__init__(transform=transform, device=device)
 
     def __call__(
         self, input_tensor: torch.Tensor, transpose: bool = False, first: bool = True

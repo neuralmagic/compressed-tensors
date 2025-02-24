@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import torch
 from compressed_tensors.registry.registry import RegistryMixin
@@ -28,12 +28,17 @@ __all__ = ["Transforms"]
 
 
 class Transforms(RegistryMixin):
-    def __init__(self, transform: Optional[Any] = None, *args, **kwargs):
+    def __init__(
+        self,
+        transform: Any,
+        device: Optional[Union[str, torch.device]] = "cpu",
+        *args,
+        **kwargs,
+    ):
         """
-        :param transform: transform (e.g. matrix, scalar) to be applied
+        :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
-        if transform is not None:
-            self.transform = transform
+        self.transform = torch.nn.Parameter(transform.to(device), requires_grad=False)
 
     def __call__(self, input_tensor: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """
