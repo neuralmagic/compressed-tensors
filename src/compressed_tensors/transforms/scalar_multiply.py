@@ -18,8 +18,10 @@ from compressed_tensors.transforms import Transforms
 
 @Transforms.register("scalar_mul")
 class ScalarMultiply(Transforms):
-    def __call__(self, input_tensor: torch.Tensor) -> torch.Tensor:
+    @staticmethod
+    def apply(transform: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
         """
+        :param transform: transorm tensor
         :param input_tensor: tensor to which the transformation is applied
         """
-        return input_tensor * self.transform
+        return input_tensor * transform

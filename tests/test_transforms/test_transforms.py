@@ -17,7 +17,13 @@ from typing import Union
 
 import pytest
 import torch
-from compressed_tensors.transforms import Transforms
+from compressed_tensors.transforms import (
+    Hadamard,
+    MatrixMultiply,
+    RandomHadamard,
+    ScalarMultiply,
+    Transforms,
+)
 from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
 
 
@@ -37,12 +43,12 @@ def test_random_hadamard_transform(size: int, dtype: torch.dtype):
         "random_hadamard", size=size, dtype=dtype
     )
     # check initialize
-    assert hadamard_transform.transform is not None
+    assert hadamard_transform is not None
 
-    val_1 = torch.round(hadamard_transform.transform @ hadamard_transform.transform.T)
+    val_1 = torch.round(hadamard_transform @ hadamard_transform.T)
 
     # output will be normalized, multiply by sqrt(size) to ensure form
-    normalized = math.sqrt(size) * hadamard_transform.transform
+    normalized = math.sqrt(size) * hadamard_transform
     # all values should be -1 or +1
     assert torch.all(torch.isin(normalized, torch.Tensor([-1, +1])))
     # check creation; HH.T == I
@@ -50,7 +56,9 @@ def test_random_hadamard_transform(size: int, dtype: torch.dtype):
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
-    transformed_value = hadamard_transform(x)
+    transformed_value = RandomHadamard.apply(
+        input_tensor=x, transform=hadamard_transform
+    )
     # TODO: check to make sure the matrix was applied correctly?
     assert transformed_value.shape == (size, size)
 
@@ -69,11 +77,13 @@ def test_random_hadamard_rotation(size: int, dtype: torch.dtype):
     )
 
     # check initialize
-    assert torch.equal(hadamard_transform.transform, rotation)
+    assert torch.equal(hadamard_transform, rotation)
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
-    transformed_value = hadamard_transform(x)
+    transformed_value = RandomHadamard.apply(
+        input_tensor=x, transform=hadamard_transform
+    )
     # TODO: check to make sure the matrix was applied correctly?
     assert transformed_value.shape == (size, size)
 
@@ -91,16 +101,16 @@ def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
     )
 
     # check initialize
-    assert hadamard_transform.transform is not None
-    assert torch.all(torch.isin(hadamard_transform.transform, torch.Tensor([-1, +1])))
+    assert hadamard_transform is not None
+    assert torch.all(torch.isin(hadamard_transform, torch.Tensor([-1, +1])))
 
-    val_1 = hadamard_transform.transform @ hadamard_transform.transform.T
+    val_1 = hadamard_transform @ hadamard_transform.T
     # check creation; HH.T == nI
     assert torch.equal(val_1 / size, torch.eye(size))
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
-    transformed_value = hadamard_transform(x)
+    transformed_value = Hadamard.apply(input_tensor=x, transform=hadamard_transform)
     # TODO: check to make sure the matrix was applied correctly?
     assert transformed_value.shape == (size, size)
 
@@ -118,11 +128,13 @@ def test_multiplier_transform(size: int, dtype: torch.dtype):
     multiplier_transform = Transforms.load_from_registry(
         "matrix_mul", transform=multiplier
     )
-    assert multiplier_transform.transform is not None
-    assert torch.equal(multiplier_transform.transform, multiplier)
+    assert multiplier_transform is not None
+    assert torch.equal(multiplier_transform, multiplier)
 
     x = torch.rand((size, size), dtype=dtype)
-    transformed_value = multiplier_transform(x)
+    transformed_value = MatrixMultiply.apply(
+        input_tensor=x, transform=multiplier_transform
+    )
     assert torch.equal(transformed_value, x)
 
 
@@ -138,9 +150,9 @@ def test_scalar_transform(scalar: Union[int, float]):
     dtype = torch.float16
     scalar = torch.Tensor([scalar])
     scalar_transform = Transforms.load_from_registry("scalar_mul", transform=scalar)
-    assert scalar_transform.transform is not None
-    assert torch.equal(scalar_transform.transform, scalar)
+    assert scalar_transform is not None
+    assert torch.equal(scalar_transform, scalar)
 
     x = torch.rand((size, size), dtype=dtype)
-    transformed_value = scalar_transform(x)
+    transformed_value = ScalarMultiply.apply(input_tensor=x, transform=scalar_transform)
     assert torch.equal(transformed_value, x * scalar)

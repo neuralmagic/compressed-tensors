@@ -18,10 +18,15 @@ from compressed_tensors.transforms import Transforms
 
 @Transforms.register("matrix_mul")
 class MatrixMultiply(Transforms):
-    def __call__(
-        self, input_tensor: torch.Tensor, transpose: bool = False, first: bool = False
+    @staticmethod
+    def apply(
+        transform: torch.Tensor,
+        input_tensor: torch.Tensor,
+        transpose: bool = False,
+        first: bool = False,
     ) -> torch.Tensor:
         """
+        :param transform: transform tensor
         :param input_tensor: tensor to which the transformation is applied
         :param transpose: whether or not the transformation is transposed before
             being applied.
@@ -30,13 +35,13 @@ class MatrixMultiply(Transforms):
         """
         if transpose:
             return (
-                torch.matmul(self.transform.T, input_tensor)
+                torch.matmul(transform.T, input_tensor)
                 if first
-                else torch.matmul(input_tensor, self.transform.T)
+                else torch.matmul(input_tensor, transform.T)
             )
 
         return (
-            torch.matmul(self.transform, input_tensor)
+            torch.matmul(transform, input_tensor)
             if first
-            else torch.matmul(input_tensor, self.transform)
+            else torch.matmul(input_tensor, transform)
         )

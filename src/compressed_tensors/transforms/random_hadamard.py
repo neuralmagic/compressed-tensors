@@ -21,8 +21,8 @@ from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
 
 @Transforms.register("random_hadamard")
 class RandomHadamard(Transforms):
-    def __init__(
-        self,
+    def __new__(
+        cls,
         size: Optional[int] = None,
         transform: Optional[torch.Tensor] = None,
         device: Optional[Union[str, torch.device]] = None,
@@ -56,12 +56,17 @@ class RandomHadamard(Transforms):
             assert size is not None
             transform = random_hadamard_matrix(size=size).to(dtype)
 
-        super().__init__(transform=transform, device=device)
+        return super().__new__(cls, transform=transform, device=device)
 
-    def __call__(
-        self, input_tensor: torch.Tensor, transpose: bool = False, first: bool = True
+    @staticmethod
+    def apply(
+        transform: torch.Tensor,
+        input_tensor: torch.Tensor,
+        transpose: bool = False,
+        first: bool = True,
     ) -> torch.Tensor:
         """
+        :param transform: transform tensor
         :param input_tensor: tensor to which the hadamard matrix is applied
         :param transpose: whether or not the hadamard matrix is transposed before
             being applied.
@@ -72,13 +77,13 @@ class RandomHadamard(Transforms):
         """
         if transpose:
             return (
-                torch.matmul(self.transform.T, input_tensor)
+                torch.matmul(transform.T, input_tensor)
                 if first
-                else torch.matmul(input_tensor, self.transform.T)
+                else torch.matmul(input_tensor, transform.T)
             )
 
         return (
-            torch.matmul(self.transform, input_tensor)
+            torch.matmul(transform, input_tensor)
             if first
-            else torch.matmul(input_tensor, self.transform)
+            else torch.matmul(input_tensor, transform)
         )

@@ -28,20 +28,62 @@ __all__ = ["Transforms"]
 
 
 class Transforms(RegistryMixin):
-    def __init__(
-        self,
-        transform: Any,
+    def __new__(
+        cls,
+        transform: torch.Tensor,
         device: Optional[Union[str, torch.device]] = "cpu",
         *args,
         **kwargs,
     ):
         """
+        Base class for setting up transforms. The registry creates transforms
+        as parameters which can be attached to modules.
+
+        import torch
+
+        size = 1024
+        dtype = torch.bfloat16
+        module = torch.nn.Linear(size, size)
+
+        # Load transform 1
+        hadamard_transform = Transforms.load_from_registry(
+            "random_hadamard", size=size, dtype=dtype
+        )
+        hadamard_apply = Transform.fetch_apply("random_hadamard")
+
+        # Load transform 2
+        scalar = torch.Tensor([0.5])
+        scalar_transform = Transforms.load_from_registry(
+            "scalar_mul", transform=scalar
+        )
+        scalar_apply = Transform.fetch_apply("scalar_mul")
+
+        module.transform = {
+            "weight":[
+                {"transform": hadamard_transform, "apply": hadamard_apply},
+                {"transform": scalar_transform, "apply": scalar_apply},
+            ]
+        }
+
         :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
-        self.transform = torch.nn.Parameter(transform.to(device), requires_grad=False)
+        return torch.nn.Parameter(transform.to(device), requires_grad=False)
 
-    def __call__(self, input_tensor: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    @classmethod
+    def fetch_apply(cls, name: str):
+        constructor = cls.get_value_from_registry(name=name)
+        return constructor.apply
+
+    # TODO: this is a static method but we could potentially just have a set of utils
+    # which fetch the appropriate apply method since how the transform is applied
+    # will likely be the same for matrices and therefore, we can have one common apply
+    # for RandomHadamard, Hadamard, MatrixMultiply etc.
+    @staticmethod
+    def apply(
+        transform: torch.Tensor, input_tensor: torch.Tensor, *args, **kwargs
+    ) -> torch.Tensor:
         """
+        :param transform: transform tensor to be applied to the input_tensor
         :param input_tensor: tensor to which the transformation is applied
 
         returns a transformed input tensor

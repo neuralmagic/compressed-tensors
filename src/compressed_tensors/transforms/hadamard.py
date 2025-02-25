@@ -21,8 +21,8 @@ from scipy.linalg import hadamard
 
 @Transforms.register("hadamard")
 class Hadamard(Transforms):
-    def __init__(
-        self,
+    def __new__(
+        cls,
         size: Optional[int] = None,
         transform: Optional[torch.Tensor] = None,
         device: Optional[Union[str, torch.device]] = None,
@@ -48,12 +48,17 @@ class Hadamard(Transforms):
             # TODO: this is deterministic; we should just serialize the size
             transform = torch.Tensor(hadamard(n=size)).to(dtype)
 
-        super().__init__(transform=transform, device=device)
+        return super().__new__(cls, transform=transform, device=device)
 
-    def __call__(
-        self, input_tensor: torch.Tensor, transpose: bool = False, first: bool = True
+    @staticmethod
+    def apply(
+        transform: torch.Tensor,
+        input_tensor: torch.Tensor,
+        transpose: bool = False,
+        first: bool = True,
     ) -> torch.Tensor:
         """
+        :param transform: transformation tensor
         :param input_tensor: tensor to which the hadamard matrix is applied
         :param transpose: whether or not the hadamard matrix is transposed before
             being applied.
@@ -64,13 +69,13 @@ class Hadamard(Transforms):
         """
         if transpose:
             return (
-                torch.matmul(self.transform.T, input_tensor)
+                torch.matmul(transform.T, input_tensor)
                 if first
-                else torch.matmul(input_tensor, self.transform.T)
+                else torch.matmul(input_tensor, transform.T)
             )
 
         return (
-            torch.matmul(self.transform, input_tensor)
+            torch.matmul(transform, input_tensor)
             if first
-            else torch.matmul(input_tensor, self.transform)
+            else torch.matmul(input_tensor, transform)
         )
