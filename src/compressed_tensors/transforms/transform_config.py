@@ -14,7 +14,7 @@
 
 from typing import Dict
 
-from compressed_tensors.transforms.transfrom_scheme import TransformationScheme
+from compressed_tensors.transforms.transform_scheme import TransformationScheme
 from pydantic import BaseModel
 
 
@@ -25,5 +25,4 @@ class TransformationConfig(BaseModel):
     transform_groups: Dict[str, TransformationScheme]
 
     def to_dict(self):
-        # for compatibility with HFQuantizer
         return self.model_dump()
