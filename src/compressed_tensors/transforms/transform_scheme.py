@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from compressed_tensors.transforms.transform_args import TransformationArgs
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 __all__ = ["TransformationScheme"]
@@ -24,7 +24,10 @@ __all__ = ["TransformationScheme"]
 class TransformationScheme(BaseModel):
     transform_type: str
     groups: List[TransformationArgs]
-    # Use the same transformation for each value returned by the target list
-    # If false, use a new transformation for each value in the target list, unless in the same transformer block?
     global_transform: bool = False
-    transform_creation_args: Optional[dict] = None
+    transform_creation_args: Optional[Dict[str, Any]] = None
+
+    @field_validator("transform_type", mode="before")
+    def validate_transform_type(cls, value) -> str:
+        assert value in ["hadamard"]
+        return value
