@@ -14,6 +14,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.transform_args import TransformationArgs
 from pydantic import BaseModel, field_validator
 
@@ -29,5 +30,5 @@ class TransformationScheme(BaseModel):
 
     @field_validator("transform_type", mode="before")
     def validate_transform_type(cls, value) -> str:
-        assert value in ["hadamard"]
+        assert value in Transforms.registered_names()
         return value
