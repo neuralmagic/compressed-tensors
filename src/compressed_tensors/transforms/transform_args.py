@@ -13,14 +13,15 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
-
-
-__all__ = ["TransformationArgs"]
+from pydantic import BaseModel, Field, field_validator
 
 
+__all__ = ["TransformationArgs", "ModuleTarget"]
+
+# TODO: we eventually want to target generic parameters but for now, this
+# is sufficient
 class ModuleTarget(str, Enum):
     """
     Enum storing parameter or activation types being targeted by transforms
@@ -35,5 +36,16 @@ class ModuleTarget(str, Enum):
 class TransformationArgs(BaseModel):
     targets: List[str]
     module_targets: List[Union[ModuleTarget, str]]
-    args: Optional[Dict[str, Any]] = None
+    call_args: Optional[Dict[str, Any]] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
+
+    @field_validator("module_targets", mode="before")
+    def validate_module_target(cls, value) -> List[ModuleTarget]:
+        module_targets_list = []
+        for v in value:
+            if isinstance(v, str):
+                module_targets_list.append(ModuleTarget(v.lower()))
+            else:
+                module_targets_list.append(v)
+
+        return module_targets_list
