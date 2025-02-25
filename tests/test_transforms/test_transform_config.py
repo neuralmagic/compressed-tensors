@@ -52,6 +52,7 @@ def test_to_dict(basic_transform_scheme):
         }
     )
     config_dict = config.to_dict()
+    assert "transform_groups" in config_dict.keys()
 
 
 def test_multiple_groups():
