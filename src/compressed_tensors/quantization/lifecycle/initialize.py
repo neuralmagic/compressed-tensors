@@ -190,24 +190,19 @@ def _initialize_scale_zero_point(
         register_offload_parameter(module, f"{base_name}_g_idx", init_g_idx)
 
 
-def _initialize_attn_scales(module: Module) -> None:
-    """Initlaize k_scale, v_scale for  self_attn"""
+def _initialize_attn_scales(module: Module):
+    """Initlaize k_scale, v_scale for self_attn"""
 
     expected_shape = 1  # per tensor
 
-    param = next(module.parameters())
-    scale_dtype = param.dtype
-    device = param.device
+    weight_param = getattr(module, "weight", next(module.parameters()))
+    scale_dtype = weight_param.dtype
+    device = weight_param.device
 
     init_scale = Parameter(
         torch.empty(expected_shape, dtype=scale_dtype, device=device),
         requires_grad=False,
     )
 
-    module.register_parameter(KVCacheScaleType.KEY.value, init_scale)
-
-    init_scale = Parameter(
-        torch.empty(expected_shape, dtype=scale_dtype, device=device),
-        requires_grad=False,
-    )
-    module.register_parameter(KVCacheScaleType.VALUE.value, init_scale)
+    register_offload_parameter(module, KVCacheScaleType.KEY.value, init_scale)
+    register_offload_parameter(module, KVCacheScaleType.VALUE.value, init_scale.clone())
