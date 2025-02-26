@@ -69,7 +69,7 @@ class CompressedLinear(Linear):
             param = Parameter(
                 torch.empty(shape, device=device, dtype=dtype), requires_grad=False
             )
-            register_offload_parameter(name, param)
+            register_offload_parameter(module, name, param)
 
         # mark module as compressed
         module.quantization_status = QuantizationStatus.COMPRESSED
