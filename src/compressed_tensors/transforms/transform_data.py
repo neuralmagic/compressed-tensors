@@ -12,14 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from compressed_tensors.transforms import Transforms
+from dataclasses import dataclass
+from typing import Dict
 
 
-@Transforms.register("scalar-mul")
-class ScalarMultiply(Transforms):
-    def __call__(self, input_tensor: torch.Tensor) -> torch.Tensor:
-        """
-        :param input_tensor: tensor to which the transformation is applied
-        """
-        return input_tensor * self.transform
+__all__ = ["TransformData"]
+
+
+@dataclass
+class TransformData:
+    data: Dict
