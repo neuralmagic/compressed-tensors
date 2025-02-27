@@ -15,7 +15,7 @@
 import pytest
 import torch
 import torch.nn as nn
-from compressed_tensors.transforms import Hadamard, Transforms
+from compressed_tensors.transforms import Hadamard, RandomHadamard, Transforms
 from compressed_tensors.transforms.transform_args import (
     ModuleTarget,
     TransformationArgs,
@@ -27,10 +27,6 @@ from compressed_tensors.transforms.transform_scheme import TransformationScheme
 
 @pytest.fixture
 def transform_recipe_basic():
-    targets = ["Embedding"]
-    module_targets = [ModuleTarget.OUTPUT_ACTIVATIONS]
-    embedding_args = TransformationArgs(targets=targets, module_targets=module_targets)
-
     targets = ["Linear"]
     module_targets = [ModuleTarget.WEIGHTS]
     linear_layer_args = TransformationArgs(
@@ -39,10 +35,9 @@ def transform_recipe_basic():
 
     scheme = TransformationScheme(
         transform_type="hadamard",
-        groups=[embedding_args, linear_layer_args],
+        groups=[linear_layer_args],
         transform_creation_args={"size": 64},
     )
-
     config = TransformationConfig(
         transform_groups={
             "transform_0": scheme,
@@ -52,10 +47,35 @@ def transform_recipe_basic():
 
 
 @pytest.fixture
-def transform_recipe_complex():
-    # Multiple transform for a given module 
-    # Weight Activations and Weight Activations for a given module
-    pass
+def transform_recipe_complex_multiple(transform_recipe_basic):
+    targets = ["Embedding"]
+    module_targets = [ModuleTarget.OUTPUT_ACTIVATIONS]
+    embedding_args = TransformationArgs(targets=targets, module_targets=module_targets)
+
+    scheme = TransformationScheme(
+        transform_type="hadamard",
+        groups=[embedding_args],
+        transform_creation_args={"size": 128},
+    )
+    transform_recipe_basic.transform_groups["transform_1"] = scheme
+    return transform_recipe_basic
+
+
+@pytest.fixture
+def transform_recipe_complex(transform_recipe_basic):
+    targets = ["Linear"]
+    module_targets = [ModuleTarget.OUTPUT_ACTIVATIONS]
+    linear_layer_args = TransformationArgs(
+        targets=targets, module_targets=module_targets
+    )
+
+    scheme = TransformationScheme(
+        transform_type="random-hadamard",
+        groups=[linear_layer_args],
+        transform_creation_args={"size": 64},
+    )
+    transform_recipe_basic.transform_groups["transform_1"] = scheme
+    return transform_recipe_basic
 
 
 @pytest.fixture
@@ -89,8 +109,7 @@ def basic_model():
     return BasicModel(vocab_size, embed_size, hidden_size, num_classes)
 
 
-def test_basic_model(basic_model, transform_recipe_basic):
-    transform_groups = transform_recipe_basic.transform_groups
+def _test_model(model, transform_groups):
     for _, group in transform_groups.items():
         # Each group/scheme targets one type of transform
         transform_type = group.transform_type
@@ -115,18 +134,71 @@ def test_basic_model(basic_model, transform_recipe_basic):
                 )
                 transform
 
-            for _, submodule in basic_model.named_modules():
+            for _, submodule in model.named_modules():
                 name = submodule.__class__.__name__
                 if name in target:
-                    transform_data = TransformData(
-                        data={
-                            module_targets[0]: {
-                                "transform": transform,
-                                "call_args": call_args,
-                            }
+                    data = {
+                        module_targets[0]: {
+                            "transform": transform,
+                            "call_args": call_args,
                         }
-                    )
-                    submodule.transform_data = transform_data
+                    }
+                    if hasattr(submodule, "transform_data"):
+                        submodule.transform_data.data.update(data)
+                    else:
+                        transform_data = TransformData(data=data)
+                        submodule.transform_data = transform_data
+    return model
+
+
+def test_recipe_complex(basic_model, transform_recipe_complex):
+    transform_groups = transform_recipe_complex.transform_groups
+    model = _test_model(basic_model, transform_groups)
+
+    blocks = [model.block1, model.block2]
+    for block in blocks:
+        for layer in block:
+            if isinstance(layer, torch.nn.Linear):
+                assert hasattr(layer, "transform_data")
+                assert isinstance(layer.transform_data, TransformData)
+                weight_transform = layer.transform_data.data.get("weights")
+                assert isinstance(weight_transform.get("transform"), Hadamard)
+                output_transform = layer.transform_data.data.get("output_activations")
+                assert isinstance(output_transform.get("transform"), RandomHadamard)
+
+    """
+    >> basic_model.block1[0].transform_data
+
+    TransformData(
+        data={
+            <ModuleTarget.WEIGHTS: 'weights'>: 
+                {'transform': <compressed_tensors.transforms.hadamard.Hadamard object at 0x705403b3baf0>, 
+                'call_args': None},    
+            <ModuleTarget.OUTPUT_ACTIVATIONS: 'output_activations'>: 
+                {'transform': <compressed_tensors.transforms.random_hadamard.RandomHadamard object at 0x74535bd6e230>, 
+                'call_args': None}
+            }
+        )
+    """
+
+
+def test_recipe_basic(basic_model, transform_recipe_basic):
+    transform_groups = transform_recipe_basic.transform_groups
+    model = _test_model(basic_model, transform_groups)
+
+    blocks = [model.block1, model.block2]
+    for block in blocks:
+        for layer in block:
+            if isinstance(layer, torch.nn.Linear):
+                assert hasattr(layer, "transform_data")
+                assert isinstance(layer.transform_data, TransformData)
+                weight_transform = layer.transform_data.data.get("weights")
+                assert isinstance(weight_transform.get("transform"), Hadamard)
+
+
+def test_recipe_complex_multiple(basic_model, transform_recipe_complex_multiple):
+    transform_groups = transform_recipe_complex_multiple.transform_groups
+    model = _test_model(basic_model, transform_groups)
 
     # Should have the following structure:
     """
@@ -152,14 +224,12 @@ def test_basic_model(basic_model, transform_recipe_basic):
     """
 
     # Verify Embedding layers and Linear Layers have the correct data attached to them
-    assert hasattr(basic_model.embedding, "transform_data")
-    assert isinstance(basic_model.embedding.transform_data, TransformData)
-    activation_transform = basic_model.embedding.transform_data.data.get(
-        "output_activations"
-    )
+    assert hasattr(model.embedding, "transform_data")
+    assert isinstance(model.embedding.transform_data, TransformData)
+    activation_transform = model.embedding.transform_data.data.get("output_activations")
     assert isinstance(activation_transform.get("transform"), Hadamard)
 
-    blocks = [basic_model.block1, basic_model.block2]
+    blocks = [model.block1, model.block2]
     for block in blocks:
         for layer in block:
             if isinstance(layer, torch.nn.Linear):

@@ -16,7 +16,7 @@ import torch
 from compressed_tensors.transforms import Transforms
 
 
-@Transforms.register("scalar_mul")
+@Transforms.register("scalar-mul")
 class ScalarMultiply(Transforms):
     @staticmethod
     def apply(transform: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
