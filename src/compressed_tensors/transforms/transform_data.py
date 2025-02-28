@@ -19,7 +19,16 @@ from typing import Any, Callable, Dict
 __all__ = ["TransformData"]
 
 
+# TODO: adding for now but we may not need it during runtime depending on the
+# integration.
 @dataclass
 class TransformData:
-    # TransformData(data={transform_name: {"apply": Callable, "call_args": Dict}})
+    """
+    Data that is required during runtime in order to apply the transform.
+
+    Example:
+        data={transform_name: {"apply": Callable, "call_args": Dict}})
+        transform_data = TransformData(data=data)
+    """
+
     data: Dict

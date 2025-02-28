@@ -23,6 +23,20 @@ __all__ = ["TransformationScheme"]
 
 
 class TransformationScheme(BaseModel):
+    """
+    :param transform_type: string indicating the particular transform that
+        should be created and applied. This should be one of the registered transforms
+        i.e be in Transforms.registered_names()
+    :param groups: includes TransformationArgs containing the information about the
+        layers that should be targeted by the specified transform. By providing a list,
+        users have the ability to apply the same transform type (with the same set
+        of arguments) to different layers.
+    :param transform_creation_args: arguments needed to initialize the transform, if
+        any
+    :param global_transform: whether an identical transform is applied to all the
+        TransformationArgs in the groups list
+    """
+
     transform_type: str
     groups: List[TransformationArgs]
     global_transform: bool = False

@@ -34,6 +34,20 @@ class ModuleTarget(str, Enum):
 
 
 class TransformationArgs(BaseModel):
+    """
+    User-facing arguments used to define which modules and their specific
+    parameters and/or activations should be targeted by a particular transform.
+
+    :param targets: list of layers to target
+    :param module_targets: list of layer parameters and/or activations onto which the
+        transform should be applied. The same transform will be applied for all
+        module targets in the list.
+    :param call_args: dictionary of args needed for the transform during runtime,
+        beyond the input_tensor or transform
+    :param ignore: any submodule which should be ignored from the targets list
+
+    """
+
     targets: List[str]
     module_targets: List[Union[ModuleTarget, str]]
     call_args: Optional[Dict[str, Any]] = None

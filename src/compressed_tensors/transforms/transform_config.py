@@ -22,6 +22,15 @@ __all__ = ["TransformationConfig"]
 
 
 class TransformationConfig(BaseModel):
+    """
+    Configuration of transforms to be added within a model's config.json.
+
+    :param transform_groups: A dictionary of the different TransformationSchemes
+        that should be applied to a particular model. The keys can be any
+        arbitrary string and a TransformationScheme should be provided
+        for each new transform type.
+    """
+
     transform_groups: Dict[str, TransformationScheme]
 
     def to_dict(self):
