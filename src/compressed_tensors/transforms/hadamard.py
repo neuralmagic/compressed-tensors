@@ -16,7 +16,7 @@ from typing import Optional, Union
 
 import torch
 from compressed_tensors.transforms import Transforms
-from scipy.linalg import hadamard
+from compressed_tensors.transforms.hadamard_utils import deterministic_hadamard_matrix
 
 
 @Transforms.register("hadamard")
@@ -46,7 +46,7 @@ class Hadamard(Transforms):
         if transform is None:
             assert size is not None
             # TODO: this is deterministic; we should just serialize the size
-            transform = torch.Tensor(hadamard(n=size)).to(dtype)
+            transform = torch.Tensor(deterministic_hadamard_matrix(size=size)).to(dtype)
 
         return super().__new__(cls, transform=transform, device=device)
 

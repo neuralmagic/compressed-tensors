@@ -78,7 +78,6 @@ def _setup_extras() -> Dict:
     return {
         "dev": ["black==22.12.0", "isort==5.8.0", "wheel>=0.36.2", "flake8>=3.8.3", "pytest>=6.0.0", "nbconvert>=7.16.3"],
         "accelerate": ["accelerate"],
-        "transforms": ["scipy"]
     }
 
 setup(

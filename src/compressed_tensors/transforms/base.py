@@ -50,20 +50,9 @@ class Transforms(RegistryMixin):
             "random_hadamard", size=size, dtype=dtype
         )
         hadamard_apply = Transform.fetch_apply("random_hadamard")
+        module.weight_transform = hadamard_transform
 
-        # Load transform 2
-        scalar = torch.Tensor([0.5])
-        scalar_transform = Transforms.load_from_registry(
-            "scalar_mul", transform=scalar
-        )
-        scalar_apply = Transform.fetch_apply("scalar_mul")
-
-        module.transform = {
-            "weight":[
-                {"transform": hadamard_transform, "apply": hadamard_apply},
-                {"transform": scalar_transform, "apply": scalar_apply},
-            ]
-        }
+        transformed_output = hadamard_apply(input_tensor=module.weight, transform=moduel.weight_transform)
 
         :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
