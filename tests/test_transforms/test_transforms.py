@@ -40,7 +40,7 @@ from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
 )
 def test_random_hadamard_transform(size: int, dtype: torch.dtype):
     hadamard_transform = Transforms.load_from_registry(
-        "random_hadamard", size=size, dtype=dtype
+        "random-hadamard", size=size, dtype=dtype
     )
     # check initialize
     assert hadamard_transform is not None
@@ -73,7 +73,7 @@ def test_random_hadamard_transform(size: int, dtype: torch.dtype):
 def test_random_hadamard_rotation(size: int, dtype: torch.dtype):
     rotation = random_hadamard_matrix(size=size).to(dtype)
     hadamard_transform = Transforms.load_from_registry(
-        "random_hadamard", transform=rotation
+        "random-hadamard", transform=rotation
     )
 
     # check initialize
@@ -126,7 +126,7 @@ def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
 def test_multiplier_transform(size: int, dtype: torch.dtype):
     multiplier = torch.eye((size), dtype=dtype)
     multiplier_transform = Transforms.load_from_registry(
-        "matrix_mul", transform=multiplier
+        "matrix-mul", transform=multiplier
     )
     assert multiplier_transform is not None
     assert torch.equal(multiplier_transform, multiplier)
@@ -149,7 +149,7 @@ def test_scalar_transform(scalar: Union[int, float]):
     size = 1024
     dtype = torch.float16
     scalar = torch.Tensor([scalar])
-    scalar_transform = Transforms.load_from_registry("scalar_mul", transform=scalar)
+    scalar_transform = Transforms.load_from_registry("scalar-mul", transform=scalar)
     assert scalar_transform is not None
     assert torch.equal(scalar_transform, scalar)
 

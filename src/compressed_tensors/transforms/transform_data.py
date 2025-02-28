@@ -12,16 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from compressed_tensors.transforms import Transforms
+from dataclasses import dataclass
+from typing import Any, Callable, Dict
 
 
-@Transforms.register("scalar-mul")
-class ScalarMultiply(Transforms):
-    @staticmethod
-    def apply(transform: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
-        """
-        :param transform: transorm tensor
-        :param input_tensor: tensor to which the transformation is applied
-        """
-        return input_tensor * transform
+__all__ = ["TransformData"]
+
+
+# TODO: adding for now but we may not need it during runtime depending on the
+# integration.
+@dataclass
+class TransformData:
+    """
+    Data that is required during runtime in order to apply the transform.
+
+    Example:
+        data={transform_name: {"apply": Callable, "call_args": Dict}})
+        transform_data = TransformData(data=data)
+    """
+
+    data: Dict
