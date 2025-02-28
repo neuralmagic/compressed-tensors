@@ -121,14 +121,17 @@ def _apply_transfoms_to_model(model, transform_groups):
             module_targets = transform_arg.module_targets
             call_args = transform_arg.call_args
 
-            transform = Transforms.load_from_registry(
-                transform_type, **transform_creation_args
-            )
-            apply = Transforms.fetch_apply(transform_type)
-
             for _, submodule in model.named_modules():
                 name = submodule.__class__.__name__
                 if name in target:
+
+                    # Every layer which matches gets its own transform
+                    # Same transform type and args are used however
+                    transform = Transforms.load_from_registry(
+                        transform_type, **transform_creation_args
+                    )
+                    apply = Transforms.fetch_apply(transform_type)
+
                     # attach the transform to the submodule
                     transform_name = f"{module_targets[0]}_transform"
                     setattr(submodule, transform_name, transform)
