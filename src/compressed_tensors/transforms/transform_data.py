@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Any, Callable, Dict
 
 
 __all__ = ["TransformData"]
@@ -21,4 +21,5 @@ __all__ = ["TransformData"]
 
 @dataclass
 class TransformData:
+    # TransformData(data={transform_name: {"apply": Callable, "call_args": Dict}})
     data: Dict

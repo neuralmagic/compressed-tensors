@@ -109,18 +109,11 @@ def basic_model():
     return BasicModel(vocab_size, embed_size, hidden_size, num_classes)
 
 
-def _test_model(model, transform_groups):
+def _apply_transfoms_to_model(model, transform_groups):
     for _, group in transform_groups.items():
         # Each group/scheme targets one type of transform
         transform_type = group.transform_type
         transform_creation_args = group.transform_creation_args
-
-        global_transform = None
-        if group.global_transform:
-            # create transform
-            global_transform = Transforms.load_from_registry(
-                transform_type, **transform_creation_args
-            )
 
         # Need a better name - too many groups
         for transform_arg in group.groups:
@@ -128,20 +121,21 @@ def _test_model(model, transform_groups):
             module_targets = transform_arg.module_targets
             call_args = transform_arg.call_args
 
-            if global_transform is None:
-                transform = Transforms.load_from_registry(
-                    transform_type, **transform_creation_args
-                )
+            transform = Transforms.load_from_registry(
+                transform_type, **transform_creation_args
+            )
+            apply = Transforms.fetch_apply(transform_type)
 
             for _, submodule in model.named_modules():
                 name = submodule.__class__.__name__
                 if name in target:
-                    data = {
-                        module_targets[0]: {
-                            "transform": transform,
-                            "call_args": call_args,
-                        }
-                    }
+                    # attach the transform to the submodule
+                    transform_name = f"{module_targets[0]}_transform"
+                    setattr(submodule, transform_name, transform)
+
+                    # add relevant transform data to the submodule as well
+                    data = {transform_name: {"apply": apply, "call_args": call_args}}
+
                     if hasattr(submodule, "transform_data"):
                         submodule.transform_data.data.update(data)
                     else:
@@ -150,83 +144,74 @@ def _test_model(model, transform_groups):
     return model
 
 
+def _verify_correct_data(layer: torch.nn.Module):
+    assert hasattr(layer, "transform_data")
+    assert isinstance(layer.transform_data, TransformData)
+
+    # data keys are all the different transforms relevant
+    # to the module
+    transform_data = layer.transform_data
+
+    for k, v in transform_data.data.items():
+        current_transform = getattr(layer, k)
+        assert isinstance(current_transform, torch.nn.Parameter)
+        assert "apply" in v
+        assert "call_args" in v
+
+
 def test_recipe_complex(basic_model, transform_recipe_complex):
     transform_groups = transform_recipe_complex.transform_groups
-    model = _test_model(basic_model, transform_groups)
+    model = _apply_transfoms_to_model(basic_model, transform_groups)
 
     blocks = [model.block1, model.block2]
     for block in blocks:
         for layer in block:
             if isinstance(layer, torch.nn.Linear):
-                assert hasattr(layer, "transform_data")
-                assert isinstance(layer.transform_data, TransformData)
-                weight_transform = layer.transform_data.data.get("weights")
-                assert isinstance(weight_transform.get("transform"), torch.nn.Parameter)
-                output_transform = layer.transform_data.data.get("output_activations")
-                assert isinstance(output_transform.get("transform"), torch.nn.Parameter)
+                _verify_correct_data(layer)
 
 
 def test_recipe_basic(basic_model, transform_recipe_basic):
     transform_groups = transform_recipe_basic.transform_groups
-    model = _test_model(basic_model, transform_groups)
+    model = _apply_transfoms_to_model(basic_model, transform_groups)
 
     blocks = [model.block1, model.block2]
     for block in blocks:
         for layer in block:
             if isinstance(layer, torch.nn.Linear):
-                assert hasattr(layer, "transform_data")
-                assert isinstance(layer.transform_data, TransformData)
-                weight_transform = layer.transform_data.data.get("weights")
-                assert isinstance(weight_transform.get("transform"), torch.nn.Parameter)
+                _verify_correct_data(layer)
 
 
 def test_recipe_complex_multiple(basic_model, transform_recipe_complex_multiple):
     transform_groups = transform_recipe_complex_multiple.transform_groups
-    model = _test_model(basic_model, transform_groups)
+    model = _apply_transfoms_to_model(basic_model, transform_groups)
 
     # Should have the following structure:
     """
-    >> basic_model.embedding.transform_data
-    TransformData(
-        data={
-            <ModuleTarget.OUTPUT_ACTIVATIONS: 'output_activations'>: 
-            {'transform': 
-            Parameter containing:
-             tensor([[ 1.,  1.,  1.,  ...,  1.,  1.,  1.],
-                     [ 1., -1.,  1.,  ..., -1.,  1., -1.],
-                     [ 1.,  1., -1.,  ...,  1., -1., -1.],
-                     ...,
-                     [ 1., -1.,  1.,  ..., -1.,  1., -1.],
-                     [ 1.,  1., -1.,  ...,  1., -1., -1.],
-                     [ 1., -1., -1.,  ..., -1., -1.,  1.]], dtype=torch.bfloat16), 
-            'call_args': None}})
-
-    >> basic_model.block1[0].transform_data
-    TransformData(
-        data={<ModuleTarget.WEIGHTS: 'weights'>: 
-            {'transform': 
-            Parameter containing:
-             tensor([[ 1.,  1.,  1.,  ...,  1.,  1.,  1.],
-                     [ 1., -1.,  1.,  ..., -1.,  1., -1.],
-                     [ 1.,  1., -1.,  ...,  1., -1., -1.],
-                     ...,
-                     [ 1., -1.,  1.,  ..., -1.,  1., -1.],
-                     [ 1.,  1., -1.,  ...,  1., -1., -1.],
-                     [ 1., -1., -1.,  ..., -1., -1.,  1.]], dtype=torch.bfloat16), 
-            'call_args': None}})
+    >> basic_model.embedding.output_activations_transform
+    Parameter containing:
+        tensor([[ 1.,  1.,  1.,  ...,  1.,  1.,  1.],
+                [ 1., -1.,  1.,  ..., -1.,  1., -1.],
+                [ 1.,  1., -1.,  ...,  1., -1., -1.],
+                ...,
+                [ 1., -1.,  1.,  ..., -1.,  1., -1.],
+                [ 1.,  1., -1.,  ...,  1., -1., -1.],
+                [ 1., -1., -1.,  ..., -1., -1.,  1.]], dtype=torch.bfloat16)
+    
+    >> model.embedding.transform_data
+        TransformData(data={'output_activations_transform': 
+            {
+                'apply': <function Hadamard.apply at 0x7c7bcc56caf0>, 
+                'call_args': None
+            }
+        }
+    )
     """
 
     # Verify Embedding layers and Linear Layers have the correct data attached to them
-    assert hasattr(model.embedding, "transform_data")
-    assert isinstance(model.embedding.transform_data, TransformData)
-    activation_transform = model.embedding.transform_data.data.get("output_activations")
-    assert isinstance(activation_transform.get("transform"), torch.nn.Parameter)
+    _verify_correct_data(model.embedding)
 
     blocks = [model.block1, model.block2]
     for block in blocks:
         for layer in block:
             if isinstance(layer, torch.nn.Linear):
-                assert hasattr(layer, "transform_data")
-                assert isinstance(layer.transform_data, TransformData)
-                weight_transform = layer.transform_data.data.get("weights")
-                assert isinstance(weight_transform.get("transform"), torch.nn.Parameter)
+                _verify_correct_data(layer)
