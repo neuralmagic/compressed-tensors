@@ -45,11 +45,10 @@ class Transforms(RegistryMixin):
         dtype = torch.bfloat16
         module = torch.nn.Linear(size, size)
 
-        # Load transform 1
         hadamard_transform = Transforms.load_from_registry(
             "random_hadamard", size=size, dtype=dtype
         )
-        hadamard_apply = Transform.fetch_apply("random_hadamard")
+        hadamard_apply = Transforms.fetch_apply("random_hadamard")
         module.weight_transform = hadamard_transform
 
         transformed_output = hadamard_apply(input_tensor=module.weight, transform=moduel.weight_transform)
