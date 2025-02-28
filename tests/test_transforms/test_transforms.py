@@ -150,8 +150,8 @@ def test_scalar_transform(scalar: Union[int, float]):
     dtype = torch.float16
     scalar = torch.Tensor([scalar])
     scalar_transform = Transforms.load_from_registry("scalar-mul", transform=scalar)
-    assert scalar_transform.transform is not None
-    assert torch.equal(scalar_transform.transform, scalar)
+    assert scalar_transform is not None
+    assert torch.equal(scalar_transform, scalar)
 
     x = torch.rand((size, size), dtype=dtype)
     transformed_value = ScalarMultiply.apply(input_tensor=x, transform=scalar_transform)

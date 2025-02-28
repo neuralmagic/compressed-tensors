@@ -132,7 +132,6 @@ def _test_model(model, transform_groups):
                 transform = Transforms.load_from_registry(
                     transform_type, **transform_creation_args
                 )
-                transform
 
             for _, submodule in model.named_modules():
                 name = submodule.__class__.__name__
@@ -162,24 +161,9 @@ def test_recipe_complex(basic_model, transform_recipe_complex):
                 assert hasattr(layer, "transform_data")
                 assert isinstance(layer.transform_data, TransformData)
                 weight_transform = layer.transform_data.data.get("weights")
-                assert isinstance(weight_transform.get("transform"), Hadamard)
+                assert isinstance(weight_transform.get("transform"), torch.nn.Parameter)
                 output_transform = layer.transform_data.data.get("output_activations")
-                assert isinstance(output_transform.get("transform"), RandomHadamard)
-
-    """
-    >> basic_model.block1[0].transform_data
-
-    TransformData(
-        data={
-            <ModuleTarget.WEIGHTS: 'weights'>: 
-                {'transform': <compressed_tensors.transforms.hadamard.Hadamard object at 0x705403b3baf0>, 
-                'call_args': None},    
-            <ModuleTarget.OUTPUT_ACTIVATIONS: 'output_activations'>: 
-                {'transform': <compressed_tensors.transforms.random_hadamard.RandomHadamard object at 0x74535bd6e230>, 
-                'call_args': None}
-            }
-        )
-    """
+                assert isinstance(output_transform.get("transform"), torch.nn.Parameter)
 
 
 def test_recipe_basic(basic_model, transform_recipe_basic):
@@ -193,7 +177,7 @@ def test_recipe_basic(basic_model, transform_recipe_basic):
                 assert hasattr(layer, "transform_data")
                 assert isinstance(layer.transform_data, TransformData)
                 weight_transform = layer.transform_data.data.get("weights")
-                assert isinstance(weight_transform.get("transform"), Hadamard)
+                assert isinstance(weight_transform.get("transform"), torch.nn.Parameter)
 
 
 def test_recipe_complex_multiple(basic_model, transform_recipe_complex_multiple):
@@ -206,28 +190,37 @@ def test_recipe_complex_multiple(basic_model, transform_recipe_complex_multiple)
     TransformData(
         data={
             <ModuleTarget.OUTPUT_ACTIVATIONS: 'output_activations'>: 
-                {'transform': <compressed_tensors.transforms.hadamard.Hadamard object at 0x7ac77ef3fa00>, 
-                'call_args': None
-            }
-        }
-    )
+            {'transform': 
+            Parameter containing:
+             tensor([[ 1.,  1.,  1.,  ...,  1.,  1.,  1.],
+                     [ 1., -1.,  1.,  ..., -1.,  1., -1.],
+                     [ 1.,  1., -1.,  ...,  1., -1., -1.],
+                     ...,
+                     [ 1., -1.,  1.,  ..., -1.,  1., -1.],
+                     [ 1.,  1., -1.,  ...,  1., -1., -1.],
+                     [ 1., -1., -1.,  ..., -1., -1.,  1.]], dtype=torch.bfloat16), 
+            'call_args': None}})
 
     >> basic_model.block1[0].transform_data
     TransformData(
-        data={
-            <ModuleTarget.WEIGHTS: 'weights'>: 
-                {'transform': <compressed_tensors.transforms.hadamard.Hadamard object at 0x7ac77ef3f940>, 
-                'call_args': None
-            }
-        }
-    )
+        data={<ModuleTarget.WEIGHTS: 'weights'>: 
+            {'transform': 
+            Parameter containing:
+             tensor([[ 1.,  1.,  1.,  ...,  1.,  1.,  1.],
+                     [ 1., -1.,  1.,  ..., -1.,  1., -1.],
+                     [ 1.,  1., -1.,  ...,  1., -1., -1.],
+                     ...,
+                     [ 1., -1.,  1.,  ..., -1.,  1., -1.],
+                     [ 1.,  1., -1.,  ...,  1., -1., -1.],
+                     [ 1., -1., -1.,  ..., -1., -1.,  1.]], dtype=torch.bfloat16), 
+            'call_args': None}})
     """
 
     # Verify Embedding layers and Linear Layers have the correct data attached to them
     assert hasattr(model.embedding, "transform_data")
     assert isinstance(model.embedding.transform_data, TransformData)
     activation_transform = model.embedding.transform_data.data.get("output_activations")
-    assert isinstance(activation_transform.get("transform"), Hadamard)
+    assert isinstance(activation_transform.get("transform"), torch.nn.Parameter)
 
     blocks = [model.block1, model.block2]
     for block in blocks:
@@ -236,4 +229,4 @@ def test_recipe_complex_multiple(basic_model, transform_recipe_complex_multiple)
                 assert hasattr(layer, "transform_data")
                 assert isinstance(layer.transform_data, TransformData)
                 weight_transform = layer.transform_data.data.get("weights")
-                assert isinstance(weight_transform.get("transform"), Hadamard)
+                assert isinstance(weight_transform.get("transform"), torch.nn.Parameter)
