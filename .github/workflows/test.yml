@@ -124,7 +124,7 @@ jobs:
 
             - name: copy results to GCP
               run: |
-                  gcloud storage cp test-results/report.xml ${{ secrets.GCP_BUILD_ML_ASSETS2 }}/${{ github.run_id }}/compressed-tensors/test-results/report-${{ inputs.test_label }}.xml
+                  gcloud storage cp test-results/report.xml ${{ secrets.GCP_BUILD_ML_ASSETS2 }}/${{ github.run_id }}/test-results/report-${{ inputs.test_label }}.xml
 
             - name: upload results
               uses: actions/upload-artifact@v4
