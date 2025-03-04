@@ -55,6 +55,9 @@ jobs:
         name: TEST (${{ inputs.python}}, ${{ inputs.test_label }})
         runs-on: ${{ inputs.test_label }}
         timeout-minutes: ${{ fromJson(inputs.timeout) }}
+        permissions:
+            contents: 'read'
+            id-token: 'write'
 
         steps:
 
