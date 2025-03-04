@@ -65,9 +65,11 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         """
         pack_factor = 32 // quantization_args.num_bits
         packed_size = math.ceil(weight_shape[1] / pack_factor)
+        packed_size_zp = math.ceil(weight_shape[0] / pack_factor)
         return {
             "weight_packed": (torch.Size((weight_shape[0], packed_size)), torch.int32),
             "weight_shape": (torch.Size((2,)), torch.int32),
+            "weight_zero_point": (torch.Size((packed_size_zp, weight_shape[-1] // quantization_args.group_size)), torch.int32)
         }
 
     def compress_weight(
@@ -104,6 +106,8 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
             quantized_weight = weight
 
         packed_weight = pack_to_int32(quantized_weight, quantization_args.num_bits)
+        packed_zp = pack_to_int32(zero_point, quantization_args.num_bits, packed_dim=0)
+        
         weight_shape = torch.tensor(weight.shape)
         if device is not None:
             packed_weight = packed_weight.to(device)
@@ -111,6 +115,7 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
 
         compressed_dict["weight_shape"] = weight_shape
         compressed_dict["weight_packed"] = packed_weight
+        compressed_dict["weight_zero_point"] = packed_zp
 
         return compressed_dict
 
@@ -133,6 +138,10 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         original_shape = torch.Size(compressed_data["weight_shape"])
         num_bits = quantization_args.num_bits
         unpacked = unpack_from_int32(weight, num_bits, original_shape)
+        original_zp_shape = (original_shape[0], scale.shape[-1])
+        print(zero_point.shape)
+        zero_point = unpack_from_int32(zero_point, num_bits, original_zp_shape, packed_dim=0)
+        print(zero_point.shape)
         decompressed_weight = dequantize(
             x_q=unpacked, scale=scale, zero_point=zero_point, g_idx=g_idx
         )
@@ -140,7 +149,7 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         return decompressed_weight
 
 
-def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
+def pack_to_int32(value: torch.Tensor, num_bits: int, packed_dim=1) -> torch.Tensor:
     """
     Packs a tensor of quantized weights stored in int8 into int32s with padding
 
@@ -176,14 +185,20 @@ def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
     pack_factor = 32 // num_bits
 
     # pad input tensor and initialize packed output
-    packed_size = math.ceil(value.shape[1] / pack_factor)
-    padding = packed_size * pack_factor - value.shape[1]
+    packed_size = math.ceil(value.shape[packed_dim] / pack_factor)
+    padding = packed_size * pack_factor - value.shape[packed_dim]
     value = np.pad(value, pad_width=[(0, 0), (0, padding)], constant_values=0)
 
     # pack values
-    packed = np.zeros((value.shape[0], packed_size), dtype=np.uint32)
-    for i in range(pack_factor):
-        packed |= value[:, i::pack_factor] << num_bits * i
+    if packed_dim == 1:
+        packed = np.zeros((value.shape[0], packed_size), dtype=np.uint32)
+        for i in range(pack_factor):
+            packed |= value[:, i::pack_factor] << num_bits * i
+    else:
+        packed = np.zeros((packed_size, value.shape[1]), dtype=np.uint32)
+        for i in range(pack_factor):
+            packed |= value[i::pack_factor, :] << num_bits * i
+
 
     # convert back to signed and torch
     packed = np.ascontiguousarray(packed).view(np.int32)
@@ -191,7 +206,7 @@ def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
 
 
 def unpack_from_int32(
-    value: torch.Tensor, num_bits: int, shape: torch.Size
+    value: torch.Tensor, num_bits: int, shape: torch.Size, packed_dim=1
 ) -> torch.Tensor:
     """
     Unpacks a tensor of packed int32 weights into individual int8s, maintaining the
@@ -216,17 +231,31 @@ def unpack_from_int32(
 
     # unpack
     mask = (1 << num_bits) - 1
-    unpacked = torch.zeros(
-        (value.shape[0], value.shape[1] * pack_factor),
-        device=value.device,
-        dtype=torch.int32,
-    )
-    for i in range(pack_factor):
-        unpacked[:, i::pack_factor] = (value >> (num_bits * i)) & mask
 
-    # remove padding
-    original_row_size = int(shape[1])
-    unpacked = unpacked[:, :original_row_size]
+    if packed_dim == 1:
+        unpacked = torch.zeros(
+            (value.shape[0], value.shape[1] * pack_factor),
+            device=value.device,
+            dtype=torch.int32,
+        )
+        for i in range(pack_factor):
+            unpacked[:, i::pack_factor] = (value >> (num_bits * i)) & mask
+
+        # remove padding
+        original_row_size = int(shape[1])
+        unpacked = unpacked[:, :original_row_size]
+    else:
+        unpacked = torch.zeros(
+            (value.shape[0] * pack_factor, value.shape[1]),
+            device=value.device,
+            dtype=torch.int32,
+        )
+        for i in range(pack_factor):
+            unpacked[i::pack_factor, :] = (value >> (num_bits * i)) & mask
+
+        # remove padding
+        original_row_size = int(shape[0])
+        unpacked = unpacked[:original_row_size, :]
 
     # bits are packed in unsigned format, reformat to signed
     # update the value range from unsigned to signed
