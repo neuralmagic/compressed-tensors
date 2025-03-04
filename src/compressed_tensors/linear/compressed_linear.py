@@ -38,6 +38,10 @@ class CompressedLinear(Linear):
     :param quantization_format: compression format module is stored as
     """
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.is_decompressed_ = False
+
     @classmethod
     @torch.no_grad()
     def from_linear(
@@ -86,5 +90,8 @@ class CompressedLinear(Linear):
         """
         Decompresses the weight, then runs the wrapped forward pass
         """
-        uncompressed_weight = self.compressor.decompress_module(self)
-        return linear(input, uncompressed_weight, self.bias)
+        if not self.is_decompressed_:
+            self.weight = self.compressor.decompress_module(self)
+            self.is_decompressed_ = True
+
+        return linear(input, self.weight, self.bias)
