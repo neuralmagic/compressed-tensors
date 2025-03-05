@@ -40,7 +40,7 @@ class CompressedLinear(Linear):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.is_decompressed_ = False
+        self._is_compressed = True
 
     @classmethod
     @torch.no_grad()
@@ -90,8 +90,8 @@ class CompressedLinear(Linear):
         """
         Decompresses the weight, then runs the wrapped forward pass
         """
-        if not self.is_decompressed_:
+        if self._is_compressed:
             self.weight = self.compressor.decompress_module(self)
-            self.is_decompressed_ = True
+            self._is_compressed = False
 
         return linear(input, self.weight, self.bias)
