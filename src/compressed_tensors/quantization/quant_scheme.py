@@ -199,6 +199,16 @@ FP8_DYNAMIC = dict(
     ),
 )
 
+AWQ = dict(
+    weights=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.INT,
+        strategy=QuantizationStrategy.GROUP,
+        group_size=128,
+        symmetric=False,
+    ),
+)
+
 PRESET_SCHEMES = {
     # Unquantized (no-op)
     "UNQUANTIZED": UNQUANTIZED,
@@ -212,4 +222,5 @@ PRESET_SCHEMES = {
     # Float weight and activation schemes
     "FP8": FP8,
     "FP8_DYNAMIC": FP8_DYNAMIC,
+    "AWQ": AWQ,
 }
