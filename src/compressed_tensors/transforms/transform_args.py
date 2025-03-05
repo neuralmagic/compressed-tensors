@@ -32,6 +32,10 @@ class ModuleTarget(str, Enum):
     INPUT_ACTIVATIONS = "input_activations"
     OUTPUT_ACTIVATIONS = "output_activations"
 
+    @classmethod
+    def has_value(cls, value):
+        return value in cls._value2member_map_ 
+
 
 class TransformationArgs(BaseModel):
     """
@@ -57,9 +61,7 @@ class TransformationArgs(BaseModel):
     def validate_module_target(cls, value) -> List[ModuleTarget]:
         module_targets_list = []
         for v in value:
-            if isinstance(v, str):
-                module_targets_list.append(ModuleTarget(v.lower()))
-            else:
-                module_targets_list.append(v)
+            assert ModuleTarget.has_value(v.lower())
+            module_targets_list.append(v)
 
         return module_targets_list
