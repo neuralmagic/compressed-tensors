@@ -97,6 +97,7 @@ jobs:
               uses: ./.github/actions/test/
               with:
                   venv: ${{ steps.create_venv.outputs.penv }}
+                  suitename: test-${{ inputs.python }}-${{ inputs.test_label }}
 
             - name: summary
               uses: neuralmagic/nm-actions/actions/summary-test@v1.13.0

@@ -4,6 +4,8 @@ inputs:
   venv:
     description: "path of virtualenv"
     required: true
+  suitename:
+    description: "path of virtualenv"
 outputs:
   status:
     description: "final status from test"
@@ -27,6 +29,9 @@ runs:
           SUCCESS=0
           pytest tests --junitxml=test-results/report.xml || SUCCESS=$?
           echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
+          if [ ! -z "${{ inputs.suitename }}" ]; then
+              sed -i "s/<testsuite name=pytest/<testsuite name=${{ inputs.suitename }}/g" test-results/report.xml
+          fi
           deactivate
           exit ${SUCCESS}
       shell: bash
