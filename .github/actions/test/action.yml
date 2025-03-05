@@ -30,7 +30,7 @@ runs:
           pytest tests --junitxml=test-results/report.xml || SUCCESS=$?
           echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
           if [ ! -z "${{ inputs.suitename }}" ]; then
-              sed -i "s/<testsuite name=pytest/<testsuite name=${{ inputs.suitename }}/g" test-results/report.xml
+              sed -i "s/<testsuite name=\"pytest\"/<testsuite name=\"${{ inputs.suitename }}\"/g" test-results/report.xml
           fi
           deactivate
           exit ${SUCCESS}
