@@ -110,6 +110,7 @@ def basic_model():
 
 
 def _apply_transfoms_to_model(model, transform_groups):
+    # TODO: move to general processing funtion in apply
     for _, group in transform_groups.items():
         # Each group/scheme targets one type of transform
         transform_type = group.transform_type
