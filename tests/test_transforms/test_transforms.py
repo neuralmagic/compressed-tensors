@@ -136,23 +136,3 @@ def test_multiplier_transform(size: int, dtype: torch.dtype):
         input_tensor=x, transform=multiplier_transform
     )
     assert torch.equal(transformed_value, x)
-
-
-@pytest.mark.parametrize(
-    "scalar",
-    [
-        2,
-        0.5,
-    ],
-)
-def test_scalar_transform(scalar: Union[int, float]):
-    size = 1024
-    dtype = torch.float16
-    scalar = torch.Tensor([scalar])
-    scalar_transform = Transforms.load_from_registry("scalar-mul", transform=scalar)
-    assert scalar_transform is not None
-    assert torch.equal(scalar_transform, scalar)
-
-    x = torch.rand((size, size), dtype=dtype)
-    transformed_value = ScalarMultiply.apply(input_tensor=x, transform=scalar_transform)
-    assert torch.equal(transformed_value, x * scalar)

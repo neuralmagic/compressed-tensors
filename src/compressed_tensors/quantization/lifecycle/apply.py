@@ -132,10 +132,11 @@ def process_transforms_config(transforms_config, model):
                 if targets:
                     # Every layer which matches gets its own transform
                     # Same transform type and args are used however
+                    dtype = getattr(submodule, module_targets[0]).dtype
+                    transform_creation_args["dtype"] = dtype
                     transform = Transforms.load_from_registry(
                         transform_type, **transform_creation_args
                     )
-                    apply = Transforms.fetch_apply(transform_type)
 
                     # attach the transform to the submodule
                     # because we can have more than one transform, need to attach some
@@ -147,13 +148,15 @@ def process_transforms_config(transforms_config, model):
                     else:
                         idx = 0
 
+                    # only support weight parameters for now, assume one value in
+                    # module targets
                     transform_name = f"{module_targets[0]}_transform_{idx}"
                     setattr(submodule, transform_name, transform)
 
                     # add relevant transform data to the submodule as well
                     data = {
                         transform_name: {
-                            "apply": apply,
+                            "type": transform_type,
                             "call_args": transform_arg.call_args,
                         }
                     }

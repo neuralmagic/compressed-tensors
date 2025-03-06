@@ -17,6 +17,7 @@ from typing import Optional, Union
 import torch
 from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
+from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
 @Transforms.register("random-hadamard")
@@ -54,36 +55,32 @@ class RandomHadamard(Transforms):
 
         if transform is None:
             assert size is not None
-            transform = random_hadamard_matrix(size=size).to(dtype)
+            transform = random_hadamard_matrix(size=size)
 
-        return super().__new__(cls, transform=transform, device=device)
+        return super().__new__(cls, transform=transform, device=device, dtype=dtype)
 
     @staticmethod
-    def apply(
+    def inverse_apply(
         transform: torch.Tensor,
         input_tensor: torch.Tensor,
         transpose: bool = False,
         first: bool = True,
     ) -> torch.Tensor:
         """
-        :param transform: transform tensor
-        :param input_tensor: tensor to which the hadamard matrix is applied
-        :param transpose: whether or not the hadamard matrix is transposed before
+        Apply the inverse operation of `apply`
+
+        :param transform: hadamard tensor
+        :param input_tensor: tensor to which the transform matrix is applied
+        :param transpose: whether or not the transform matrix is transposed before
             being applied.
-        :param first: if the hadmard matrix will be the first or second matrix to be
+        :param first: if the transform matrix will be the first or second matrix to be
             multiplied
-
-        returns a transformed input_tensor
         """
-        if transpose:
-            return (
-                torch.matmul(transform.T, input_tensor)
-                if first
-                else torch.matmul(input_tensor, transform.T)
-            )
 
-        return (
-            torch.matmul(transform, input_tensor)
-            if first
-            else torch.matmul(input_tensor, transform)
+        transpose = not transpose
+        return apply_matrix_transform(
+            transform=transform,
+            input_tensor=input_tensor,
+            transpose=transpose,
+            first=first,
         )
