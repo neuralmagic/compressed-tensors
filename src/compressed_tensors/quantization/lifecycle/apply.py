@@ -19,7 +19,6 @@ from copy import deepcopy
 from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
 from typing import Set, Union
-from compressed_tensors.transforms import Transforms
 
 import torch
 from compressed_tensors.config import CompressionFormat
@@ -48,7 +47,6 @@ from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_modul
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from torch.nn import Module
-from compressed_tensors.transforms.transform_data import TransformData
 
 
 __all__ = [
@@ -107,6 +105,7 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
                 state_dict=state_dict,
             )
 
+
 def process_transforms_config(transforms_config, model):
     for _, group in transforms_config.transform_groups.items():
         # Each group/scheme targets one type of transform
@@ -119,12 +118,16 @@ def process_transforms_config(transforms_config, model):
 
             for name, submodule in model.named_modules():
                 if len(transform_arg.ignore) > 0:
-                    if matches := find_name_or_class_matches(name, submodule, transform_arg.ignore):
+                    if matches := find_name_or_class_matches(
+                        name, submodule, transform_arg.ignore
+                    ):
                         for match in matches:
                             print("ignoring", match, name)
                         continue  # layer matches ignore list, continue
 
-                targets = find_name_or_class_matches(name, submodule, transform_arg.targets)
+                targets = find_name_or_class_matches(
+                    name, submodule, transform_arg.targets
+                )
 
                 if targets:
                     # Every layer which matches gets its own transform
@@ -136,11 +139,11 @@ def process_transforms_config(transforms_config, model):
 
                     # attach the transform to the submodule
                     # because we can have more than one transform, need to attach some
-                    # form of key to fetch 
-                    # OR we store it in the dictionary, handle cpu-offloading separatly 
+                    # form of key to fetch
+                    # OR we store it in the dictionary, handle cpu-offloading separatly
 
                     if hasattr(submodule, "transform_data"):
-                        idx = submodule.transform_data.data.get("idx") + 1
+                        idx = submodule.transform_data.idx + 1
                     else:
                         idx = 0
 
@@ -148,12 +151,18 @@ def process_transforms_config(transforms_config, model):
                     setattr(submodule, transform_name, transform)
 
                     # add relevant transform data to the submodule as well
-                    data = {"idx": idx, transform_name: {"apply": apply, "call_args": transform_arg.call_args}}
+                    data = {
+                        transform_name: {
+                            "apply": apply,
+                            "call_args": transform_arg.call_args,
+                        }
+                    }
 
                     if hasattr(submodule, "transform_data"):
                         submodule.transform_data.data.update(data)
+                        submodule.transform_data.idx = idx
                     else:
-                        transform_data = TransformData(data=data)
+                        transform_data = TransformData(data=OrderedDict(data))
                         submodule.transform_data = transform_data
     return model
 
@@ -296,7 +305,6 @@ def apply_quantization_config(
             )
 
             names_to_scheme[name] = submodule.quantization_scheme.weights
-        
 
     if config.ignore is not None and ignored_submodules is not None:
         if set(config.ignore) - set(ignored_submodules):
