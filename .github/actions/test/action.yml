@@ -27,11 +27,13 @@ runs:
           source ${{ inputs.venv }}/bin/activate
           rm -rf src
           SUCCESS=0
-          pytest tests --junitxml=test-results/report.xml || SUCCESS=$?
-          echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
           if [ ! -z "${{ inputs.suitename }}" ]; then
-              sed -i "s/<testsuite name=\"pytest\"/<testsuite name=\"${{ inputs.suitename }}\"/g" test-results/report.xml
+              pytest tests --junitxml=test-results/report.xml -o junit_suite_name="${{ inputs.suitename }}" || SUCCESS=$?
+              #sed -i "s/<testsuite name=\"pytest\"/<testsuite name=\"${{ inputs.suitename }}\"/g" test-results/report.xml
+          else
+              pytest tests --junitxml=test-results/report.xml || SUCCESS=$?
           fi
+          echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
           deactivate
           exit ${SUCCESS}
       shell: bash
