@@ -21,6 +21,7 @@ from compressed_tensors.quantization import (
     QuantizationStatus,
     initialize_module_for_quantization,
 )
+from compressed_tensors.utils import register_offload_parameter
 from torch import Tensor
 from torch.nn import Parameter
 from torch.nn.functional import linear
@@ -36,6 +37,10 @@ class CompressedLinear(Linear):
     :param quantization_scheme: quantization config for the module to wrap
     :param quantization_format: compression format module is stored as
     """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._is_compressed = True
 
     @classmethod
     @torch.no_grad()
@@ -68,7 +73,7 @@ class CompressedLinear(Linear):
             param = Parameter(
                 torch.empty(shape, device=device, dtype=dtype), requires_grad=False
             )
-            module.register_parameter(name, param)
+            register_offload_parameter(module, name, param)
 
         # mark module as compressed
         module.quantization_status = QuantizationStatus.COMPRESSED
@@ -85,5 +90,8 @@ class CompressedLinear(Linear):
         """
         Decompresses the weight, then runs the wrapped forward pass
         """
-        uncompressed_weight = self.compressor.decompress_module(self)
-        return linear(input, uncompressed_weight, self.bias)
+        if self._is_compressed:
+            self.weight = self.compressor.decompress_module(self)
+            self._is_compressed = False
+
+        return linear(input, self.weight, self.bias)
