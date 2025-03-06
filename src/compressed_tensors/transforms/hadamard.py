@@ -25,7 +25,7 @@ class Hadamard(Transforms):
         cls,
         size: Optional[int] = None,
         transform: Optional[torch.Tensor] = None,
-        device: Optional[Union[str, torch.device]] = None,
+        device: Optional[Union[str, torch.device]] = "cuda",
         dtype: Optional[torch.dtype] = torch.bfloat16,
     ):
         """

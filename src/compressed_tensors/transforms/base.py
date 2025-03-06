@@ -31,7 +31,7 @@ class Transforms(RegistryMixin):
     def __new__(
         cls,
         transform: torch.Tensor,
-        device: Optional[Union[str, torch.device]] = "cpu",
+        device: Optional[Union[str, torch.device]] = "cuda",
         *args,
         **kwargs,
     ):
