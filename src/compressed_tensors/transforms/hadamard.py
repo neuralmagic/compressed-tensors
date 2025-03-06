@@ -46,36 +46,35 @@ class Hadamard(Transforms):
         if transform is None:
             assert size is not None
             # TODO: this is deterministic; we should just serialize the size
-            transform = torch.Tensor(deterministic_hadamard_matrix(size=size)).to(dtype)
+            transform = torch.Tensor(deterministic_hadamard_matrix(size=size))
 
-        return super().__new__(cls, transform=transform, device=device)
+        return super().__new__(cls, transform=transform, device=device, dtype=dtype)
 
     @staticmethod
-    def apply(
+    def inverse_apply(
         transform: torch.Tensor,
         input_tensor: torch.Tensor,
         transpose: bool = False,
         first: bool = True,
     ) -> torch.Tensor:
         """
-        :param transform: transformation tensor
-        :param input_tensor: tensor to which the hadamard matrix is applied
-        :param transpose: whether or not the hadamard matrix is transposed before
+        Apply the inverse operation of `apply`
+
+        :param transform: hadamard tensor
+        :param input_tensor: tensor to which the transform matrix is applied
+        :param transpose: whether or not the transform matrix is transposed before
             being applied.
-        :param first: if the hadmard matrix will be the first or second matrix to be
+        :param first: if the transform matrix will be the first or second matrix to be
             multiplied
-
-        returns a transformed input_tensor
         """
-        if transpose:
-            return (
-                torch.matmul(transform.T, input_tensor)
-                if first
-                else torch.matmul(input_tensor, transform.T)
-            )
-
+        transpose = not transpose
+        # need to normalize before sending back
         return (
-            torch.matmul(transform, input_tensor)
-            if first
-            else torch.matmul(input_tensor, transform)
+            apply_matrix_transform(
+                transform=transform,
+                input_tensor=input_tensor,
+                transpose=transpose,
+                first=first,
+            )
+            / transform.shape[0]
         )

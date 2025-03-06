@@ -16,6 +16,7 @@ from typing import Any, Optional, Union
 
 import torch
 from compressed_tensors.registry.registry import RegistryMixin
+from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
 __all__ = ["Transforms"]
@@ -26,12 +27,15 @@ __all__ = ["Transforms"]
 # first or second matirx in torch.matmul depending on dimensions, can be inferred
 # by the layer time likely.
 
+MATIRX_TRANSFORMS = ["matrix-mul", "hadamard", "random-hadamard"]
+
 
 class Transforms(RegistryMixin):
     def __new__(
         cls,
         transform: torch.Tensor,
         device: Optional[Union[str, torch.device]] = "cuda",
+        dtype: Optional[torch.dtype] = torch.bfloat16,
         *args,
         **kwargs,
     ):
@@ -51,29 +55,33 @@ class Transforms(RegistryMixin):
         hadamard_apply = Transforms.fetch_apply("random_hadamard")
         module.weight_transform = hadamard_transform
 
-        transformed_output = hadamard_apply(input_tensor=module.weight, transform=moduel.weight_transform)
+        transformed_output = hadamard_apply(input_tensor=module.weight,
+            transform=moduel.weight_transform)
+
+        hadamard_inverse = Transforms.fetch_inverse_apply("random_hadamard")
+        original_weight = hadamard_inverse(input_tensor=transformed_output,
+            transform=model.weight_trainsform,
+            transpose=True)
 
         :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
-        return torch.nn.Parameter(transform.to(device), requires_grad=False)
+        return torch.nn.Parameter(transform.to(device).to(dtype), requires_grad=False)
 
     @classmethod
     def fetch_apply(cls, name: str):
-        constructor = cls.get_value_from_registry(name=name)
-        return constructor.apply
+        if name in MATIRX_TRANSFORMS:
+            return apply_matrix_transform
+        raise NotImplementedError("Only matrix transforms are supported")
 
-    # TODO: this is a static method but we could potentially just have a set of utils
-    # which fetch the appropriate apply method since how the transform is applied
-    # will likely be the same for matrices and therefore, we can have one common apply
-    # for RandomHadamard, Hadamard, MatrixMultiply etc.
+    @classmethod
+    def fetch_inverse_apply(cls, name: str):
+        return cls.get_value_from_registry(name=name).inverse_apply
+
     @staticmethod
-    def apply(
+    def inverse_apply(
         transform: torch.Tensor, input_tensor: torch.Tensor, *args, **kwargs
     ) -> torch.Tensor:
         """
-        :param transform: transform tensor to be applied to the input_tensor
-        :param input_tensor: tensor to which the transformation is applied
-
-        returns a transformed input tensor
+        Apply the inverse operation applied by the apply method
         """
         raise NotImplementedError()

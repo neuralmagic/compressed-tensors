@@ -19,29 +19,28 @@ from compressed_tensors.transforms import Transforms
 @Transforms.register("matrix-mul")
 class MatrixMultiply(Transforms):
     @staticmethod
-    def apply(
+    def inverse_apply(
         transform: torch.Tensor,
         input_tensor: torch.Tensor,
         transpose: bool = False,
-        first: bool = False,
+        first: bool = True,
     ) -> torch.Tensor:
         """
-        :param transform: transform tensor
-        :param input_tensor: tensor to which the transformation is applied
-        :param transpose: whether or not the transformation is transposed before
+        Apply the inverse operation of `apply`
+
+        :param transform: matrix tensor
+        :param input_tensor: tensor to which the transform matrix is applied
+        :param transpose: whether or not the transform matrix is transposed before
             being applied.
-        :param first: if the multiplier matrix will be the first or second matrix to be
+        :param first: if the transform matrix will be the first or second matrix to be
             multiplied
         """
-        if transpose:
-            return (
-                torch.matmul(transform.T, input_tensor)
-                if first
-                else torch.matmul(input_tensor, transform.T)
-            )
 
-        return (
-            torch.matmul(transform, input_tensor)
-            if first
-            else torch.matmul(input_tensor, transform)
+        # Note: not implemented for lower precision than float32
+        transform = torch.linalg.inv(transform)
+        return apply_matrix_transform(
+            transform=transform,
+            input_tensor=input_tensor,
+            transpose=transpose,
+            first=first,
         )
