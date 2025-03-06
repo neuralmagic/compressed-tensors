@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
@@ -28,9 +29,13 @@ class ModuleTarget(str, Enum):
     in a particuilar module.
     """
 
-    WEIGHTS = "weights"
+    WEIGHT = "weight"
     INPUT_ACTIVATIONS = "input_activations"
     OUTPUT_ACTIVATIONS = "output_activations"
+
+    @classmethod
+    def has_value(cls, value):
+        return value in cls._value2member_map_
 
 
 class TransformationArgs(BaseModel):
@@ -50,16 +55,14 @@ class TransformationArgs(BaseModel):
 
     targets: List[str]
     module_targets: List[Union[ModuleTarget, str]]
-    call_args: Optional[Dict[str, Any]] = None
+    call_args: Optional[Dict[str, Any]] = defaultdict()
     ignore: Optional[List[str]] = Field(default_factory=list)
 
     @field_validator("module_targets", mode="before")
     def validate_module_target(cls, value) -> List[ModuleTarget]:
         module_targets_list = []
         for v in value:
-            if isinstance(v, str):
-                module_targets_list.append(ModuleTarget(v.lower()))
-            else:
-                module_targets_list.append(v)
+            assert ModuleTarget.has_value(v.lower())
+            module_targets_list.append(v)
 
         return module_targets_list
