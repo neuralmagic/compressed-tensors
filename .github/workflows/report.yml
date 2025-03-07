@@ -60,6 +60,12 @@ jobs:
 
         steps:
 
+            - name: checkout code
+              id: checkout
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.gitref }}
+
             - name: install automation components
               uses: neuralmagic/nm-actions/actions/install-automation-components@v1.0.0
 
