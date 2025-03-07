@@ -67,7 +67,7 @@ jobs:
                   ref: ${{ inputs.gitref }}
 
             - name: install automation components
-              uses: neuralmagic/nm-actions/actions/install-automation-components@v1.0.0
+              uses: neuralmagic/nm-actions/actions/install-report-tools@testmo-to-reportportal
 
             - name: 'Authenticate to Google Cloud'
               id: auth-gcp
