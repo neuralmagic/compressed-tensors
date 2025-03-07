@@ -133,9 +133,8 @@ def process_transforms_config(transforms_config, model):
                     # Every layer which matches gets its own transform
                     # Same transform type and args are used however
                     dtype = getattr(submodule, module_targets[0]).dtype
-                    transform_creation_args["dtype"] = dtype
                     transform = Transforms.load_from_registry(
-                        transform_type, **transform_creation_args
+                        transform_type, dtype=dtype, **transform_creation_args
                     )
 
                     # attach the transform to the submodule
@@ -318,6 +317,8 @@ def apply_quantization_config(
             )
 
     if transforms_config:
+        model.transforms_config = transforms_config
+        breakpoint()
         model = process_transforms_config(transforms_config, model)
 
     # apply current quantization status across all targeted layers
