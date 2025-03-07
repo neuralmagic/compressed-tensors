@@ -51,6 +51,7 @@ from torch.nn import Module
 
 __all__ = [
     "load_pretrained_quantization",
+    "load_transforms",
     "apply_quantization_config",
     "apply_quantization_status",
     "find_name_or_class_matches",
@@ -59,10 +60,33 @@ __all__ = [
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
-from compressed_tensors.utils.safetensors_load import get_quantization_state_dict
+from compressed_tensors.utils.safetensors_load import (
+    get_quantization_state_dict,
+    get_weight_mappings,
+)
+from safetensors import safe_open
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def load_transforms(model: Module, model_name_or_path: str):
+    model_path = get_safetensors_folder(model_name_or_path)
+    weight_mappings = get_weight_mappings(model_path)
+
+    state_dict = {}
+    for weight_name, safe_path in weight_mappings.items():
+        if "transform" in weight_name:
+            with safe_open(safe_path, framework="pt", device="cpu") as f:
+                state_dict[weight_name] = f.get_tensor(weight_name)
+
+    for name, submodule in iter_named_leaf_modules(model):
+        transform_data = getattr(submodule, "transform_data", None)
+        if transform_data:
+            for transform_name, transform_data in transform_data.data.items():
+                full_name = f"{name}.{transform_name}"
+                transform_data = state_dict.get(full_name, None)
+                update_parameter_data(submodule, transform_data, transform_name)
 
 
 def load_pretrained_quantization(model: Module, model_name_or_path: str):
@@ -106,7 +130,7 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
             )
 
 
-def process_transforms_config(transforms_config, model):
+def process_transforms_config(transforms_config, model, quantization_status):
     for _, group in transforms_config.transform_groups.items():
         # Each group/scheme targets one type of transform
         transform_type = group.transform_type
@@ -132,10 +156,6 @@ def process_transforms_config(transforms_config, model):
                 if targets:
                     # Every layer which matches gets its own transform
                     # Same transform type and args are used however
-                    dtype = getattr(submodule, module_targets[0]).dtype
-                    transform = Transforms.load_from_registry(
-                        transform_type, dtype=dtype, **transform_creation_args
-                    )
 
                     # attach the transform to the submodule
                     # because we can have more than one transform, need to attach some
@@ -146,10 +166,28 @@ def process_transforms_config(transforms_config, model):
                         idx = submodule.transform_data.idx + 1
                     else:
                         idx = 0
-
                     # only support weight parameters for now, assume one value in
                     # module targets
                     transform_name = f"{module_targets[0]}_transform_{idx}"
+
+                    # create an empty tensor OR create a new transform
+                    dtype = getattr(submodule, module_targets[0]).dtype
+                    if quantization_status in [
+                        QuantizationStatus.COMPRESSED,
+                        QuantizationStatus.FROZEN,
+                    ]:
+                        transform = Transforms.load_from_registry(
+                            transform_type,
+                            dtype=dtype,
+                            empty=True,
+                            **transform_creation_args,
+                        )
+                    else:
+                        transform = Transforms.load_from_registry(
+                            transform_type,
+                            dtype=dtype,
+                            **transform_creation_args,
+                        )
                     setattr(submodule, transform_name, transform)
 
                     # add relevant transform data to the submodule as well
@@ -318,8 +356,9 @@ def apply_quantization_config(
 
     if transforms_config:
         model.transforms_config = transforms_config
-        breakpoint()
-        model = process_transforms_config(transforms_config, model)
+        model = process_transforms_config(
+            transforms_config, model, config.quantization_status
+        )
 
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)

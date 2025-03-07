@@ -24,8 +24,8 @@ from compressed_tensors.transforms.utils import apply_matrix_transform
 class RandomHadamard(Transforms):
     def __new__(
         cls,
-        size: Optional[int] = None,
-        transform: Optional[torch.Tensor] = None,
+        size: int,
+        empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cuda",
         dtype: Optional[torch.dtype] = torch.bfloat16,
     ):
@@ -53,9 +53,10 @@ class RandomHadamard(Transforms):
         accuracy implications.
         """
 
-        if transform is None:
-            assert size is not None
+        if not empty:
             transform = random_hadamard_matrix(size=size)
+        else:
+            transform = torch.empty((size, size))
 
         return super().__new__(cls, transform=transform, device=device, dtype=dtype)
 
