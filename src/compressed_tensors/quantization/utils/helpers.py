@@ -64,8 +64,7 @@ def calculate_qparams(
     :param quantization_args: settings to quantization
     :return: tuple of the calculated scale(s) and zero point(s)
     """
-    min_vals = torch.min(min_vals, torch.zeros_like(min_vals))
-    max_vals = torch.max(max_vals, torch.zeros_like(max_vals))
+
     device = min_vals.device
 
     bit_min, bit_max = calculate_range(quantization_args, device)
@@ -73,15 +72,17 @@ def calculate_qparams(
     zp_dtype = quantization_args.pytorch_dtype()
 
     if quantization_args.symmetric:
+        min_vals = torch.min(min_vals, torch.zeros_like(min_vals))
+        max_vals = torch.max(max_vals, torch.zeros_like(max_vals))
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
         scales = max_val_pos / (float(bit_range) / 2)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
         scales = (max_vals - min_vals) / float(bit_range)
-        scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
+        scales = torch.clamp(scales, min=1e-5)
         zero_points = bit_min - (min_vals / scales)
-        zero_points = torch.clamp(zero_points, bit_min, bit_max)
+        zero_points = torch.clamp(torch.round(zero_points), bit_min, bit_max)
 
     # match zero-points to quantized type
     zero_points = zero_points.to(zp_dtype)
