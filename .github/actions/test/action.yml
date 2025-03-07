@@ -5,7 +5,7 @@ inputs:
     description: "path of virtualenv"
     required: true
   suitename:
-    description: "path of virtualenv"
+    description: "test suite name"
     required: true
 outputs:
   status:
