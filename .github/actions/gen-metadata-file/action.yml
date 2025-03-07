@@ -1,0 +1,75 @@
+name: generate metadata info file for the run
+description: 'generate metadata file'
+inputs:
+  reportportal_host:
+    description: "reportportal hostname"
+    required: true
+  project:
+    description: "reportportal project"
+    required: true
+  gha_url:
+    description: "GHA job url"
+    required: true
+  wf_category:
+    description: "workflow category; will be used in the droute attributes"
+    required: true
+  gitref:
+    description: "gitref for checked out product code; will be used in the droute attributes"
+    required: true
+  run_name:
+    description: "run name; if empty, will use project as default"
+  additional_attributes_string:
+    description: "additional information for droute attributes, specified in the 'key=value, key=value, ...' format"
+outputs:
+  metadata_filepath:
+    description: "path of the metadata file"
+    value: ${{ steps.metadata.outputs.metadata_filepath }}
+runs:
+  using: composite
+  steps:
+
+    - name: generate metadata file
+      id: metadata
+      run: |
+
+        # wheel is downloaded already
+        WHEEL=`find . -type f -name compressed*.whl -exec basename {} \;`
+
+        JSON_STRING=$(cat <<EOF
+        {
+          "hostname": "$REPORTPORTAL_HOST",
+          "project": "${{ inputs.project }}",
+          "description": "${{ inputs.description }}",
+        EOF
+        )
+
+        run_name=${{ inputs.run_name }}
+        if [ -z "${{ inputs.run_name }}" ]; then
+          run_name=${{ inputs.project }}
+        fi
+        JSON_STRING=$(cat <<EOF
+          "name": "${{ inputs.run_name }}",
+        EOF
+        )
+
+        ATTRIBUTES_STRING=$(cat <<EOF
+          "attributes": {
+            "wheel": "$WHEEL",
+            "gitref": "${{ inputs.gitref }}",
+            "workflow category": "${{ inputs.wf_category }}",
+        EOF
+        )
+
+        if [ ! -z "${{ inputs.additional_attributes_string }}" ]; then
+          echo "${{ inputs.additional_attributes_string }}" \
+          | jq --raw-output -R 'split(", ") | map(split("=") 
+          | "    \"\(.[0])\": \"\(.[1])\",") | .[]' >> $ATTRIBUTES_STRING
+        fi
+
+        echo -e "$JSON_STRING\n$ATTRIBUTES_STRING\n  }\n}" > metadata.json  
+        cat metadata.json
+        METADATA_FILEPATH=`realpath metadata.json`
+        echo "metadata_filepath=${METADATA_FILEPATH}" >> $GITHUB_OUTPUT
+      env:
+        REPORTPORTAL_HOST: ${{ inputs.reportportal_host }}
+      shell: bash
