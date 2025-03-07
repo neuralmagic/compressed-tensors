@@ -170,8 +170,6 @@ def _initialize_scale_zero_point(
         if quantization_args.strategy == QuantizationStrategy.CHANNEL:
             expected_shape = weight_shape[0]
 
-        # TODO: add support for output activations
-
     scale_dtype = module.weight.dtype
     if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
         scale_dtype = torch.float16

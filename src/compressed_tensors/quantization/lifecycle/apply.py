@@ -130,8 +130,6 @@ def apply_quantization_config(
     config = process_quantization_config(config)
     names_to_scheme = OrderedDict()
 
-    # have to consolidate attn quant with weight/input quant
-    # currently treats them as mutually exclusive
     for scheme in config.config_groups.values():
         for target in scheme.targets:
             target_to_scheme[target] = scheme
