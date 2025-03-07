@@ -78,16 +78,16 @@ jobs:
                   workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
                   service_account: ${{ secrets.GCP_GHA_SA }}
 
+            - name: 'Set up Cloud SDK'
+              uses: 'google-github-actions/setup-gcloud@v2'
+              with:
+                  version: '>= 473.0.0'
+
             - name: download assets
               uses: neuralmagic/nm-actions/actions/gcp-download-assets@v1.1.0
               with:
                 bucket_source: ${{ secrets.GCP_BUILD_ML_ASSETS2 }}
                 run_id: ${{ inputs.run_id }}
-
-            - name: 'Set up Cloud SDK'
-              uses: 'google-github-actions/setup-gcloud@v2'
-              with:
-                  version: '>= 473.0.0'
 
             - name: generate metadata info
               id: generate-metadata
