@@ -52,7 +52,7 @@ runs:
           "attributes": {
             "wheel": "$WHEEL",
             "gitref": "${{ inputs.gitref }}",
-            "workflow category": "${{ inputs.wf_category }}",
+            "workflow category": "${{ inputs.wf_category }}"
         EOF
         )
 

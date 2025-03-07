@@ -69,13 +69,6 @@ jobs:
             - name: install automation components
               uses: neuralmagic/nm-actions/actions/install-automation-components@v1.0.0
 
-            - name: set python
-              id: set-python
-              uses: actions/setup-python@v5
-              with:
-                python-version: 3.10.12
-
-            # GCP
             - name: 'Authenticate to Google Cloud'
               id: auth-gcp
               uses: google-github-actions/auth@v2.1.3
