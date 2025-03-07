@@ -269,7 +269,7 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             # forward call
             return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
 
-        #breakpoint()
+        # breakpoint()
         input_ = args[0]
 
         compressed = module.quantization_status == QuantizationStatus.COMPRESSED
@@ -289,8 +289,8 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         output = forward_func_orig.__get__(module, module.__class__)(
             input_, *args[1:], **kwargs
         )
-        #breakpoint()
-    
+        # breakpoint()
+
         # restore back to unquantized_value
         if scheme.weights is not None and not compressed:
             self.weight.data = unquantized_weight
