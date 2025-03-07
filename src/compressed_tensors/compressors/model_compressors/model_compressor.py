@@ -29,6 +29,7 @@ from compressed_tensors.base import (
     QUANTIZATION_CONFIG_NAME,
     QUANTIZATION_METHOD_NAME,
     SPARSITY_CONFIG_NAME,
+    TRANSFORMS_CONFIG,
 )
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
@@ -45,6 +46,7 @@ from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
 )
+from compressed_tensors.transforms.transform_config import TransformationConfig
 from compressed_tensors.utils import (
     get_safetensors_folder,
     merge_names,
@@ -170,6 +172,10 @@ class ModelCompressor:
             model, format=quantization_format
         )
 
+        # TODO: update to fetch from the pretrained model
+        # using the attached config for now
+        transforms_config = getattr(model, "transforms_config", None)
+
         if isinstance(sparsity_config, str):  # we passed in a sparsity format
             sparsity_config = SparsityCompressionConfig.load_from_registry(
                 sparsity_config
@@ -179,7 +185,9 @@ class ModelCompressor:
             return None
 
         return cls(
-            sparsity_config=sparsity_config, quantization_config=quantization_config
+            sparsity_config=sparsity_config,
+            quantization_config=quantization_config,
+            transforms_config=transforms_config,
         )
 
     @staticmethod
@@ -243,9 +251,11 @@ class ModelCompressor:
         self,
         sparsity_config: Optional[SparsityCompressionConfig] = None,
         quantization_config: Optional[QuantizationConfig] = None,
+        transforms_config: Optional[TransformationConfig] = None,
     ):
         self.sparsity_config = sparsity_config
         self.quantization_config = quantization_config
+        self.transforms_config = transforms_config
         self.sparsity_compressor = None
         self.quantization_compressor = None
 
@@ -497,6 +507,13 @@ class ModelCompressor:
                 SPARSITY_CONFIG_NAME
             ] = sparsity_config_data
 
+        if self.transforms_config is not None:
+            transforms_config_data = self.transforms_config.to_dict()
+            config_data[QUANTIZATION_CONFIG_NAME][
+                TRANSFORMS_CONFIG
+            ] = transforms_config_data
+
+        breakpoint()
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)
 
