@@ -35,20 +35,16 @@ runs:
         # wheel is downloaded already
         WHEEL=`find . -type f -name compressed*.whl -exec basename {} \;`
 
+        RUN_NAME=${{ inputs.run_name }}
+        if [ -z "${{ inputs.run_name }}" ]; then
+          RUN_NAME=${{ inputs.project }}
+        fi
         JSON_STRING=$(cat <<EOF
         {
           "hostname": "$REPORTPORTAL_HOST",
           "project": "${{ inputs.project }}",
-          "description": "${{ inputs.description }}",
-        EOF
-        )
-
-        run_name=${{ inputs.run_name }}
-        if [ -z "${{ inputs.run_name }}" ]; then
-          run_name=${{ inputs.project }}
-        fi
-        JSON_STRING=$(cat <<EOF
-          "name": "${{ inputs.run_name }}",
+          "description": "GHA job url: ${{ inputs.gha_url }}",
+          "name": "${RUN_NAME}",
         EOF
         )
 
