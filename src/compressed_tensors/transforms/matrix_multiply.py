@@ -16,6 +16,7 @@ import torch
 from compressed_tensors.transforms import Transforms
 
 
+# TODO: fix loading
 @Transforms.register("matrix-mul")
 class MatrixMultiply(Transforms):
     @staticmethod
