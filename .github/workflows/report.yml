@@ -16,6 +16,14 @@ on:
                 description: "run_id of 'build.yml' run that generated the assets"
                 type: string
                 required: true
+            wheel:
+                description: wheel used for testing
+                type: string
+                required: true
+            run_name:
+                description: name of the test run
+                type: string
+                required: true
             wf_category:
                 description: "categories: NIGHTLY, RELEASE"
                 type: string
@@ -37,6 +45,14 @@ on:
                 required: true
             run_id:
                 description: "run_id of 'build.yml' run that generated the assets"
+                type: string
+                required: true
+            wheel:
+                description: wheel used for testing
+                type: string
+                required: true
+            run_name:
+                description: name of the test run
                 type: string
                 required: true
             wf_category:
@@ -87,13 +103,22 @@ jobs:
 
             - name: generate metadata info
               id: generate-metadata
-              uses: ./.github/actions/gen-metadata-file
-              with:
-                reportportal_host: ${{ secrets.REPORTPORTAL_HOST }}
-                project: compressed-tensors
-                gha_url: "https://github.com/neuralmagic/compressed-tensors/actions/runs/${{ inputs.run_id }}"
-                wf_category: ${{ inputs.wf_category }}
-                gitref: ${{ inputs.gitref }}
+              run: |
+                jq --raw-output -n '{
+                  "hostname": "${{ secrets.REPORTPORTAL_HOST }}",
+                  "project": "compressed-tensors",
+                  "name": "${{ inputs.run_name }}",
+                  "description": "GitHub run: ${{ inputs.gha_url }}",
+                  "attributes": {
+                    "wheel": "${{ inputs.wheel }}"
+                    "gitref": "${{ inputs.gitref }}",
+                    "workflow category": "${{ inputs.wf_category }}"
+                  }
+                }' > metadata.json
+                cat metadata.json
+                METADATA_FILEPATH=`realpath metadata.json`
+                echo "metadata_filepath=${METADATA_FILEPATH}" >> $GITHUB_OUTPUT
+              shell: bash
 
             - name: report to reportportal
               uses: neuralmagic/nm-actions/actions/reportportal_submit_execution_results@testmo-to-reportportal
