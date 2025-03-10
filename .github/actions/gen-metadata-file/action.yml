@@ -47,7 +47,7 @@ runs:
             \"gitref\": \"${{ inputs.gitref }}\",
             \"workflow category\": \"${{ inputs.wf_category }}\"
             }
-          }' > metadata.json
+          }" > metadata.json
         cat metadata.json
         METADATA_FILEPATH=`realpath metadata.json`
         echo "metadata_filepath=${METADATA_FILEPATH}" >> $GITHUB_OUTPUT
