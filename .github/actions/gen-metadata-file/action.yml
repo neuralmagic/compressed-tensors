@@ -18,8 +18,6 @@ inputs:
     required: true
   run_name:
     description: "run name; if empty, will use project as default"
-  additional_attributes_string:
-    description: "additional information for droute attributes, specified in the 'key=value, key=value, ...' format"
 outputs:
   metadata_filepath:
     description: "path of the metadata file"
@@ -34,35 +32,22 @@ runs:
 
         # wheel is downloaded already
         WHEEL=`find . -type f -name compressed*.whl -exec basename {} \;`
-
         RUN_NAME=${{ inputs.run_name }}
         if [ -z "${{ inputs.run_name }}" ]; then
           RUN_NAME=${{ inputs.project }}
         fi
-        JSON_STRING=$(cat <<EOF
-        {
-          "hostname": "$REPORTPORTAL_HOST",
-          "project": "${{ inputs.project }}",
-          "description": "GHA job url: ${{ inputs.gha_url }}",
-          "name": "${RUN_NAME}",
-        EOF
-        )
 
-        ATTRIBUTES_STRING=$(cat <<EOF
-          "attributes": {
-            "wheel": "$WHEEL",
-            "gitref": "${{ inputs.gitref }}",
-            "workflow category": "${{ inputs.wf_category }}"
-        EOF
-        )
-
-        if [ ! -z "${{ inputs.additional_attributes_string }}" ]; then
-          echo "${{ inputs.additional_attributes_string }}" \
-          | jq --raw-output -R 'split(", ") | map(split("=") 
-          | "    \"\(.[0])\": \"\(.[1])\",") | .[]' >> $ATTRIBUTES_STRING
-        fi
-
-        echo -e "$JSON_STRING\n$ATTRIBUTES_STRING\n  }\n}" > metadata.json  
+        jq --raw-output -n "{
+          \"hostname\": \"${REPORTPORTAL_HOST}\",
+          \"project": \"${{ inputs.project }}\",
+          \"name\": \"${RUN_NAME}\",
+          \"description\": \"GitHub run: ${{ inputs.gha_url }}\",
+          \"attributes\": {
+            \"wheel\": \"${WHEEL}\"
+            \"gitref\": \"${{ inputs.gitref }}\",
+            \"workflow category\": \"${{ inputs.wf_category }}\"
+            }
+          }' > metadata.json
         cat metadata.json
         METADATA_FILEPATH=`realpath metadata.json`
         echo "metadata_filepath=${METADATA_FILEPATH}" >> $GITHUB_OUTPUT
