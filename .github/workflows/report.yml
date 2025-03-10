@@ -110,7 +110,7 @@ jobs:
                   "name": "${{ inputs.run_name }}",
                   "description": "GitHub run: ${{ inputs.gha_url }}",
                   "attributes": {
-                    "wheel": "${{ inputs.wheel }}"
+                    "wheel": "${{ inputs.wheel }}",
                     "gitref": "${{ inputs.gitref }}",
                     "workflow category": "${{ inputs.wf_category }}"
                   }
