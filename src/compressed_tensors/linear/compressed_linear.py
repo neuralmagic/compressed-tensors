@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from typing import Dict, Tuple
 
 import torch
@@ -32,10 +33,16 @@ class CompressedLinear(Linear):
     """
     Wrapper module for running a compressed forward pass of a quantized Linear module.
     The wrapped layer will decompressed on each forward call.
+
     """
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        warnings.warn(
+            "CompressedLinear should not be initialized directly. "
+            "Use the from_linear method instead.",
+            UserWarning,
+        )
 
     @classmethod
     @torch.no_grad()
