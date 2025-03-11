@@ -17,6 +17,7 @@ from typing import Optional, Union
 import torch
 from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.hadamard_utils import deterministic_hadamard_matrix
+from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
 @Transforms.register("hadamard")

@@ -284,7 +284,6 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         if scheme.weights is not None and not compressed:
             # calibrate and (fake) quantize weights when applicable
             unquantized_weight = self.weight.data.clone()
-            # breakpoint()
             transform_data = getattr(module, "transform_data", None)
             if transform_data is not None:
                 apply_transforms_to_parameter(
