@@ -28,6 +28,10 @@ from compressed_tensors.quantization.utils import (
     calculate_range,
     compute_dynamic_scales_and_zp,
 )
+from compressed_tensors.transforms.apply import (
+    apply_inverse_transforms_to_parameter,
+    apply_transforms_to_parameter,
+)
 from compressed_tensors.utils import safe_permute
 from torch.nn import Module
 
@@ -280,9 +284,24 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         if scheme.weights is not None and not compressed:
             # calibrate and (fake) quantize weights when applicable
             unquantized_weight = self.weight.data.clone()
+            transform_data = getattr(module, "transform_data", None)
+            if transform_data is not None:
+                apply_transforms_to_parameter(
+                    module=module,
+                    module_parameter=self.weight,
+                    transform_data=transform_data,
+                )
+
             self.weight.data = forward_quantize(
                 module, self.weight, "weight", scheme.weights
             )
+
+            if transform_data is not None:
+                apply_inverse_transforms_to_parameter(
+                    module=module,
+                    module_parameter=self.weight,
+                    transform_data=transform_data,
+                )
 
         # perform wrapped forward call
         output = forward_func_orig.__get__(module, module.__class__)(

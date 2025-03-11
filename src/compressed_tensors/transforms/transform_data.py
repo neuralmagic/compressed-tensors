@@ -32,3 +32,4 @@ class TransformData:
     """
 
     data: Dict
+    idx: int = 0

@@ -41,6 +41,8 @@ from compressed_tensors.quantization.utils import (
     iter_named_leaf_modules,
     iter_named_quantizable_modules,
 )
+from compressed_tensors.transforms import Transforms
+from compressed_tensors.transforms.transform_data import TransformData
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
@@ -104,8 +106,75 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
             )
 
 
+def process_transforms_config(transforms_config, model):
+    for _, group in transforms_config.transform_groups.items():
+        # Each group/scheme targets one type of transform
+        transform_type = group.transform_type
+        transform_creation_args = group.transform_creation_args
+
+        # Need a better name - too many groups
+        for transform_arg in group.groups:
+            module_targets = transform_arg.module_targets
+
+            for name, submodule in model.named_modules():
+                if len(transform_arg.ignore) > 0:
+                    if matches := find_name_or_class_matches(
+                        name, submodule, transform_arg.ignore
+                    ):
+                        for match in matches:
+                            print("ignoring", match, name)
+                        continue  # layer matches ignore list, continue
+
+                targets = find_name_or_class_matches(
+                    name, submodule, transform_arg.targets
+                )
+
+                if targets:
+                    # Every layer which matches gets its own transform
+                    # Same transform type and args are used however
+                    dtype = getattr(submodule, module_targets[0]).dtype
+                    transform_creation_args["dtype"] = dtype
+                    transform = Transforms.load_from_registry(
+                        transform_type, **transform_creation_args
+                    )
+
+                    # attach the transform to the submodule
+                    # because we can have more than one transform, need to attach some
+                    # form of key to fetch
+                    # OR we store it in the dictionary, handle cpu-offloading separatly
+
+                    if hasattr(submodule, "transform_data"):
+                        idx = submodule.transform_data.idx + 1
+                    else:
+                        idx = 0
+
+                    # only support weight parameters for now, assume one value in
+                    # module targets
+                    transform_name = f"{module_targets[0]}_transform_{idx}"
+                    setattr(submodule, transform_name, transform)
+
+                    # add relevant transform data to the submodule as well
+                    data = {
+                        transform_name: {
+                            "type": transform_type,
+                            "call_args": transform_arg.call_args,
+                        }
+                    }
+
+                    if hasattr(submodule, "transform_data"):
+                        submodule.transform_data.data.update(data)
+                        submodule.transform_data.idx = idx
+                    else:
+                        transform_data = TransformData(data=OrderedDict(data))
+                        submodule.transform_data = transform_data
+    return model
+
+
 def apply_quantization_config(
-    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
+    model: Module,
+    config: Union[QuantizationConfig, None],
+    run_compressed: bool = False,
+    transforms_config=None,
 ) -> OrderedDict:
     """
     Initializes the model for quantization in-place based on the given config.
@@ -183,6 +252,9 @@ def apply_quantization_config(
                 "not found in the model: "
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
+
+    if transforms_config:
+        model = process_transforms_config(transforms_config, model)
 
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
