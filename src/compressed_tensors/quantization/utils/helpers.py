@@ -80,7 +80,7 @@ def calculate_qparams(
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
         scales = (max_vals - min_vals) / float(bit_range)
-        scales = torch.clamp(scales, min=1e-5)
+        scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = bit_min - (min_vals / scales)
         zero_points = torch.clamp(torch.round(zero_points), bit_min, bit_max)
 
