@@ -19,7 +19,7 @@ from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
 
 
-@Transforms.register("random_hadamard")
+@Transforms.register("random-hadamard")
 class RandomHadamard(Transforms):
     def __new__(
         cls,

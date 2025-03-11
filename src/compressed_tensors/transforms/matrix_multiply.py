@@ -16,7 +16,7 @@ import torch
 from compressed_tensors.transforms import Transforms
 
 
-@Transforms.register("matrix_mul")
+@Transforms.register("matrix-mul")
 class MatrixMultiply(Transforms):
     @staticmethod
     def apply(
