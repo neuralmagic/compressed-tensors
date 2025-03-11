@@ -29,6 +29,7 @@ from compressed_tensors.base import (
     QUANTIZATION_CONFIG_NAME,
     QUANTIZATION_METHOD_NAME,
     SPARSITY_CONFIG_NAME,
+    TRANSFORMS_CONFIG,
 )
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
@@ -38,6 +39,7 @@ from compressed_tensors.quantization import (
     QuantizationStatus,
     apply_quantization_config,
     load_pretrained_quantization,
+    load_transforms,
 )
 from compressed_tensors.quantization.lifecycle import expand_target_names
 from compressed_tensors.quantization.quant_args import QuantizationArgs
@@ -45,6 +47,7 @@ from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
 )
+from compressed_tensors.transforms.transform_config import TransformationConfig
 from compressed_tensors.utils import (
     get_safetensors_folder,
     merge_names,
@@ -133,6 +136,8 @@ class ModelCompressor:
 
         sparsity_config = cls.parse_sparsity_config(compression_config)
         quantization_config = cls.parse_quantization_config(compression_config)
+        transforms_config = cls.parse_transforms_config(compression_config)
+
         if sparsity_config is None and quantization_config is None:
             return None
 
@@ -144,8 +149,13 @@ class ModelCompressor:
         if quantization_config is not None:
             quantization_config = QuantizationConfig.model_validate(quantization_config)
 
+        if transforms_config is not None:
+            transforms_config = TransformationConfig.model_validate(transforms_config)
+
         return cls(
-            sparsity_config=sparsity_config, quantization_config=quantization_config
+            sparsity_config=sparsity_config,
+            quantization_config=quantization_config,
+            transforms_config=transforms_config,
         )
 
     @classmethod
@@ -170,6 +180,10 @@ class ModelCompressor:
             model, format=quantization_format
         )
 
+        # TODO: update to fetch from the pretrained model
+        # using the attached config for now
+        transforms_config = getattr(model, "transforms_config", None)
+
         if isinstance(sparsity_config, str):  # we passed in a sparsity format
             sparsity_config = SparsityCompressionConfig.load_from_registry(
                 sparsity_config
@@ -179,8 +193,24 @@ class ModelCompressor:
             return None
 
         return cls(
-            sparsity_config=sparsity_config, quantization_config=quantization_config
+            sparsity_config=sparsity_config,
+            quantization_config=quantization_config,
+            transforms_config=transforms_config,
         )
+
+    @staticmethod
+    def parse_transforms_config(
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
+    ) -> Union[Dict[str, Any], None]:
+
+        if compression_config is None:
+            return None
+
+        if is_compressed_tensors_config(compression_config):
+            t_config = compression_config.transforms_config
+            return t_config.model_dump() if t_config is not None else None
+
+        return compression_config.get(TRANSFORMS_CONFIG, None)
 
     @staticmethod
     def parse_sparsity_config(
@@ -243,9 +273,11 @@ class ModelCompressor:
         self,
         sparsity_config: Optional[SparsityCompressionConfig] = None,
         quantization_config: Optional[QuantizationConfig] = None,
+        transforms_config: Optional[TransformationConfig] = None,
     ):
         self.sparsity_config = sparsity_config
         self.quantization_config = quantization_config
+        self.transforms_config = transforms_config
         self.sparsity_compressor = None
         self.quantization_compressor = None
 
@@ -434,9 +466,13 @@ class ModelCompressor:
                 self.quantization_config, QuantizationStatus.FROZEN
             ):
                 names_to_scheme = apply_quantization_config(
-                    model, self.quantization_config
+                    model,
+                    self.quantization_config,
+                    transforms_config=self.transforms_config,
                 )
                 load_pretrained_quantization(model, model_path)
+
+            load_transforms(model, model_path)
 
             model_path_or_state_dict = (
                 model.state_dict() if sparse_decompressed else model_path
@@ -496,6 +532,12 @@ class ModelCompressor:
             config_data[QUANTIZATION_CONFIG_NAME][
                 SPARSITY_CONFIG_NAME
             ] = sparsity_config_data
+
+        if self.transforms_config is not None:
+            transforms_config_data = self.transforms_config.to_dict()
+            config_data[QUANTIZATION_CONFIG_NAME][
+                TRANSFORMS_CONFIG
+            ] = transforms_config_data
 
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)
