@@ -42,6 +42,7 @@ from compressed_tensors.quantization.utils import (
     iter_named_quantizable_modules,
 )
 from compressed_tensors.transforms import Transforms
+from compressed_tensors.transforms.transform_config import TransformationConfig
 from compressed_tensors.transforms.transform_data import TransformData
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
@@ -57,6 +58,7 @@ __all__ = [
     "find_name_or_class_matches",
     "expand_target_names",
     "is_target",
+    "process_transforms_config",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -130,7 +132,11 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
             )
 
 
-def process_transforms_config(transforms_config, model, quantization_status):
+def process_transforms_config(
+    transforms_config: TransformationConfig,
+    model: torch.nn.Module,
+    quantization_status: Optional[QuantizationStatus] = QuantizationStatus.INITIALIZED,
+):
     for _, group in transforms_config.transform_groups.items():
         # Each group/scheme targets one type of transform
         transform_type = group.transform_type

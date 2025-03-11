@@ -56,7 +56,7 @@ def test_to_dict(basic_transform_scheme):
 
 
 def test_multiple_groups():
-    module_targets = [ModuleTarget.WEIGHTS]
+    module_targets = [ModuleTarget.WEIGHT]
 
     targets_1 = ["model.layers.0.attn.v_proj"]
     linear_args_1 = TransformationArgs(targets=targets_1, module_targets=module_targets)

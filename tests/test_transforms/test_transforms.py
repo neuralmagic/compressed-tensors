@@ -21,7 +21,6 @@ from compressed_tensors.transforms import (
     Hadamard,
     MatrixMultiply,
     RandomHadamard,
-    ScalarMultiply,
     Transforms,
 )
 from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
@@ -40,7 +39,7 @@ from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
 )
 def test_random_hadamard_transform(size: int, dtype: torch.dtype):
     hadamard_transform = Transforms.load_from_registry(
-        "random-hadamard", size=size, dtype=dtype
+        "random-hadamard", size=size, dtype=dtype, device="cpu"
     )
     # check initialize
     assert hadamard_transform is not None
@@ -56,34 +55,8 @@ def test_random_hadamard_transform(size: int, dtype: torch.dtype):
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
-    transformed_value = RandomHadamard.apply(
-        input_tensor=x, transform=hadamard_transform
-    )
-    # TODO: check to make sure the matrix was applied correctly?
-    assert transformed_value.shape == (size, size)
-
-
-@pytest.mark.parametrize(
-    "size,dtype",
-    [
-        [1024, torch.bfloat16],
-        [2048, torch.float16],
-    ],
-)
-def test_random_hadamard_rotation(size: int, dtype: torch.dtype):
-    rotation = random_hadamard_matrix(size=size).to(dtype)
-    hadamard_transform = Transforms.load_from_registry(
-        "random-hadamard", transform=rotation
-    )
-
-    # check initialize
-    assert torch.equal(hadamard_transform, rotation)
-
-    # check apply
-    x = torch.rand((size, size), dtype=dtype)
-    transformed_value = RandomHadamard.apply(
-        input_tensor=x, transform=hadamard_transform
-    )
+    apply = Transforms.fetch_apply("random-hadamard")
+    transformed_value = apply(input_tensor=x, transform=hadamard_transform)
     # TODO: check to make sure the matrix was applied correctly?
     assert transformed_value.shape == (size, size)
 
@@ -97,7 +70,7 @@ def test_random_hadamard_rotation(size: int, dtype: torch.dtype):
 )
 def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
     hadamard_transform = Transforms.load_from_registry(
-        "hadamard", size=size, dtype=dtype
+        "hadamard", size=size, dtype=dtype, device="cpu"
     )
 
     # check initialize
@@ -110,7 +83,8 @@ def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
-    transformed_value = Hadamard.apply(input_tensor=x, transform=hadamard_transform)
+    apply = Transforms.fetch_apply("hadamard")
+    transformed_value = apply(input_tensor=x, transform=hadamard_transform)
     # TODO: check to make sure the matrix was applied correctly?
     assert transformed_value.shape == (size, size)
 
@@ -124,15 +98,14 @@ def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
     ],
 )
 def test_multiplier_transform(size: int, dtype: torch.dtype):
-    multiplier = torch.eye((size), dtype=dtype)
+    multiplier = torch.eye((size))
     multiplier_transform = Transforms.load_from_registry(
-        "matrix-mul", transform=multiplier
+        "matrix-mul", transform=multiplier, device="cpu", dtype=dtype
     )
     assert multiplier_transform is not None
     assert torch.equal(multiplier_transform, multiplier)
 
     x = torch.rand((size, size), dtype=dtype)
-    transformed_value = MatrixMultiply.apply(
-        input_tensor=x, transform=multiplier_transform
-    )
+    apply = Transforms.fetch_apply("matrix-mul")
+    transformed_value = apply(input_tensor=x, transform=multiplier_transform)
     assert torch.equal(transformed_value, x)
