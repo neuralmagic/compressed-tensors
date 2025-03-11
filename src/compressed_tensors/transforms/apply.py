@@ -28,7 +28,7 @@ def apply_transforms_to_parameter(
     transform_data: TransformData,
 ):
     """
-    Apply all transforms relevant to parameter using a module's
+    Apply all transforms relevant to a parameter using a module's
     transform data. The parameter data is updated in-place.
 
     :param module: torch.nn.Moudle
@@ -55,7 +55,7 @@ def apply_inverse_transforms_to_parameter(
     transform_data: TransformData,
 ):
     """
-    Apply all inverse transform operations relevant to parameter using a module's
+    Apply all inverse transform operations relevant to a parameter using a module's
     TransformData. The parameter data is updated in-place.
 
     :param module: torch.nn.Moudle

@@ -126,6 +126,7 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         :param quantization_args: quantization parameters for the weight
         :return: tensor of the decompressed weight
         """
+
         weight = compressed_data["weight_packed"]
         scale = compressed_data["weight_scale"]
         zero_point = compressed_data.get("weight_zero_point", None)

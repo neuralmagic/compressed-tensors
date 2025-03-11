@@ -42,7 +42,7 @@ def test_multiple_groups_global():
     embedding_args = TransformationArgs(targets=targets, module_targets=module_targets)
 
     targets = ["Linear"]
-    module_targets = [ModuleTarget.WEIGHTS]
+    module_targets = [ModuleTarget.WEIGHT]
     linear_args = TransformationArgs(targets=targets, module_targets=module_targets)
 
     # same transform applied to multiple groups
@@ -63,7 +63,7 @@ def test_multiple_groups_global():
 
 def test_multiple_groups():
     groups = []
-    module_targets = [ModuleTarget.WEIGHTS]
+    module_targets = [ModuleTarget.WEIGHT]
 
     for i in range(20):
         targets = [f"model.layers.{i}.attn.v_proj", f"model.layers.{i}.attn.o_proj"]

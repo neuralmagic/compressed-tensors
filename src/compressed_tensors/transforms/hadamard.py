@@ -17,14 +17,15 @@ from typing import Optional, Union
 import torch
 from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.hadamard_utils import deterministic_hadamard_matrix
+from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
 @Transforms.register("hadamard")
 class Hadamard(Transforms):
     def __new__(
         cls,
-        size: Optional[int] = None,
-        transform: Optional[torch.Tensor] = None,
+        size: int,
+        empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cuda",
         dtype: Optional[torch.dtype] = torch.bfloat16,
     ):
@@ -43,10 +44,11 @@ class Hadamard(Transforms):
         :param dtype: type to cast the rotation matrix to
 
         """
-        if transform is None:
-            assert size is not None
+        if not empty:
             # TODO: this is deterministic; we should just serialize the size
             transform = torch.Tensor(deterministic_hadamard_matrix(size=size))
+        else:
+            transform = torch.empty((size, size))
 
         return super().__new__(cls, transform=transform, device=device, dtype=dtype)
 

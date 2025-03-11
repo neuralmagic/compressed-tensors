@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+from collections import defaultdict
+
 from compressed_tensors.transforms.transform_args import (
     ModuleTarget,
     TransformationArgs,
@@ -26,13 +28,13 @@ def test_transform_args_basic():
 
     assert basic_args.targets[0] == "Embedding"
     assert basic_args.module_targets[0] == ModuleTarget.INPUT_ACTIVATIONS
-    assert basic_args.call_args is None
+    assert isinstance(type(basic_args.call_args), type(defaultdict))
     assert len(basic_args.ignore) == 0
 
 
 def test_transform_args_full():
     targets = ["Linear"]
-    module_targets = ["weights", "input_activations"]
+    module_targets = ["weight", "input_activations"]
     ignore = ["model.layers.2"]
     call_args = {"transpose": True}
 
@@ -45,6 +47,6 @@ def test_transform_args_full():
 
     full_args.targets = targets
     full_args.ignore == ignore
-    full_args.module_targets[0] == ModuleTarget.WEIGHTS
-    full_args.module_targets[1] == ModuleTarget.INPUT_ACTIVATIONS
+    full_args.module_targets[0] == ModuleTarget.WEIGHT.value
+    full_args.module_targets[1] == ModuleTarget.INPUT_ACTIVATIONS.value
     assert full_args.call_args.get("transpose")
