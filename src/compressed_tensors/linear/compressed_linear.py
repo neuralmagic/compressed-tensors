@@ -99,8 +99,7 @@ class CompressedLinear(Linear):
         Decompresses the weight, then runs the wrapped forward pass
         """
         if self.quantization_status == QuantizationStatus.COMPRESSED:
-            decompressed_weight = self.compressor.decompress_module(self)
-            self.weight.data = decompressed_weight
+            self.weight = self.compressor.decompress_module(self)
             self.quantization_status = QuantizationStatus.FROZEN
 
         return linear(input, self.weight, self.bias)
