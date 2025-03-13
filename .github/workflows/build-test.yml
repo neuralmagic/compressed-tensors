@@ -69,7 +69,7 @@ jobs:
         needs: [BUILD, TEST]
         uses: ./.github/workflows/report.yml
         with:
-            label: k8s-util
+            label: rh-reporter
             timeout: 40
             run_id: ${{ github.run_id }}
             run_name: compressed-tensors
