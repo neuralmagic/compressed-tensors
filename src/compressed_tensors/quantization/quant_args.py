@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import warnings
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Union
 
@@ -24,6 +25,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 __all__ = [
     "FP8_DTYPE",
+    "FP8_E4M3_DATA",
+    "FP4_NVFP4_DATA",
     "QuantizationType",
     "QuantizationStrategy",
     "QuantizationArgs",
@@ -31,7 +34,28 @@ __all__ = [
     "ActivationOrdering",
 ]
 
+# TODO: Remove soon in favour of a more descriptive FloatArgs
 FP8_DTYPE = torch.float8_e4m3fn
+
+FP8_E4M3_DATA = FloatArgs(
+    exponent=4,
+    mantissa=3,
+    bits=8,
+    max=torch.finfo(torch.float8_e4m3fn).max,
+    min=torch.finfo(torch.float8_e4m3fn).min,
+    dtype=torch.float8_e4m3fn,
+)
+FP4_NVFP4_DATA = FloatArgs(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
+
+
+@dataclass
+class FloatArgs:
+    exponent: int
+    mantissa: int
+    bits: int
+    max: float
+    min: float
+    dtype: Optional[torch.dtype] = None
 
 
 class QuantizationType(str, Enum):
@@ -233,6 +257,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
+        # TODO: required for the compressor
+        # Add FP4_nvfp4 type when updating naive_compressor
         if self.type == QuantizationType.FLOAT:
             return FP8_DTYPE
         elif self.type == QuantizationType.INT:

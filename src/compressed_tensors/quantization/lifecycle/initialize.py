@@ -30,6 +30,8 @@ from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
+    FP4_NVFP4_DATA,
+    FP8_E4M3_DATA,
     disable_hf_hook,
     has_offloaded_params,
     register_offload_parameter,
@@ -161,7 +163,33 @@ def _initialize_scale_zero_point(
             expected_shape = (weight_shape[0], max(num_groups, 1))
 
     scale_dtype = module.weight.dtype
-    if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
+
+    # NVFP4 support; use FP8 scales
+    # For weight quant, attach global scales for NVFP4
+    if (
+        base_name == "weight"
+        and quantization_args.num_bits == 4
+        and quantization_args.strategy == QuantizationStrategy.FLOAT
+    ):
+        scale_dtype = FP8_E4M3_DATA.dtype
+        # create and attach nvfp4 data
+        tensor_amax = torch.abs(module.weight.data).max().to(torch.float32)
+        # Setting data for now - could possibly be handled later in the pipeline
+        values = FP8_E4M3_DATA.max * FP4_NVFP4_DATA.max / tensor_amax
+        # Assuming the global scale can be torch.float16/bfloat16/module weight dtype and not only torch.float32?
+        init_global_scale = Parameter(
+            value, dtype=torch.float32, device=device, requires_grad=False
+        )
+        register_offload_parameter(
+            module, f"f{base_name}_global_scale", init_global_scale
+        )
+
+    if scale_dtype not in [
+        torch.float16,
+        torch.bfloat16,
+        torch.float32,
+        FP8_DATA.dtype,
+    ]:
         scale_dtype = torch.float16
 
     # initializes empty scale, zero point, and g_idx parameters for the module

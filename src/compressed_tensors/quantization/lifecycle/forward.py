@@ -20,6 +20,7 @@ import torch
 from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
+    QuantizationType,
     round_to_quantized_type,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
@@ -359,18 +360,22 @@ def _quantize(
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
 
-    scaled = x / scale
-    if zero_point is not None:
-        scaled += zero_point.to(x.dtype)
-    # clamp first because cast isn't guaranteed to be saturated (ie for fp8)
-    clamped_value = torch.clamp(
-        scaled,
-        q_min,
-        q_max,
-    )
-    quantized_value = round_to_quantized_type(clamped_value, args)
-    if dtype is not None:
-        quantized_value = quantized_value.to(dtype)
+    if args.num_bits == 4 and args.type == QuantizationType.FLOAT:
+        # apply fp4 quant
+        return quantized_value
+    else:
+        scaled = x / scale
+        if zero_point is not None:
+            scaled += zero_point.to(x.dtype)
+        # clamp first because cast isn't guaranteed to be saturated (ie for fp8)
+        clamped_value = torch.clamp(
+            scaled,
+            q_min,
+            q_max,
+        )
+        quantized_value = round_to_quantized_type(clamped_value, args)
+        if dtype is not None:
+            quantized_value = quantized_value.to(dtype)
 
     return quantized_value
 
@@ -382,13 +387,18 @@ def _dequantize(
     zero_point: torch.Tensor = None,
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
-    dequant_value = x_q.to(scale.dtype)
 
-    if zero_point is not None:
-        dequant_value = dequant_value - zero_point.to(scale.dtype)
-    dequant_value = dequant_value * scale
+    if args.num_bits == 4 and args.type == QuantizationType.FLOAT:
+        # apply fp4 deqquant
+        dequant_value = None
+    else:
+        dequant_value = x_q.to(scale.dtype)
 
-    if dtype is not None:
-        dequant_value = dequant_value.to(dtype)
+        if zero_point is not None:
+            dequant_value = dequant_value - zero_point.to(scale.dtype)
+        dequant_value = dequant_value * scale
+
+        if dtype is not None:
+            dequant_value = dequant_value.to(dtype)
 
     return dequant_value
