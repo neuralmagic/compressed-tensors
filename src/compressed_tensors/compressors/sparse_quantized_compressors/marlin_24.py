@@ -57,9 +57,9 @@ class Marlin24Compressor(BaseCompressor):
             a ValueError otherwise
         """
         for name, quant_args in model_quant_args.items():
-            strategy = quant_args.strategy
-            group_size = quant_args.group_size
-            symmetric = quant_args.symmetric
+            strategy = quant_args[0].strategy
+            group_size = quant_args[0].group_size
+            symmetric = quant_args[0].symmetric
             if (
                 strategy is not QuantizationStrategy.GROUP.value
                 and strategy is not QuantizationStrategy.CHANNEL.value
@@ -146,7 +146,7 @@ class Marlin24Compressor(BaseCompressor):
                     value = value.to(torch.float16)
 
                     # quantize weight, keeping it as a float16 for now
-                    quant_args = names_to_scheme[prefix]
+                    quant_args = names_to_scheme[prefix][0]
                     value = quantize(
                         x=value, scale=scale, zero_point=zp, args=quant_args
                     )
