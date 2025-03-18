@@ -89,14 +89,18 @@ class BaseQuantizationCompressor(BaseCompressor):
         )
 
         for name, value in tqdm(model_state.items(), desc="Quantized Compression"):
+            # check if the parameter we're compressing is the weight zp
+            # or the input zp
             weight_zp = name.endswith(weight_zp_suffix)
             input_zp = name.endswith(input_zp_suffix)
 
+            # if we're compressing the weight zp, fetch weight quant args
             if weight_zp:
                 quant_args_zp = names_to_scheme.get(name[: -(len(weight_zp_suffix))])
                 if isinstance(quant_args_zp, tuple):
                     quant_args_zp = quant_args_zp[0]
 
+            # if we're compressing the input zp, fetch input quant args
             if input_zp:
                 input_args_zp = names_to_scheme.get(name[: -(len(input_zp_suffix))])
                 if isinstance(input_args_zp, tuple):
@@ -126,8 +130,10 @@ class BaseQuantizationCompressor(BaseCompressor):
                         compressed_dict[merge_names(prefix, key)] = value
                 else:
                     compressed_dict[name] = value.to("cpu")
+            # only save if asym
             elif weight_zp and quant_args_zp.symmetric:
                 continue
+            # only save if asym
             elif input_zp and input_args_zp.symmetric:
                 continue
             elif name.endswith("g_idx") and torch.any(value <= -1):
