@@ -92,6 +92,16 @@ class BaseQuantizationCompressor(BaseCompressor):
             weight_zp = name.endswith(weight_zp_suffix)
             input_zp = name.endswith(input_zp_suffix)
 
+            if weight_zp:
+                quant_args_zp = names_to_scheme.get(name[: -(len(weight_zp_suffix))])
+                if isinstance(quant_args_zp, tuple):
+                    quant_args_zp = quant_args_zp[0]
+
+            if input_zp:
+                input_args_zp = names_to_scheme.get(name[: -(len(input_zp_suffix))])
+                if isinstance(input_args_zp, tuple):
+                    input_args_zp = input_args_zp[-1]
+
             if name.endswith(weight_suffix):
                 prefix = name[: -(len(weight_suffix))]
                 scale = model_state.get(merge_names(prefix, "weight_scale"), None)
@@ -99,7 +109,11 @@ class BaseQuantizationCompressor(BaseCompressor):
                 g_idx = model_state.get(merge_names(prefix, "weight_g_idx"), None)
                 if scale is not None:
                     # weight is quantized, compress it
-                    quant_args = names_to_scheme[prefix][0]
+                    if isinstance(names_to_scheme[prefix], tuple):
+                        quant_args = names_to_scheme[prefix][0]
+                    else:
+                        quant_args = names_to_scheme[prefix]
+
                     compressed_data = self.compress_weight(
                         weight=value,
                         scale=scale,
@@ -112,15 +126,9 @@ class BaseQuantizationCompressor(BaseCompressor):
                         compressed_dict[merge_names(prefix, key)] = value
                 else:
                     compressed_dict[name] = value.to("cpu")
-            elif (
-                weight_zp
-                and names_to_scheme.get(name[: -(len(weight_zp_suffix))])[0].symmetric
-            ):
+            elif weight_zp and quant_args_zp.symmetric:
                 continue
-            elif (
-                input_zp
-                and names_to_scheme.get(name[: -(len(input_zp_suffix))])[1].symmetric
-            ):
+            elif input_zp and input_args_zp.symmetric:
                 continue
             elif name.endswith("g_idx") and torch.any(value <= -1):
                 continue
