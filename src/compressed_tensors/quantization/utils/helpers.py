@@ -17,7 +17,8 @@ from typing import Generator, List, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import (
-    FP8_DTYPE,
+    FP4_NVFP4_DATA,
+    FP8_E4M3_DATA,
     QuantizationArgs,
     QuantizationStrategy,
     QuantizationType,
@@ -73,6 +74,7 @@ def calculate_qparams(
     zp_dtype = quantization_args.pytorch_dtype()
 
     if quantization_args.symmetric:
+        # TODO: update for NVFP4 when applying observers
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
         scales = max_val_pos / (float(bit_range) / 2)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
@@ -138,14 +140,21 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         q_max = torch.tensor(bit_range / 2 - 1, device=device)
         q_min = torch.tensor(-bit_range / 2, device=device)
     elif quantization_args.type == QuantizationType.FLOAT:
-        if quantization_args.num_bits != 8:
-            raise ValueError(
-                "Floating point quantization is only supported for 8 bits,"
-                f"got {quantization_args.num_bits}"
-            )
-        fp_range_info = torch.finfo(FP8_DTYPE)
-        q_max = torch.tensor(fp_range_info.max, device=device)
-        q_min = torch.tensor(fp_range_info.min, device=device)
+        if quantization_args.num_bits == 8:
+            """
+            if quantization_args.num_bits != 8:
+                raise ValueError(
+                    "Floating point quantization is only supported for 8 bits,"
+                    f"got {quantization_args.num_bits}"
+                )
+            """
+            q_max = torch.tensor(FP8_E4M3_DATA.max, device=device)
+            q_min = torch.tensor(FP8_E4M3_DATA.min, device=device)
+        else:
+            # nvfp4 ranges
+            assert quantization_args.num_bits == 4
+            q_max = torch.tensor(FP4_NVFP4_DATA.max, device=device)
+            q_min = torch.tensor(FP4_NVFP4_DATA.min, device=device)
     else:
         raise ValueError(f"Invalid quantization type {quantization_args.type}")
 
