@@ -22,6 +22,8 @@ from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
 from compressed_tensors.quantization.quant_args import (
+    FP4_NVFP4_DATA,
+    FP8_E4M3_DATA,
     ActivationOrdering,
     QuantizationArgs,
     QuantizationStrategy,
@@ -31,8 +33,6 @@ from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
-    FP4_NVFP4_DATA,
-    FP8_E4M3_DATA,
     disable_hf_hook,
     has_offloaded_params,
     register_offload_parameter,
@@ -176,11 +176,10 @@ def _initialize_scale_zero_point(
         # create and attach nvfp4 data
         tensor_amax = torch.abs(module.weight.data).max().to(torch.float32)
         # Setting data for now - could possibly be handled later in the pipeline
-        values = FP8_E4M3_DATA.max * FP4_NVFP4_DATA.max / tensor_amax
+        value = FP8_E4M3_DATA.max * FP4_NVFP4_DATA.max / tensor_amax
+        value = value.to(torch.float32).to(device)
         # Assuming the global scale can be torch.float16/bfloat16/module weight dtype and not only torch.float32?
-        init_global_scale = Parameter(
-            value, dtype=torch.float32, device=device, requires_grad=False
-        )
+        init_global_scale = Parameter(value, requires_grad=False)
         register_offload_parameter(
             module, f"f{base_name}_global_scale", init_global_scale
         )
