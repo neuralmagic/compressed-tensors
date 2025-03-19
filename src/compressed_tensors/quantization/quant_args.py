@@ -34,6 +34,17 @@ __all__ = [
     "ActivationOrdering",
 ]
 
+
+@dataclass
+class FloatArgs:
+    exponent: int
+    mantissa: int
+    bits: int
+    max: float
+    min: float
+    dtype: Optional[torch.dtype] = None
+
+
 # TODO: Remove soon in favour of a more descriptive FloatArgs
 FP8_DTYPE = torch.float8_e4m3fn
 
@@ -46,16 +57,6 @@ FP8_E4M3_DATA = FloatArgs(
     dtype=torch.float8_e4m3fn,
 )
 FP4_NVFP4_DATA = FloatArgs(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
-
-
-@dataclass
-class FloatArgs:
-    exponent: int
-    mantissa: int
-    bits: int
-    max: float
-    min: float
-    dtype: Optional[torch.dtype] = None
 
 
 class QuantizationType(str, Enum):
