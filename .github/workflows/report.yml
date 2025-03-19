@@ -109,11 +109,11 @@ jobs:
                   "project": "compressed-tensors",
                   "name": "${{ inputs.run_name }}",
                   "description": "GitHub run: https://github.com/neuralmagic/compressed-tensors/actions/runs/${{ inputs.run_id }}",
-                  "attributes": {
-                    "wheel": "${{ inputs.wheel }}",
-                    "gitref": "${{ inputs.gitref }}",
-                    "workflow category": "${{ inputs.wf_category }}"
-                  }
+                  "attributes": [
+                    {"key": "wheel", "value": "${{ inputs.wheel }}"},
+                    {"key": "gitref", "value": "${{ inputs.gitref }}"},
+                    {"key": "workflow category", "value": "${{ inputs.wf_category }}"}
+                  ]
                 }' > metadata.json
                 cat metadata.json
                 METADATA_FILEPATH=`realpath metadata.json`
