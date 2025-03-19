@@ -76,7 +76,22 @@ def calculate_qparams(
     if quantization_args.symmetric:
         # TODO: update for NVFP4 when applying observers
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
-        scales = max_val_pos / (float(bit_range) / 2)
+
+        if (
+            quantization_args.num_bits == 4
+            and quantization_args.type == QuantizationType.FLOAT
+        ):
+            # TODO: how do we pass in the global scale?
+            # An observer is attached per module, we can conditionally pass in
+            # the global scale
+            scale = global_scale * (max_val_pos / FP4_NVFP4_DATA.max)
+            scale = scale.to(FP8_E4M3_DATA.dtype).to(torch.float32)
+            scale = scale / global_scale
+        else:
+            # Divide over bit range over max value?
+            scales = max_val_pos / (float(bit_range) / 2)
+
+        # needed for fp4?
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
@@ -141,13 +156,6 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         q_min = torch.tensor(-bit_range / 2, device=device)
     elif quantization_args.type == QuantizationType.FLOAT:
         if quantization_args.num_bits == 8:
-            """
-            if quantization_args.num_bits != 8:
-                raise ValueError(
-                    "Floating point quantization is only supported for 8 bits,"
-                    f"got {quantization_args.num_bits}"
-                )
-            """
             q_max = torch.tensor(FP8_E4M3_DATA.max, device=device)
             q_min = torch.tensor(FP8_E4M3_DATA.min, device=device)
         else:

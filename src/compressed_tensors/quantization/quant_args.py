@@ -289,7 +289,11 @@ def round_to_quantized_type(
     """
     original_dtype = tensor.dtype
     if args.type == QuantizationType.FLOAT:
-        rounded = tensor.to(FP8_DTYPE)
+        if args.num_bits == 8:
+            rounded = tensor.to(FP8_E4M3_DATA.dtype)
+        elif args.num_bits == 4:
+            # TODO: cast to whatever value we want fp4 to be post quantization/clamping
+            rounded = tensor.to()
     elif args.type == QuantizationType.INT:
         rounded = torch.round(tensor)
     else:

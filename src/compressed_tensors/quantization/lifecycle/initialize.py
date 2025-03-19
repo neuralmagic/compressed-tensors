@@ -25,6 +25,7 @@ from compressed_tensors.quantization.quant_args import (
     ActivationOrdering,
     QuantizationArgs,
     QuantizationStrategy,
+    QuantizationType,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -169,7 +170,7 @@ def _initialize_scale_zero_point(
     if (
         base_name == "weight"
         and quantization_args.num_bits == 4
-        and quantization_args.strategy == QuantizationStrategy.FLOAT
+        and quantization_args.type == QuantizationType.FLOAT
     ):
         scale_dtype = FP8_E4M3_DATA.dtype
         # create and attach nvfp4 data
@@ -188,7 +189,7 @@ def _initialize_scale_zero_point(
         torch.float16,
         torch.bfloat16,
         torch.float32,
-        FP8_DATA.dtype,
+        FP8_E4M3_DATA.dtype,
     ]:
         scale_dtype = torch.float16
 
