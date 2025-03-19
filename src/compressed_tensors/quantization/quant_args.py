@@ -260,7 +260,12 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         # TODO: required for the compressor
         # Add FP4_nvfp4 type when updating naive_compressor
         if self.type == QuantizationType.FLOAT:
-            return FP8_DTYPE
+            if self.num_bits == 8:
+                return FP8_E4M3_DATA.dtype
+            else:
+                assert self.num_bits == 4
+                # TODO: will return None for now until updated in FloatArgs
+                return FP4_NVFP4_DATA.dtype
         elif self.type == QuantizationType.INT:
             if self.num_bits <= 8:
                 return torch.int8
@@ -291,9 +296,10 @@ def round_to_quantized_type(
     if args.type == QuantizationType.FLOAT:
         if args.num_bits == 8:
             rounded = tensor.to(FP8_E4M3_DATA.dtype)
-        elif args.num_bits == 4:
+        else:
+            assert args.num_bits == 4
             # TODO: cast to whatever value we want fp4 to be post quantization/clamping
-            rounded = tensor.to()
+            rounded = tensor.to(FP4_NVFP4_DATA.dtype)
     elif args.type == QuantizationType.INT:
         rounded = torch.round(tensor)
     else:
