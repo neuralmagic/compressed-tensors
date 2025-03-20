@@ -115,13 +115,12 @@ jobs:
                     {"key": "workflow category", "value": "${{ inputs.wf_category }}"}
                   ]
                 }' > metadata.json
-                cat metadata.json
                 METADATA_FILEPATH=`realpath metadata.json`
-                echo "metadata_filepath=${METADATA_FILEPATH}" >> $GITHUB_OUTPUT
+                echo "metadata_filepath=${METADATA_FILEPATH}" | tee -a $GITHUB_OUTPUT
               shell: bash
 
             - name: report to reportportal
-              uses: neuralmagic/nm-actions/actions/reportportal_submit_execution_results@testmo-to-reportportal
+              uses: neuralmagic/nm-actions/actions/reportportal_submit_execution_results@v1.15.0
               with:
                 droute_username: ${{ secrets.DROUTE_USERNAME }}
                 droute_password: ${{ secrets.DROUTE_PASSWORD }}
