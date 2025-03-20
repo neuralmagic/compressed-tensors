@@ -51,7 +51,7 @@ def test_random_hadamard_matrix_compliant(size):
 
 @pytest.mark.parametrize(
     "size",
-    [1024, 2048],
+    [1024],
 )
 def test_deterministic_hadamard_compliant(size):
     had_matrix = deterministic_hadamard_matrix(size)

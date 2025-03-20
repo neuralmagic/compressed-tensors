@@ -27,10 +27,10 @@ __all__ = ["Transforms"]
 # first or second matirx in torch.matmul depending on dimensions, can be inferred
 # by the layer time likely.
 
-MATIRX_TRANSFORMS = ["matrix-mul", "hadamard", "random-hadamard"]
+MATRIX_TRANSFORMS = ["matrix-mul", "hadamard", "random-hadamard"]
 
 
-class Transforms(RegistryMixin):
+class Transforms(torch.nn.Parameter, RegistryMixin):
     def __new__(
         cls,
         transform: torch.Tensor,
@@ -69,7 +69,7 @@ class Transforms(RegistryMixin):
 
     @classmethod
     def fetch_apply(cls, name: str):
-        if name in MATIRX_TRANSFORMS:
+        if name in MATRIX_TRANSFORMS:
             return apply_matrix_transform
         raise NotImplementedError("Only matrix transforms are supported")
 
