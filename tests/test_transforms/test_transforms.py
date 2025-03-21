@@ -44,10 +44,10 @@ def test_random_hadamard_transform(size: int, dtype: torch.dtype):
     # check initialize
     assert hadamard_transform is not None
 
-    val_1 = torch.round(hadamard_transform @ hadamard_transform.T)
+    val_1 = torch.round(hadamard_transform.transform @ hadamard_transform.transform.T)
 
     # output will be normalized, multiply by sqrt(size) to ensure form
-    normalized = math.sqrt(size) * hadamard_transform
+    normalized = math.sqrt(size) * hadamard_transform.transform
     # all values should be -1 or +1
     assert torch.all(torch.isin(normalized, torch.Tensor([-1, +1])))
     # check creation; HH.T == I
@@ -55,8 +55,7 @@ def test_random_hadamard_transform(size: int, dtype: torch.dtype):
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
-    apply = Transforms.fetch_apply("random-hadamard")
-    transformed_value = apply(input_tensor=x, transform=hadamard_transform)
+    transformed_value = hadamard_transform.apply(input_tensor=x)
     # TODO: check to make sure the matrix was applied correctly?
     assert transformed_value.shape == (size, size)
 
@@ -75,16 +74,15 @@ def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
 
     # check initialize
     assert hadamard_transform is not None
-    assert torch.all(torch.isin(hadamard_transform, torch.Tensor([-1, +1])))
+    assert torch.all(torch.isin(hadamard_transform.transform, torch.Tensor([-1, +1])))
 
-    val_1 = hadamard_transform @ hadamard_transform.T
+    val_1 = hadamard_transform.transform @ hadamard_transform.transform.T
     # check creation; HH.T == nI
     assert torch.equal(val_1 / size, torch.eye(size))
 
     # check apply
     x = torch.rand((size, size), dtype=dtype)
-    apply = Transforms.fetch_apply("hadamard")
-    transformed_value = apply(input_tensor=x, transform=hadamard_transform)
+    transformed_value = hadamard_transform.apply(input_tensor=x)
     # TODO: check to make sure the matrix was applied correctly?
     assert transformed_value.shape == (size, size)
 
@@ -103,9 +101,8 @@ def test_multiplier_transform(size: int, dtype: torch.dtype):
         "matrix-mul", transform=multiplier, device="cpu", dtype=dtype
     )
     assert multiplier_transform is not None
-    assert torch.equal(multiplier_transform, multiplier)
+    assert torch.equal(multiplier_transform.transform, multiplier)
 
     x = torch.rand((size, size), dtype=dtype)
-    apply = Transforms.fetch_apply("matrix-mul")
-    transformed_value = apply(input_tensor=x, transform=multiplier_transform)
-    assert torch.equal(transformed_value, x)
+    transformed_output = multiplier_transform.apply(x)
+    assert torch.equal(transformed_output, x)

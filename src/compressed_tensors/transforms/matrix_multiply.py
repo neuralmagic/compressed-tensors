@@ -14,14 +14,27 @@
 
 import torch
 from compressed_tensors.transforms import Transforms
+from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
 # TODO: fix loading
 @Transforms.register("matrix-mul")
 class MatrixMultiply(Transforms):
-    @staticmethod
+    def apply(
+        self,
+        input_tensor: torch.Tensor,
+        transpose: bool = False,
+        first: bool = True,
+    ) -> torch.Tensor:
+        return apply_matrix_transform(
+            transform=self.transform,
+            input_tensor=input_tensor,
+            transpose=transpose,
+            first=first,
+        )
+
     def inverse_apply(
-        transform: torch.Tensor,
+        self,
         input_tensor: torch.Tensor,
         transpose: bool = False,
         first: bool = True,
@@ -40,7 +53,7 @@ class MatrixMultiply(Transforms):
         # Note: not implemented for lower precision than float32
         transform = torch.linalg.inv(transform)
         return apply_matrix_transform(
-            transform=transform,
+            transform=self.transform,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,

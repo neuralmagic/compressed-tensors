@@ -17,6 +17,7 @@ from typing import Any, Optional, Union
 import torch
 from compressed_tensors.registry.registry import RegistryMixin
 from compressed_tensors.transforms.utils import apply_matrix_transform
+from compressed_tensors.utils import register_offload_parameter, update_parameter_data
 
 
 __all__ = ["Transforms"]
@@ -27,18 +28,16 @@ __all__ = ["Transforms"]
 # first or second matirx in torch.matmul depending on dimensions, can be inferred
 # by the layer time likely.
 
-MATRIX_TRANSFORMS = ["matrix-mul", "hadamard", "random-hadamard"]
 
-
-class Transforms(torch.nn.Parameter, RegistryMixin):
-    def __new__(
-        cls,
+class Transforms(RegistryMixin):
+    def __init__(
+        self,
         transform: torch.Tensor,
+        learnable: Optional[bool] = True,
         device: Optional[Union[str, torch.device]] = "cuda",
         dtype: Optional[torch.dtype] = torch.bfloat16,
-        *args,
-        **kwargs,
     ):
+        self.learnable = learnable
         """
         Base class for setting up transforms. The registry creates transforms
         as parameters which can be attached to modules.
@@ -48,38 +47,45 @@ class Transforms(torch.nn.Parameter, RegistryMixin):
         size = 1024
         dtype = torch.bfloat16
         module = torch.nn.Linear(size, size)
+        name = "weight_transform"
 
         hadamard_transform = Transforms.load_from_registry(
             "random_hadamard", size=size, dtype=dtype
         )
-        hadamard_apply = Transforms.fetch_apply("random_hadamard")
-        module.weight_transform = hadamard_transform
 
-        transformed_output = hadamard_apply(input_tensor=module.weight,
-            transform=moduel.weight_transform)
+        hadamard_transform.register_to_module(name, module)
+        module.transform_data = {name: {"call_args": dict, "class": hadamard_transform}}
 
-        hadamard_inverse = Transforms.fetch_inverse_apply("random_hadamard")
-        original_weight = hadamard_inverse(input_tensor=transformed_output,
-            transform=model.weight_trainsform,
-            transpose=True)
+        transformed_output = hadamard_transform.apply(input_tensor=module.weight)
+        original_weight = hadamard_transform.inverse_apply(
+            input_tensor=transformed_output)
 
         :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
-        return torch.nn.Parameter(transform.to(device).to(dtype), requires_grad=False)
+        if self.learnable:
+            self.transform = torch.nn.Parameter(
+                transform.to(dtype).to(device), requires_grad=False
+            )
+        else:
+            self.transform = torch.nn.Buffer(transform.to(dtype).to(device))
 
-    @classmethod
-    def fetch_apply(cls, name: str):
-        if name in MATRIX_TRANSFORMS:
-            return apply_matrix_transform
-        raise NotImplementedError("Only matrix transforms are supported")
+    # register to class for easy offloading, serialization, deserialization
+    def register_to_module(self, name: str, module: torch.nn.Module):
+        if self.learnable:
+            register_offload_parameter(module, name, self.transform)
+        else:
+            # TODO: have to verify serialization/offloading
+            module.register_buffer(name, self.transform)
 
-    @classmethod
-    def fetch_inverse_apply(cls, name: str):
-        return cls.get_value_from_registry(name=name).inverse_apply
+    def apply(self, input_tensor: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        """
+        Apply the transform to the module
+        """
+        raise NotImplementedError()
 
-    @staticmethod
+    # TODO: potentially split into its own transform using the same shared set-up
     def inverse_apply(
-        transform: torch.Tensor, input_tensor: torch.Tensor, *args, **kwargs
+        self, input_tensor: torch.Tensor, *args, **kwargs
     ) -> torch.Tensor:
         """
         Apply the inverse operation applied by the apply method

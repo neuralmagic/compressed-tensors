@@ -22,8 +22,8 @@ from compressed_tensors.transforms.utils import apply_matrix_transform
 
 @Transforms.register("random-hadamard")
 class RandomHadamard(Transforms):
-    def __new__(
-        cls,
+    def __init__(
+        self,
         size: int,
         empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cuda",
@@ -58,11 +58,23 @@ class RandomHadamard(Transforms):
         else:
             transform = torch.empty((size, size))
 
-        return super().__new__(cls, transform=transform, device=device, dtype=dtype)
+        super().__init__(transform=transform, device=device, dtype=dtype)
 
-    @staticmethod
+    def apply(
+        self,
+        input_tensor: torch.Tensor,
+        transpose: bool = False,
+        first: bool = True,
+    ) -> torch.Tensor:
+        return apply_matrix_transform(
+            transform=self.transform,
+            input_tensor=input_tensor,
+            transpose=transpose,
+            first=first,
+        )
+
     def inverse_apply(
-        transform: torch.Tensor,
+        self,
         input_tensor: torch.Tensor,
         transpose: bool = False,
         first: bool = True,
@@ -80,7 +92,7 @@ class RandomHadamard(Transforms):
 
         transpose = not transpose
         return apply_matrix_transform(
-            transform=transform,
+            transform=self.transform,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,

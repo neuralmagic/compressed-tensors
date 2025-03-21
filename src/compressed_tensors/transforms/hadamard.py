@@ -22,12 +22,14 @@ from compressed_tensors.transforms.utils import apply_matrix_transform
 
 @Transforms.register("hadamard")
 class Hadamard(Transforms):
-    def __new__(
-        cls,
+    def __init__(
+        self,
         size: int,
         empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cuda",
         dtype: Optional[torch.dtype] = torch.bfloat16,
+        *args,
+        **kwargs,
     ):
         """
         Produces a hadamard matrix with dims (size, size), with values
@@ -50,11 +52,23 @@ class Hadamard(Transforms):
         else:
             transform = torch.empty((size, size))
 
-        return super().__new__(cls, transform=transform, device=device, dtype=dtype)
+        super().__init__(transform=transform, dtype=dtype, device=device)
 
-    @staticmethod
+    def apply(
+        self,
+        input_tensor: torch.Tensor,
+        transpose: bool = False,
+        first: bool = True,
+    ) -> torch.Tensor:
+        return apply_matrix_transform(
+            transform=self.transform,
+            input_tensor=input_tensor,
+            transpose=transpose,
+            first=first,
+        )
+
     def inverse_apply(
-        transform: torch.Tensor,
+        self,
         input_tensor: torch.Tensor,
         transpose: bool = False,
         first: bool = True,
@@ -73,7 +87,7 @@ class Hadamard(Transforms):
         # need to normalize before sending back
         return (
             apply_matrix_transform(
-                transform=transform,
+                transform=self.transform,
                 input_tensor=input_tensor,
                 transpose=transpose,
                 first=first,
