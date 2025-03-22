@@ -40,11 +40,10 @@ def apply_transforms_to_parameter(
     """
 
     for transform_name, transform_values in transform_data.data.items():
-        transform = getattr(module, transform_name)
-        apply = Transforms.fetch_apply(transform_values.get("type"))
+        transform = transform_values.get("transform")
         call_args = transform_values.get("call_args")
-        transformed_param_data = apply(
-            input_tensor=module_parameter, transform=transform, **call_args
+        transformed_param_data = transform.apply(
+            input_tensor=module_parameter, **call_args
         )
         module_parameter.data.copy_(transformed_param_data)
 
@@ -67,10 +66,9 @@ def apply_inverse_transforms_to_parameter(
     """
 
     for transform_name, transform_values in reversed(transform_data.data.items()):
-        transform = getattr(module, transform_name)
-        inverse_apply = Transforms.fetch_inverse_apply(transform_values.get("type"))
+        transform = transform_values.get("transform")
         call_args = transform_values.get("call_args")
-        transformed_param_data = inverse_apply(
-            input_tensor=module_parameter, transform=transform, **call_args
+        transformed_param_data = transform.inverse_apply(
+            input_tensor=module_parameter, **call_args
         )
         module_parameter.data.copy_(transformed_param_data)

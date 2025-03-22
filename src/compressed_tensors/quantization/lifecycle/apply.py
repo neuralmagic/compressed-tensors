@@ -194,12 +194,12 @@ def process_transforms_config(
                             dtype=dtype,
                             **transform_creation_args,
                         )
-                    setattr(submodule, transform_name, transform)
+                    transform.register_to_module(name=transform_name, module=submodule)
 
                     # add relevant transform data to the submodule as well
                     data = {
                         transform_name: {
-                            "type": transform_type,
+                            "transform": transform,
                             "call_args": transform_arg.call_args,
                         }
                     }
