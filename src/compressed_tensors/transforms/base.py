@@ -63,9 +63,7 @@ class Transforms(RegistryMixin):
         :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
         if self.learnable:
-            self.transform = torch.nn.Parameter(
-                transform.to(dtype).to(device), requires_grad=False
-            )
+            self.transform = torch.nn.Parameter(transform.to(dtype).to(device))
         else:
             self.transform = torch.nn.Buffer(transform.to(dtype).to(device))
 
