@@ -75,6 +75,21 @@ class Transforms(RegistryMixin):
             # TODO: have to verify serialization/offloading
             module.register_buffer(name, self.transform)
 
+    def update_transform(
+        self,
+        data: torch.Tensor,
+        module: Optional[torch.nn.Module] = None,
+        name: Optional[str] = None,
+    ):
+        if module is None:
+            self.transform.data.copy_(data)
+        else:
+            # If updating the module parameter data, assumes this is also the transform
+            # data
+            if name is None:
+                raise ValueError("Name and module are required to update parma data")
+            update_parameter_data(module, data, name)
+
     def apply(self, input_tensor: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """
         Apply the transform to the module

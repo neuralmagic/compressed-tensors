@@ -92,5 +92,5 @@ class Hadamard(Transforms):
                 transpose=transpose,
                 first=first,
             )
-            / transform.shape[0]
+            / self.transform.shape[0]
         )

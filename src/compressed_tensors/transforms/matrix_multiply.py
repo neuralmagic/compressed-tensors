@@ -51,9 +51,8 @@ class MatrixMultiply(Transforms):
         """
 
         # Note: not implemented for lower precision than float32
-        transform = torch.linalg.inv(transform)
         return apply_matrix_transform(
-            transform=self.transform,
+            transform=torch.linalg.inv(self.transform),
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
