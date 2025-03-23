@@ -17,7 +17,7 @@ from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
-# TODO: fix loading
+# TODO: fix loading + add generic matrix registry?
 @Transforms.register("matrix-mul")
 class MatrixMultiply(Transforms):
     def apply(

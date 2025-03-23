@@ -16,7 +16,10 @@ from typing import Optional, Union
 
 import torch
 from compressed_tensors.transforms import Transforms
-from compressed_tensors.transforms.hadamard_utils import deterministic_hadamard_matrix
+from compressed_tensors.transforms.hadamard_utils import (
+    SingletonHadamardRegistry,
+    deterministic_hadamard_matrix,
+)
 from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
@@ -28,9 +31,9 @@ class Hadamard(Transforms):
         empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cuda",
         dtype: Optional[torch.dtype] = torch.bfloat16,
-        *args,
-        **kwargs,
+        learnable: Optional[bool] = False,
     ):
+
         """
         Produces a hadamard matrix with dims (size, size), with values
         -1 and 1, and the property HH.T == nI i.e the transformation
@@ -46,13 +49,38 @@ class Hadamard(Transforms):
         :param dtype: type to cast the rotation matrix to
 
         """
-        if not empty:
-            # TODO: this is deterministic; we should just serialize the size
-            transform = torch.Tensor(deterministic_hadamard_matrix(size=size))
-        else:
-            transform = torch.empty((size, size))
+        self.learnable = learnable
+        self.hadamard_registry = SingletonHadamardRegistry()
+        self.size = size
+        self.dtype = dtype
 
-        super().__init__(transform=transform, dtype=dtype, device=device)
+        if empty:
+            # If saved, would have a different lifecycle (would be loaded and not be
+            # the same parameter, for now)
+            # Would take more memory
+            transform = torch.empty((size, size)).to(dtype).to(device)
+        else:
+            transform = self.fetch().to(device)
+
+        super().__init__(transform=transform, learnable=learnable)
+
+        # if not learnable, save parameter
+        if not self.learnable and size not in self.hadamard_registry._data:
+            self.hadamard_registry.set_hadamard(size, self.transform)
+
+    def fetch(self):
+        # TODO: this is deterministic; we should just serialize the size
+        transform = self.hadamard_registry.get_hadamard(self.size)
+        if transform is None:
+            transform = torch.Tensor(deterministic_hadamard_matrix(size=self.size)).to(
+                self.dtype
+            )
+
+            # if learnable, save actual data, not parameter
+            if self.learnable:
+                self.hadamard_registry.set_hadamard(self.size, transform)
+
+        return transform
 
     def apply(
         self,
@@ -61,7 +89,7 @@ class Hadamard(Transforms):
         first: bool = True,
     ) -> torch.Tensor:
         return apply_matrix_transform(
-            transform=self.transform,
+            transform=self.transform.to(input_tensor.device),
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
@@ -87,7 +115,7 @@ class Hadamard(Transforms):
         # need to normalize before sending back
         return (
             apply_matrix_transform(
-                transform=self.transform,
+                transform=self.transform.to(input_tensor.device),
                 input_tensor=input_tensor,
                 transpose=transpose,
                 first=first,

@@ -18,7 +18,29 @@ import numpy
 import torch
 
 
-__all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix"]
+__all__ = [
+    "random_hadamard_matrix",
+    "deterministic_hadamard_matrix",
+    "SingletonHadamardRegistry",
+]
+
+
+class SingletonHadamardRegistry:
+    _instance = None
+
+    def __new__(cls):
+        # Check if the instance already exists
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._data = {}  # Initialize the data storage
+        return cls._instance
+
+    def set_hadamard(self, key, value):
+        self._data[key] = value
+
+    def get_hadamard(self, key):
+        return self._data.get(key, None)
+
 
 # adapted from:
 # https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py
@@ -59,6 +81,7 @@ def deterministic_hadamard_matrix(size: int):
 # https://github.com/Dao-AILab/fast-hadamard-transform/tree/master
 
 
+# ToDo: should no longer be random, call something else --> different generation type than scipy?
 def random_hadamard_matrix(size: int) -> torch.Tensor:
     """
     Produces a randomly generated Hadamard matrix.
@@ -73,7 +96,8 @@ def random_hadamard_matrix(size: int) -> torch.Tensor:
     # the matrix generated to be reproducible
 
     # Benefits: support other shapes / non powers of 2, support randomization
-    Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float64)
+    # Q = torch.randint(low=1, high=2, size=(size,)).to(torch.float64)
+    Q = torch.ones(size).to(torch.float64)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
     return _matmul_hadU(Q)
@@ -129,7 +153,7 @@ def _matmul_hadU(X, transpose=False):
         input = hadK.view(1, K, K).to(input) @ input
 
     # normalize
-    return input.view(X.shape) / torch.tensor(n).sqrt()
+    return input.view(X.shape)
 
 
 def _is_pow2(n):

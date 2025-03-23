@@ -199,6 +199,7 @@ def process_transforms_config(
                             dtype=dtype,
                             **transform_creation_args,
                         )
+
                         transform.register_to_module(
                             name=transform_name, module=submodule
                         )
@@ -217,6 +218,8 @@ def process_transforms_config(
                     else:
                         transform_data = TransformData(data=OrderedDict(data))
                         submodule.transform_data = transform_data
+    breakpoint()
+    # 10358 for now mib; 1/3 of memory if caching/sharing parameter data
     return model
 
 

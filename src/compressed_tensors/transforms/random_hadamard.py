@@ -12,14 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 from typing import Optional, Union
 
 import torch
 from compressed_tensors.transforms import Transforms
-from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
+from compressed_tensors.transforms.hadamard_utils import (
+    SingletonHadamardRegistry,
+    random_hadamard_matrix,
+)
 from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
+# TODO: allow randomness for both potentially, separate by generation type
+# this will make randomness a creation arg instead
 @Transforms.register("random-hadamard")
 class RandomHadamard(Transforms):
     def __init__(
@@ -28,6 +34,7 @@ class RandomHadamard(Transforms):
         empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cuda",
         dtype: Optional[torch.dtype] = torch.bfloat16,
+        learnable: Optional[bool] = False,
     ):
         """
         Produces a randomly generated matrix with dims (size, size), with values
@@ -52,13 +59,44 @@ class RandomHadamard(Transforms):
         we will not have to store the entire matrix. Will need to consider
         accuracy implications.
         """
+        self.learnable = learnable
+        self.size = size
+        self.normalized_size = math.sqrt(self.size)
+        self.dtype = dtype
+        self.device = device
+        # TODO: potentially lives outside of the registry
+        # And caching is controlled by llmcompressor
+        self.hadamard_registry = SingletonHadamardRegistry()
 
-        if not empty:
-            transform = random_hadamard_matrix(size=size)
+        self.permutation = (
+            (torch.randint(low=0, high=2, size=(self.size,)).to(torch.float64) * 2 - 1)
+            .to(self.dtype)
+            .to(self.device)
+        )
+
+        if empty:
+            # If saved, would have a different lifecycle (would be loaded and registered
+            # Would take more memory
+            transform = torch.empty((size, size)).to(dtype)
         else:
-            transform = torch.empty((size, size))
+            transform = self.fetch()
 
-        super().__init__(transform=transform, device=device, dtype=dtype)
+        super().__init__(transform=transform, learnable=self.learnable)
+
+        # not learnable, cache parameter
+        if not self.learnable and size not in self.hadamard_registry._data:
+            self.hadamard_registry.set_hadamard(self.size, self.transform)
+
+    def fetch(self):
+        deterministic_had = self.hadamard_registry.get_hadamard(self.size)
+        if deterministic_had is None:
+            deterministic_had = random_hadamard_matrix(size=self.size).to(self.dtype)
+            # learnable, cache data
+            if self.learnable:
+                self.hadamard_registry.set_hadamard(self.size, deterministic_had)
+
+        deterministic_had = deterministic_had.to(self.device)
+        return (deterministic_had * self.permutation) / self.normalized_size
 
     def apply(
         self,
@@ -67,7 +105,7 @@ class RandomHadamard(Transforms):
         first: bool = True,
     ) -> torch.Tensor:
         return apply_matrix_transform(
-            transform=self.transform,
+            transform=self.transform.to(input_tensor.device),
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
@@ -92,7 +130,7 @@ class RandomHadamard(Transforms):
 
         transpose = not transpose
         return apply_matrix_transform(
-            transform=self.transform,
+            transform=self.transform.to(input_tensor.device),
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,

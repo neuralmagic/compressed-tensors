@@ -33,11 +33,8 @@ class Transforms(RegistryMixin):
     def __init__(
         self,
         transform: torch.Tensor,
-        learnable: Optional[bool] = True,
-        device: Optional[Union[str, torch.device]] = "cuda",
-        dtype: Optional[torch.dtype] = torch.bfloat16,
+        learnable: Optional[bool] = False,
     ):
-        self.learnable = learnable
         """
         Base class for setting up transforms. The registry creates transforms
         as parameters which can be attached to modules.
@@ -62,10 +59,10 @@ class Transforms(RegistryMixin):
 
         :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
-        if self.learnable:
-            self.transform = torch.nn.Parameter(transform.to(dtype).to(device))
+        if learnable:
+            self.transform = torch.nn.Parameter(transform)
         else:
-            self.transform = torch.nn.Buffer(transform.to(dtype).to(device))
+            self.transform = torch.nn.Buffer(transform)
 
     # register to class for easy offloading, serialization, deserialization
     def register_to_module(self, name: str, module: torch.nn.Module):
