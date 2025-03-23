@@ -39,7 +39,6 @@ from compressed_tensors.quantization import (
     QuantizationStatus,
     apply_quantization_config,
     load_pretrained_quantization,
-    load_transforms,
 )
 from compressed_tensors.quantization.lifecycle import expand_target_names
 from compressed_tensors.quantization.quant_args import QuantizationArgs
@@ -471,8 +470,6 @@ class ModelCompressor:
                     transforms_config=self.transforms_config,
                 )
                 load_pretrained_quantization(model, model_path)
-
-            load_transforms(model, model_path)
 
             model_path_or_state_dict = (
                 model.state_dict() if sparse_decompressed else model_path

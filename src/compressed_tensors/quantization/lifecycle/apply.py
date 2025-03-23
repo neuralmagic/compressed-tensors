@@ -84,11 +84,16 @@ def load_transforms(model: Module, model_name_or_path: str):
 
     for name, submodule in iter_named_leaf_modules(model):
         transform_data = getattr(submodule, "transform_data", None)
+
         if transform_data:
-            for transform_name, transform_data in transform_data.data.items():
+            for transform_name, transform_values in transform_data.data.items():
                 full_name = f"{name}.{transform_name}"
                 transform_data = state_dict.get(full_name, None)
-                update_parameter_data(submodule, transform_data, transform_name)
+                transform = transform_values.get("transform")
+                transform.register_to_module(name=transform_name, module=submodule)
+                transform.update_transform(
+                    module=submodule, data=transform_data, name=transform_name
+                )
 
 
 def load_pretrained_quantization(model: Module, model_name_or_path: str):
@@ -194,7 +199,9 @@ def process_transforms_config(
                             dtype=dtype,
                             **transform_creation_args,
                         )
-                    transform.register_to_module(name=transform_name, module=submodule)
+                        transform.register_to_module(
+                            name=transform_name, module=submodule
+                        )
 
                     # add relevant transform data to the submodule as well
                     data = {
