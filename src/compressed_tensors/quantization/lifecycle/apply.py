@@ -180,6 +180,7 @@ def process_transforms_config(
                     # only support weight parameters for now, assume one value in
                     # module targets
                     transform_name = f"{module_targets[0]}_transform_{idx}"
+                    perm_name = f"{module_targets[0]}_perm_{idx}"
 
                     # create an empty tensor OR create a new transform
                     dtype = getattr(submodule, module_targets[0]).dtype
@@ -201,7 +202,7 @@ def process_transforms_config(
                         )
 
                         transform.register_to_module(
-                            name=transform_name, module=submodule
+                            name=transform_name, module=submodule, perm_name=perm_name
                         )
 
                     # add relevant transform data to the submodule as well

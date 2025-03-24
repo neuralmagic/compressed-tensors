@@ -24,24 +24,6 @@ __all__ = [
     "SingletonHadamardRegistry",
 ]
 
-
-class SingletonHadamardRegistry:
-    _instance = None
-
-    def __new__(cls):
-        # Check if the instance already exists
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._data = {}  # Initialize the data storage
-        return cls._instance
-
-    def set_hadamard(self, key, value):
-        self._data[key] = value
-
-    def get_hadamard(self, key):
-        return self._data.get(key, None)
-
-
 # adapted from:
 # https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py
 def deterministic_hadamard_matrix(size: int):

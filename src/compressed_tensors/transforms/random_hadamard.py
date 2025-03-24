@@ -17,11 +17,11 @@ from typing import Optional, Union
 
 import torch
 from compressed_tensors.transforms import Transforms
-from compressed_tensors.transforms.hadamard_utils import (
-    SingletonHadamardRegistry,
-    random_hadamard_matrix,
+from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
+from compressed_tensors.transforms.utils import (
+    SingletonMatrixRegistry,
+    apply_matrix_transform,
 )
-from compressed_tensors.transforms.utils import apply_matrix_transform
 
 
 # TODO: allow randomness for both potentially, separate by generation type
@@ -34,7 +34,6 @@ class RandomHadamard(Transforms):
         empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cuda",
         dtype: Optional[torch.dtype] = torch.bfloat16,
-        learnable: Optional[bool] = False,
     ):
         """
         Produces a randomly generated matrix with dims (size, size), with values
@@ -59,46 +58,35 @@ class RandomHadamard(Transforms):
         we will not have to store the entire matrix. Will need to consider
         accuracy implications.
         """
-        self.learnable = learnable
         self.size = size
         self.normalized_size = math.sqrt(self.size)
-        self.dtype = dtype
-        self.device = device
         # TODO: potentially lives outside of the registry
         # And caching is controlled by llmcompressor
-        self.hadamard_registry = SingletonHadamardRegistry()
-
-        # TODO: need to register randomness as well
-        # Are they training just this and the actual hadamard is a buffer?
-        self.permutation = (
-            (torch.randint(low=0, high=2, size=(self.size,)).to(torch.float64) * 2 - 1)
-            .to(self.dtype)
-            .to(self.device)
-        )
+        self.matrix_registry = SingletonMatrixRegistry()
 
         if empty:
             # If saved, would have a different lifecycle (would be loaded and registered
             # Would take more memory
             transform = torch.empty((size, size)).to(dtype)
+            permutation = torch.empty((size)).to(dtype)
         else:
-            transform = self.fetch().to(device)
+            transform = self.fetch().to(dtype).to(device)
+            permutation = (
+                (torch.randint(low=0, high=2, size=(self.size,)) * 2 - 1)
+                .to(dtype)
+                .to(device)
+            )
 
-        super().__init__(transform=transform, learnable=self.learnable)
+        super().__init__(transform=transform, permutation=permutation)
 
-        # not learnable, cache parameter
-        if not self.learnable and size not in self.hadamard_registry._data:
-            self.hadamard_registry.set_hadamard(self.size, self.transform)
+        if not self.matrix_registry.contains(size):
+            self.matrix_registry.set_matrix(self.size, self.transform)
 
     def fetch(self):
-        transform = self.hadamard_registry.get_hadamard(self.size)
+        transform = self.matrix_registry.get_matrix(self.size)
         if transform is None:
-            transform = random_hadamard_matrix(size=self.size).to(self.dtype)
-            # learnable, cache data
-            if self.learnable:
-                self.hadamard_registry.set_hadamard(self.size, transform)
-
+            transform = random_hadamard_matrix(size=self.size)
         return transform
-        # return (deterministic_had * self.permutation) / self.normalized_size
 
     def apply(
         self,
@@ -107,8 +95,7 @@ class RandomHadamard(Transforms):
         first: bool = True,
     ) -> torch.Tensor:
         return apply_matrix_transform(
-            transform=(self.permutation * self.transform.to(input_tensor.device))
-            / self.normalized_size,
+            transform=(self.transform * self.permutation) / self.normalized_size,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
@@ -133,8 +120,7 @@ class RandomHadamard(Transforms):
 
         transpose = not transpose
         return apply_matrix_transform(
-            transform=(self.permutation * self.transform.to(input_tensor.device))
-            / self.normalized_size,
+            transform=(self.transform * self.permutation) / self.normalized_size,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,

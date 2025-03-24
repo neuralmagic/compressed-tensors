@@ -12,14 +12,55 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional, Union
+
 import torch
 from compressed_tensors.transforms import Transforms
-from compressed_tensors.transforms.utils import apply_matrix_transform
+from compressed_tensors.transforms.utils import (
+    SingletonMatrixRegistry,
+    apply_matrix_transform,
+)
 
 
 # TODO: fix loading + add generic matrix registry?
 @Transforms.register("matrix-mul")
 class MatrixMultiply(Transforms):
+    def __init__(
+        self,
+        name: str,
+        transform_data: torch.Tensor,
+        size: Optional[int] = None,
+        empty: Optional[bool] = False,
+        device: Optional[Union[str, torch.device]] = "cpu",
+        dtype: Optional[torch.dtype] = torch.bfloat16,
+    ):
+
+        if empty and size is None:
+            raise ValueError(
+                "size is required when setting up empty transforms for deserialization "
+            )
+
+        # name required to either pull a cached matrix or cache a matrix itself
+        # will assume each name corresponds to a unique matrix
+        self.name = name
+        self.matrix_registry = SingletonMatrixRegistry()
+
+        if empty:
+            transform = torch.empty((size, size)).to(dtype)
+        else:
+            transform = self.fetch().to(dtype).to(device)
+
+        super().__init__(transform=transform)
+
+        if not self.matrix_registry.contains(self.name):
+            self.matrix_registry.set_matrix(self.name, self.transform)
+
+    def fetch(self):
+        transform = self.matrix_registry.get_matrix(self.name)
+        if transform is None:
+            transform = transform_data
+        return transform
+
     def apply(
         self,
         input_tensor: torch.Tensor,
