@@ -68,6 +68,8 @@ class RandomHadamard(Transforms):
         # And caching is controlled by llmcompressor
         self.hadamard_registry = SingletonHadamardRegistry()
 
+        # TODO: need to register randomness as well
+        # Are they training just this and the actual hadamard is a buffer?
         self.permutation = (
             (torch.randint(low=0, high=2, size=(self.size,)).to(torch.float64) * 2 - 1)
             .to(self.dtype)
@@ -79,7 +81,7 @@ class RandomHadamard(Transforms):
             # Would take more memory
             transform = torch.empty((size, size)).to(dtype)
         else:
-            transform = self.fetch()
+            transform = self.fetch().to(device)
 
         super().__init__(transform=transform, learnable=self.learnable)
 
@@ -88,15 +90,15 @@ class RandomHadamard(Transforms):
             self.hadamard_registry.set_hadamard(self.size, self.transform)
 
     def fetch(self):
-        deterministic_had = self.hadamard_registry.get_hadamard(self.size)
-        if deterministic_had is None:
-            deterministic_had = random_hadamard_matrix(size=self.size).to(self.dtype)
+        transform = self.hadamard_registry.get_hadamard(self.size)
+        if transform is None:
+            transform = random_hadamard_matrix(size=self.size).to(self.dtype)
             # learnable, cache data
             if self.learnable:
-                self.hadamard_registry.set_hadamard(self.size, deterministic_had)
+                self.hadamard_registry.set_hadamard(self.size, transform)
 
-        deterministic_had = deterministic_had.to(self.device)
-        return (deterministic_had * self.permutation) / self.normalized_size
+        return transform
+        # return (deterministic_had * self.permutation) / self.normalized_size
 
     def apply(
         self,
@@ -105,7 +107,8 @@ class RandomHadamard(Transforms):
         first: bool = True,
     ) -> torch.Tensor:
         return apply_matrix_transform(
-            transform=self.transform.to(input_tensor.device),
+            transform=(self.permutation * self.transform.to(input_tensor.device))
+            / self.normalized_size,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
@@ -130,7 +133,8 @@ class RandomHadamard(Transforms):
 
         transpose = not transpose
         return apply_matrix_transform(
-            transform=self.transform.to(input_tensor.device),
+            transform=(self.permutation * self.transform.to(input_tensor.device))
+            / self.normalized_size,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
