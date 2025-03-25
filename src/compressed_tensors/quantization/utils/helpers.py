@@ -64,6 +64,10 @@ def calculate_qparams(
     :param quantization_args: settings to quantization
     :return: tuple of the calculated scale(s) and zero point(s)
     """
+    # based on the implementations for consuming quantized values,
+    # 0.0 must always be representable within the quantized range
+    min_vals = torch.min(min_vals, torch.zeros_like(min_vals))
+    max_vals = torch.max(max_vals, torch.zeros_like(max_vals))
 
     device = min_vals.device
 
@@ -72,8 +76,6 @@ def calculate_qparams(
     zp_dtype = quantization_args.pytorch_dtype()
 
     if quantization_args.symmetric:
-        min_vals = torch.min(min_vals, torch.zeros_like(min_vals))
-        max_vals = torch.max(max_vals, torch.zeros_like(max_vals))
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
         scales = max_val_pos / (float(bit_range) / 2)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
@@ -97,7 +99,7 @@ def calculate_qparams(
 def compute_dynamic_scales_and_zp(value: Tensor, args: QuantizationArgs):
     """
     Returns the computed scales and zero points for dynamic activation
-    qunatization.
+    quantization.
 
     :param value: tensor to calculate quantization parameters for
     :param args: quantization args
