@@ -84,9 +84,12 @@ def calculate_qparams(
         scales = (max_vals - min_vals) / float(bit_range)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = bit_min - (min_vals / scales)
-        zero_points = torch.clamp(torch.round(zero_points), bit_min, bit_max)
+        zero_points = torch.clamp(zero_points, bit_min, bit_max)
 
     # match zero-points to quantized type
+    # if casting to int, use round instead of truncate
+    if quantization_args.type == QuantizationType.INT:
+        zero_points = torch.round(zero_points)
     zero_points = zero_points.to(zp_dtype)
 
     if scales.ndim == 0:
