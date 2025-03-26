@@ -22,22 +22,29 @@ from compressed_tensors.transforms.utils import (
 )
 
 
-# TODO: fix loading + add generic matrix registry?
 @Transforms.register("matrix-mul")
 class MatrixMultiply(Transforms):
     def __init__(
         self,
         name: str,
-        transform_data: torch.Tensor,
+        transform_name: str,
+        transform_data: Optional[torch.Tensor] = None,
         size: Optional[int] = None,
         empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cpu",
         dtype: Optional[torch.dtype] = torch.bfloat16,
+        *args,
+        **kwargs,
     ):
 
         if empty and size is None:
             raise ValueError(
-                "size is required when setting up empty transforms for deserialization "
+                "size is required when setting up parameters for deserialization "
+            )
+
+        if not empty and transform_data is None:
+            raise ValueError(
+                "transform_data is required when initializing matrix-multiply transforms"
             )
 
         # name required to either pull a cached matrix or cache a matrix itself
@@ -45,20 +52,21 @@ class MatrixMultiply(Transforms):
         self.name = name
         self.matrix_registry = SingletonMatrixRegistry()
 
+        # Can we get rid of the size for deserialization?
         if empty:
             transform = torch.empty((size, size)).to(dtype)
         else:
-            transform = self.fetch().to(dtype).to(device)
+            transform = self.fetch(transform_data).to(dtype).to(device)
 
-        super().__init__(transform=transform)
+        super().__init__(transform=transform, transform_name=tranform_name)
 
         if not self.matrix_registry.contains(self.name):
             self.matrix_registry.set_matrix(self.name, self.transform)
 
-    def fetch(self):
+    def fetch(self, transform_data: torch.Tensor):
         transform = self.matrix_registry.get_matrix(self.name)
         if transform is None:
-            transform = transform_data
+            return transform_data
         return transform
 
     def apply(

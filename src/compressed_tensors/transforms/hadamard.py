@@ -28,11 +28,13 @@ class Hadamard(Transforms):
     def __init__(
         self,
         size: int,
+        transform_name: str,
         empty: Optional[bool] = False,
-        device: Optional[Union[str, torch.device]] = "cuda",
+        device: Optional[Union[str, torch.device]] = "cpu",
         dtype: Optional[torch.dtype] = torch.bfloat16,
+        *args,
+        **kwargs,
     ):
-
         """
         Produces a hadamard matrix with dims (size, size), with values
         -1 and 1, and the property HH.T == nI i.e the transformation
@@ -52,14 +54,11 @@ class Hadamard(Transforms):
         self.size = size
 
         if empty:
-            # If saved, would have a different lifecycle (would be loaded and not be
-            # the same parameter, for now)
-            # Would take more memory
             transform = torch.empty((size, size)).to(dtype)
         else:
             transform = self.fetch().to(dtype).to(device)
 
-        super().__init__(transform=transform)
+        super().__init__(transform=transform, transform_name=transform_name)
 
         if not self.matrix_registry.contains(size):
             self.matrix_registry.set_matrix(size, self.transform)

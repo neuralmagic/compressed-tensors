@@ -62,6 +62,7 @@ __all__ = [
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
+from compressed_tensors.utils import has_offloaded_params
 from compressed_tensors.utils.safetensors_load import (
     get_quantization_state_dict,
     get_weight_mappings,
@@ -88,11 +89,14 @@ def load_transforms(model: Module, model_name_or_path: str):
         if transform_data:
             for transform_name, transform_values in transform_data.data.items():
                 full_name = f"{name}.{transform_name}"
-                transform_data = state_dict.get(full_name, None)
+                full_per_name = full_name.replace("transform", "perm")
+                dict_data = state_dict.get(full_name, None)
+                permutation_data = state_dict.get(full_per_name, None)
                 transform = transform_values.get("transform")
-                transform.register_to_module(name=transform_name, module=submodule)
+                transform.update_device(module=submodule)
+                transform.register_to_module(module=submodule)
                 transform.update_transform(
-                    module=submodule, data=transform_data, name=transform_name
+                    module=submodule, data=dict_data, permutation_data=permutation_data
                 )
 
 
@@ -180,7 +184,7 @@ def process_transforms_config(
                     # only support weight parameters for now, assume one value in
                     # module targets
                     transform_name = f"{module_targets[0]}_transform_{idx}"
-                    perm_name = f"{module_targets[0]}_perm_{idx}"
+                    permutation_name = f"{module_targets[0]}_perm_{idx}"
 
                     # create an empty tensor OR create a new transform
                     dtype = getattr(submodule, module_targets[0]).dtype
@@ -192,18 +196,21 @@ def process_transforms_config(
                             transform_type,
                             dtype=dtype,
                             empty=True,
+                            transform_name=transform_name,
+                            permutation_name=permutation_name,
                             **transform_creation_args,
                         )
                     else:
                         transform = Transforms.load_from_registry(
                             transform_type,
                             dtype=dtype,
+                            transform_name=transform_name,
+                            permutation_name=permutation_name,
+                            device=next(submodule.parameters()).device,
                             **transform_creation_args,
                         )
 
-                        transform.register_to_module(
-                            name=transform_name, module=submodule, perm_name=perm_name
-                        )
+                        transform.register_to_module(module=submodule)
 
                     # add relevant transform data to the submodule as well
                     data = {
@@ -219,7 +226,6 @@ def process_transforms_config(
                     else:
                         transform_data = TransformData(data=OrderedDict(data))
                         submodule.transform_data = transform_data
-    breakpoint()
     # 10358 for now mib; 1/3 of memory if caching/sharing parameter data
     return model
 

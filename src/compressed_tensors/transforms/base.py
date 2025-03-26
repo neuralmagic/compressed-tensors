@@ -31,7 +31,11 @@ __all__ = ["Transforms"]
 
 class Transforms(RegistryMixin):
     def __init__(
-        self, transform: torch.Tensor, permutation: Optional[torch.Tensor] = None
+        self,
+        transform: torch.Tensor,
+        transform_name: str,
+        permutation: Optional[torch.Tensor] = None,
+        permutation_name: Optional[str] = None,
     ):
         """
         Base class for setting up transforms. The registry creates transforms
@@ -57,26 +61,34 @@ class Transforms(RegistryMixin):
 
         :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
-        self.register_permutation = False
-        self.transform = torch.nn.Buffer(transform)
+        self.transform = torch.nn.Parameter(transform, requires_grad=False)
+        self.transform_name = transform_name
         self.permutation = (
-            torch.nn.Buffer(permutation) if permutation is not None else None
+            torch.nn.Parameter(permutation, requires_grad=False)
+            if permutation is not None
+            else None
         )
+        self.permutation_name = permutation_name
+
+    def update_device(self, module: torch.nn.Module):
+        # Helper function required for deserialization
+        module_device = next(module.parameters()).device
+        self.transform.data = self.transform.data.to(module_device)
+        if self.permutation is not None:
+            self.permutation.data = self.permutation.data.to(module_device)
 
     # register to class for easy offloading, serialization, deserialization
     # TODO: Manage lifecycle of permutation and transform buffers
-    def register_to_module(self, name: str, module: torch.nn.Module, perm_name: str):
-        module.register_buffer(name, self.transform)
+    def register_to_module(self, module: torch.nn.Module):
+        register_offload_parameter(module, self.transform_name, self.transform)
         if self.permutation is not None:
-            module.register_buffer(perm_name, self.permutation)
+            register_offload_parameter(module, self.permutation_name, self.permutation)
 
     def update_transform(
         self,
         data: torch.Tensor,
         permutation_data: Optional[torch.Tensor] = None,
         module: Optional[torch.nn.Module] = None,
-        name: Optional[str] = None,
-        permutation_name: Optional[str] = None,
     ):
         if module is None:
             self.transform.data.copy_(data)
@@ -85,15 +97,11 @@ class Transforms(RegistryMixin):
 
         else:
             # If updating the module parameter data, assumes this is also the transform
-            # data
-            if name is None:
-                raise ValueError(
-                    "Name and module are required to update transform data"
-                )
-            update_parameter_data(module, data, name)
+            # is already registered/shared data
+            update_parameter_data(module, data, self.transform_name)
 
             if self.permutation is not None and permutation_data is not None:
-                update_parameter_data(module, permutation_data, permutation_name)
+                update_parameter_data(module, permutation_data, self.permutation_name)
 
     def apply(self, input_tensor: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """

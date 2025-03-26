@@ -31,9 +31,13 @@ class RandomHadamard(Transforms):
     def __init__(
         self,
         size: int,
+        transform_name: str,
+        permutation_name: str,
         empty: Optional[bool] = False,
-        device: Optional[Union[str, torch.device]] = "cuda",
+        device: Optional[Union[str, torch.device]] = "cpu",
         dtype: Optional[torch.dtype] = torch.bfloat16,
+        *args,
+        **kwargs,
     ):
         """
         Produces a randomly generated matrix with dims (size, size), with values
@@ -65,10 +69,8 @@ class RandomHadamard(Transforms):
         self.matrix_registry = SingletonMatrixRegistry()
 
         if empty:
-            # If saved, would have a different lifecycle (would be loaded and registered
-            # Would take more memory
             transform = torch.empty((size, size)).to(dtype)
-            permutation = torch.empty((size)).to(dtype)
+            permutation = torch.empty((size)).to(dtype).to(device)
         else:
             transform = self.fetch().to(dtype).to(device)
             permutation = (
@@ -77,7 +79,12 @@ class RandomHadamard(Transforms):
                 .to(device)
             )
 
-        super().__init__(transform=transform, permutation=permutation)
+        super().__init__(
+            transform=transform,
+            permutation=permutation,
+            transform_name=transform_name,
+            permutation_name=permutation_name,
+        )
 
         if not self.matrix_registry.contains(size):
             self.matrix_registry.set_matrix(self.size, self.transform)
