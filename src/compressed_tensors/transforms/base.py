@@ -33,11 +33,10 @@ class Transforms(RegistryMixin):
     def __init__(
         self,
         transform: torch.Tensor,
-        learnable: Optional[bool] = True,
-        device: Optional[Union[str, torch.device]] = "cuda",
-        dtype: Optional[torch.dtype] = torch.bfloat16,
+        transform_name: str,
+        permutation: Optional[torch.Tensor] = None,
+        permutation_name: Optional[str] = None,
     ):
-        self.learnable = learnable
         """
         Base class for setting up transforms. The registry creates transforms
         as parameters which can be attached to modules.
@@ -62,33 +61,47 @@ class Transforms(RegistryMixin):
 
         :param transform: transform (e.g. torch.Tensor, scalar) to be applied
         """
-        if self.learnable:
-            self.transform = torch.nn.Parameter(transform.to(dtype).to(device))
-        else:
-            self.transform = torch.nn.Buffer(transform.to(dtype).to(device))
+        self.transform = torch.nn.Parameter(transform, requires_grad=False)
+        self.transform_name = transform_name
+        self.permutation = (
+            torch.nn.Parameter(permutation, requires_grad=False)
+            if permutation is not None
+            else None
+        )
+        self.permutation_name = permutation_name
+
+    def update_device(self, module: torch.nn.Module):
+        # Helper function required for deserialization
+        module_device = next(module.parameters()).device
+        self.transform.data = self.transform.data.to(module_device)
+        if self.permutation is not None:
+            self.permutation.data = self.permutation.data.to(module_device)
 
     # register to class for easy offloading, serialization, deserialization
-    def register_to_module(self, name: str, module: torch.nn.Module):
-        if self.learnable:
-            register_offload_parameter(module, name, self.transform)
-        else:
-            # TODO: have to verify serialization/offloading
-            module.register_buffer(name, self.transform)
+    # TODO: Manage lifecycle of permutation and transform buffers
+    def register_to_module(self, module: torch.nn.Module):
+        register_offload_parameter(module, self.transform_name, self.transform)
+        if self.permutation is not None:
+            register_offload_parameter(module, self.permutation_name, self.permutation)
 
     def update_transform(
         self,
         data: torch.Tensor,
+        permutation_data: Optional[torch.Tensor] = None,
         module: Optional[torch.nn.Module] = None,
-        name: Optional[str] = None,
     ):
         if module is None:
             self.transform.data.copy_(data)
+            if self.permutation is not None and permutation_data is not None:
+                self.permutation.data.copy_(permutation_data)
+
         else:
             # If updating the module parameter data, assumes this is also the transform
-            # data
-            if name is None:
-                raise ValueError("Name and module are required to update parma data")
-            update_parameter_data(module, data, name)
+            # is already registered/shared data
+            update_parameter_data(module, data, self.transform_name)
+
+            if self.permutation is not None and permutation_data is not None:
+                update_parameter_data(module, permutation_data, self.permutation_name)
 
     def apply(self, input_tensor: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """

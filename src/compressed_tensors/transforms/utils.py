@@ -15,7 +15,27 @@
 import torch
 
 
-__all__ = ["apply_matrix_transform"]
+__all__ = ["apply_matrix_transform", "SingletonMatrixRegistry"]
+
+
+class SingletonMatrixRegistry:
+    _instance = None
+
+    def __new__(cls):
+        # Check if the instance already exists
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._data = {}  # Initialize the data storage
+        return cls._instance
+
+    def set_matrix(self, key, value):
+        self._data[key] = value
+
+    def get_matrix(self, key):
+        return self._data.get(key, None)
+
+    def contains(self, key):
+        return key in self._data
 
 
 def apply_matrix_transform(

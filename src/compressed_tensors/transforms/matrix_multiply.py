@@ -12,14 +12,63 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional, Union
+
 import torch
 from compressed_tensors.transforms import Transforms
-from compressed_tensors.transforms.utils import apply_matrix_transform
+from compressed_tensors.transforms.utils import (
+    SingletonMatrixRegistry,
+    apply_matrix_transform,
+)
 
 
-# TODO: fix loading
 @Transforms.register("matrix-mul")
 class MatrixMultiply(Transforms):
+    def __init__(
+        self,
+        name: str,
+        transform_name: str,
+        transform_data: Optional[torch.Tensor] = None,
+        size: Optional[int] = None,
+        empty: Optional[bool] = False,
+        device: Optional[Union[str, torch.device]] = "cpu",
+        dtype: Optional[torch.dtype] = torch.bfloat16,
+        *args,
+        **kwargs,
+    ):
+
+        if empty and size is None:
+            raise ValueError(
+                "size is required when setting up parameters for deserialization "
+            )
+
+        if not empty and transform_data is None:
+            raise ValueError(
+                "transform_data is required when initializing matrix-multiply transforms"
+            )
+
+        # name required to either pull a cached matrix or cache a matrix itself
+        # will assume each name corresponds to a unique matrix
+        self.name = name
+        self.matrix_registry = SingletonMatrixRegistry()
+
+        # Can we get rid of the size for deserialization?
+        if empty:
+            transform = torch.empty((size, size)).to(dtype)
+        else:
+            transform = self.fetch(transform_data).to(dtype).to(device)
+
+        super().__init__(transform=transform, transform_name=tranform_name)
+
+        if not self.matrix_registry.contains(self.name):
+            self.matrix_registry.set_matrix(self.name, self.transform)
+
+    def fetch(self, transform_data: torch.Tensor):
+        transform = self.matrix_registry.get_matrix(self.name)
+        if transform is None:
+            return transform_data
+        return transform
+
     def apply(
         self,
         input_tensor: torch.Tensor,

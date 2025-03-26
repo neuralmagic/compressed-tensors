@@ -12,22 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 from typing import Optional, Union
 
 import torch
 from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
-from compressed_tensors.transforms.utils import apply_matrix_transform
+from compressed_tensors.transforms.utils import (
+    SingletonMatrixRegistry,
+    apply_matrix_transform,
+)
 
 
+# TODO: allow randomness for both potentially, separate by generation type
+# this will make randomness a creation arg instead
 @Transforms.register("random-hadamard")
 class RandomHadamard(Transforms):
     def __init__(
         self,
         size: int,
+        transform_name: str,
+        permutation_name: str,
         empty: Optional[bool] = False,
-        device: Optional[Union[str, torch.device]] = "cuda",
+        device: Optional[Union[str, torch.device]] = "cpu",
         dtype: Optional[torch.dtype] = torch.bfloat16,
+        *args,
+        **kwargs,
     ):
         """
         Produces a randomly generated matrix with dims (size, size), with values
@@ -52,13 +62,38 @@ class RandomHadamard(Transforms):
         we will not have to store the entire matrix. Will need to consider
         accuracy implications.
         """
+        self.size = size
+        self.normalized_size = math.sqrt(self.size)
+        # TODO: potentially lives outside of the registry
+        # And caching is controlled by llmcompressor
+        self.matrix_registry = SingletonMatrixRegistry()
 
-        if not empty:
-            transform = random_hadamard_matrix(size=size)
+        if empty:
+            transform = torch.empty((size, size)).to(dtype)
+            permutation = torch.empty((size)).to(dtype).to(device)
         else:
-            transform = torch.empty((size, size))
+            transform = self.fetch().to(dtype).to(device)
+            permutation = (
+                (torch.randint(low=0, high=2, size=(self.size,)) * 2 - 1)
+                .to(dtype)
+                .to(device)
+            )
 
-        super().__init__(transform=transform, device=device, dtype=dtype)
+        super().__init__(
+            transform=transform,
+            permutation=permutation,
+            transform_name=transform_name,
+            permutation_name=permutation_name,
+        )
+
+        if not self.matrix_registry.contains(size):
+            self.matrix_registry.set_matrix(self.size, self.transform)
+
+    def fetch(self):
+        transform = self.matrix_registry.get_matrix(self.size)
+        if transform is None:
+            transform = random_hadamard_matrix(size=self.size)
+        return transform
 
     def apply(
         self,
@@ -67,7 +102,7 @@ class RandomHadamard(Transforms):
         first: bool = True,
     ) -> torch.Tensor:
         return apply_matrix_transform(
-            transform=self.transform,
+            transform=(self.transform * self.permutation) / self.normalized_size,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
@@ -92,7 +127,7 @@ class RandomHadamard(Transforms):
 
         transpose = not transpose
         return apply_matrix_transform(
-            transform=self.transform,
+            transform=(self.transform * self.permutation) / self.normalized_size,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
