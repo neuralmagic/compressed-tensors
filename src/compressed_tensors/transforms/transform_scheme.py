@@ -31,16 +31,14 @@ class TransformationScheme(BaseModel):
         layers that should be targeted by the specified transform. By providing a list,
         users have the ability to apply the same transform type (with the same set
         of arguments) to different layers. No
+    :param shared: if an identical transform is to be used for all the groups
     :param transform_creation_args: arguments needed to initialize the transform, if
         any
     """
 
-    # TODO: maybe we don't need "global"
-    # If it's the same transform (but different call_args) in the list?
-    # Come back to this
-
     transform_type: str
     groups: List[TransformationArgs]
+    shared: bool = False
     transform_creation_args: Optional[Dict[str, Any]] = None
 
     @field_validator("transform_type", mode="before")

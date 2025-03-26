@@ -79,7 +79,7 @@ def load_transforms(model: Module, model_name_or_path: str):
 
     state_dict = {}
     for weight_name, safe_path in weight_mappings.items():
-        if "transform" in weight_name:
+        if "transform" in weight_name or "_perm_" in weight_name:
             with safe_open(safe_path, framework="pt", device="cpu") as f:
                 state_dict[weight_name] = f.get_tensor(weight_name)
 
