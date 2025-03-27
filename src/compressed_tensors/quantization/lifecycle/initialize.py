@@ -18,8 +18,9 @@ from enum import Enum
 from typing import Optional
 
 import torch
-from compressed_tensors.quantization.lifecycle.forward import (
-    wrap_module_forward_quantized,
+from compressed_tensors.quantization.lifecycle.forward import (  # wrap_module_forward_quantized,
+    post_forward_quantize,
+    pre_forward_quantize,
 )
 from compressed_tensors.quantization.quant_args import (
     ActivationOrdering,
@@ -119,7 +120,12 @@ def initialize_module_for_quantization(
         with disable_hf_hook(module):
             # wrap forward call of module to perform
             # quantized actions based on calltime status
-            wrap_module_forward_quantized(module, scheme)
+            post_forward_wrapper = lambda module, input, output: post_forward_quantize(
+                input, output, scheme=scheme
+            )
+            module.register_forward_pre_hook(pre_forward_quantize)
+            module.register_forward_hook(post_forward_wrapper)
+            # wrap_module_forward_quantized(module, scheme)
 
 
 def is_attention_module(module: Module):

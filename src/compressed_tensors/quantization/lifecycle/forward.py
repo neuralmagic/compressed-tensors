@@ -14,7 +14,7 @@
 
 from functools import wraps
 from math import ceil
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 from compressed_tensors.quantization.quant_args import (
@@ -42,6 +42,8 @@ __all__ = [
     "fake_quantize",
     "wrap_module_forward_quantized",
     "forward_quantize",
+    "pre_forward_quantize",
+    "post_forward_quantize",
 ]
 
 
@@ -254,6 +256,34 @@ def _process_quantization(
             )
         if do_dequantize:
             output = _dequantize(output if do_quantize else x, scale, zero_point)
+
+    return output
+
+
+def pre_forward_quantize(module: Module, args: Any):
+    scheme = module.quantization_scheme
+    compressed = module.quantization_status == QuantizationStatus.COMPRESSED
+
+    input_ = args[0]
+    if scheme.input_activations is not None:
+        # prehook should calibrate activations before forward call
+        input_ = forward_quantize(module, input_, "input", scheme.input_activations)
+
+    if scheme.weights is not None and not compressed:
+        setattr(module, "unquantized_weight", module.weight.data.clone())
+        module.weight.data = forward_quantize(
+            module, module.weight, "weight", scheme.weights
+        )
+
+    return input_
+
+
+def post_forward_quantize(module: Module, _args: Any, output: torch.Tensor):
+    scheme = module.quantization_scheme
+    compressed = module.quantization_status == QuantizationStatus.COMPRESSED
+
+    if scheme.weights is not None and not compressed:
+        module.weight.data = module.getattr("unquantized_weight")
 
     return output
 
