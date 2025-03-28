@@ -131,3 +131,4 @@ jobs:
               run: |
                 echo "cleaning up downloaded assets..."
                 rm -rf ${{ inputs.run_id }}/
+              shell: bash
