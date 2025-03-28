@@ -283,11 +283,9 @@ def get_quantization_state_dict(model_path: str) -> Dict[str, Tensor]:
     weight_mappings = get_weight_mappings(model_path)
     state_dict = {}
     for weight_name, safe_path in weight_mappings.items():
-        if not is_quantization_param(weight_name):
+        if is_quantization_param(weight_name):
+            state_dict[weight_name] = safe_path
             continue
-        with safe_open(safe_path, framework="pt", device="cpu") as f:
-            state_dict[weight_name] = f.get_tensor(weight_name)
-
     return state_dict
 
 

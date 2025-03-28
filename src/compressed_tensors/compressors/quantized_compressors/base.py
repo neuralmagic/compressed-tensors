@@ -186,7 +186,8 @@ class BaseQuantizationCompressor(BaseCompressor):
                 decompressed = self.decompress_weight(
                     compressed_data=weight_data, quantization_args=quant_args
                 )
-                yield merge_names(weight_name, "weight"), decompressed
+                weight_data["weight"] = decompressed
+                yield weight_name, weight_data
 
     def _decompress_from_state_dict(self, state_dict, names_to_scheme):
         weight_mappings = get_nested_mappings_from_state_dict(
@@ -202,4 +203,5 @@ class BaseQuantizationCompressor(BaseCompressor):
                 decompressed = self.decompress_weight(
                     compressed_data=weight_data, quantization_args=quant_args
                 )
-                yield merge_names(weight_name, "weight"), decompressed
+                weight_data["weight"] = decompressed
+                yield weight_name, weight_data
