@@ -533,7 +533,7 @@ class ModelCompressor:
                     # however, update_data does a good shape check
                     if param_name == "weight":
                         delattr(module, param_name)
-                        param = torch.nn.Parameter(param_data, requires_grad=False)
+                        param = torch.nn.Parameter(param_data.to(device), requires_grad=False)
                         register_offload_parameter(module, param_name, param)
                     else:
                         update_parameter_data(module, param_data, param_name)
