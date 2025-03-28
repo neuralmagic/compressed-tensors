@@ -261,10 +261,15 @@ def _process_quantization(
 
 
 def pre_forward_quantize(module: Module, args: Any):
+    print("pre forward")
+    if not getattr(module, "quantization_enabled", True):
+        return args[0]
+
     scheme = module.quantization_scheme
     compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
     input_ = args[0]
+    breakpoint()
     if scheme.input_activations is not None:
         # prehook should calibrate activations before forward call
         input_ = forward_quantize(module, input_, "input", scheme.input_activations)
@@ -274,17 +279,29 @@ def pre_forward_quantize(module: Module, args: Any):
         module.weight.data = forward_quantize(
             module, module.weight, "weight", scheme.weights
         )
-
     return input_
 
 
 def post_forward_quantize(module: Module, _args: Any, output: torch.Tensor):
+    print("post forward")
+    if not getattr(module, "quantization_enabled", True):
+        return output
+
     scheme = module.quantization_scheme
     compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
     if scheme.weights is not None and not compressed:
-        module.weight.data = module.getattr("unquantized_weight")
+        module.weight.data = getattr(module, "unquantized_weight")
 
+    if scheme.output_activations is not None:
+        # forward-hook should calibrate/forward_quantize right afer this
+        if (
+            module.quantization_status == QuantizationStatus.CALIBRATION
+            and not scheme.output_activations.dynamic
+        ):
+            return output
+
+        output = forward_quantize(module, output, "output", scheme.output_activations)
     return output
 
 

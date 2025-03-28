@@ -18,9 +18,10 @@ from enum import Enum
 from typing import Optional
 
 import torch
-from compressed_tensors.quantization.lifecycle.forward import (  # wrap_module_forward_quantized,
+from compressed_tensors.quantization.lifecycle.forward import (
     post_forward_quantize,
     pre_forward_quantize,
+    wrap_module_forward_quantized,
 )
 from compressed_tensors.quantization.quant_args import (
     ActivationOrdering,
@@ -117,14 +118,12 @@ def initialize_module_for_quantization(
         module.quantization_scheme = scheme
         module.quantization_status = QuantizationStatus.INITIALIZED
 
+        # TODO: shouldn't need this anymore as we're no longer wrapping?
         with disable_hf_hook(module):
             # wrap forward call of module to perform
             # quantized actions based on calltime status
-            post_forward_wrapper = lambda module, input, output: post_forward_quantize(
-                input, output, scheme=scheme
-            )
             module.register_forward_pre_hook(pre_forward_quantize)
-            module.register_forward_hook(post_forward_wrapper)
+            module.register_forward_hook(post_forward_quantize)
             # wrap_module_forward_quantized(module, scheme)
 
 
