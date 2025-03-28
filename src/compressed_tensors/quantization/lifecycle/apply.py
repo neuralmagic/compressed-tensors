@@ -48,7 +48,7 @@ from torch.nn import Module
 
 
 __all__ = [
-    "load_pretrained_quantization",
+    "load_pretrained_quantization_inputs_outputs",
     "apply_quantization_config",
     "apply_quantization_status",
     "find_name_or_class_matches",
@@ -63,10 +63,14 @@ from compressed_tensors.utils.safetensors_load import get_quantization_state_dic
 _LOGGER = logging.getLogger(__name__)
 
 
-def load_pretrained_quantization(model: Module, model_name_or_path: str):
+def load_pretrained_quantization_inputs_outputs(
+    model: Module, model_name_or_path: Optional[str] = None
+):
     """
     Loads the quantization parameters (scale and zero point) from model_name_or_path to
-    a model that has already been initialized with a quantization config
+    a model that has already been initialized with a quantization config.
+
+    NOTE: only loads inputs/output parameters. Weight parameters are loaded by the decomrpessor
 
     :param model: model to load pretrained quantization parameters to
     :param model_name_or_path: Hugging Face stub or local folder containing a quantized
@@ -78,14 +82,6 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
     for name, submodule in iter_named_leaf_modules(model):
         if not is_module_quantized(submodule):
             continue
-        if submodule.quantization_scheme.weights is not None:
-            base_name = "weight"
-            _load_quant_args_from_state_dict(
-                base_name=base_name,
-                module_name=name,
-                module=submodule,
-                state_dict=state_dict,
-            )
         if submodule.quantization_scheme.input_activations is not None:
             base_name = "input"
             _load_quant_args_from_state_dict(
@@ -237,9 +233,13 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
+
+        # TODO: Can likely be used for both init and frozen? better than module.dtype?
+        scale_dtype = model.dtype if status == QuantizationStatus.FROZEN else None
+
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init
+                module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
             )
         )
 
@@ -347,6 +347,7 @@ def _infer_status(model: Module) -> Optional[QuantizationStatus]:
 def _load_quant_args_from_state_dict(
     base_name: str, module_name: str, module: Module, state_dict: Dict
 ):
+    # TODO: skip update and just register here, don't do it in initialize
     """
     Loads scale and zero point from a state_dict into the specified module
 
@@ -360,20 +361,31 @@ def _load_quant_args_from_state_dict(
     zp_name = f"{base_name}_zero_point"
     g_idx_name = f"{base_name}_g_idx"
 
-    state_dict_scale = state_dict.get(f"{module_name}.{scale_name}", None)
-    state_dict_zp = state_dict.get(f"{module_name}.{zp_name}", None)
-    state_dict_g_idx = state_dict.get(f"{module_name}.{g_idx_name}", None)
+    state_dict_scale_path = state_dict.get(f"{module_name}.{scale_name}", None)
+    state_dict_zp_path = state_dict.get(f"{module_name}.{zp_name}", None)
+    state_dict_g_idx_path = state_dict.get(f"{module_name}.{g_idx_name}", None)
 
-    if state_dict_scale is not None:
+    if state_dict_g_idx_path is not None:
+        with safe_open(state_dict_scale_path, framework="pt", device="cpu") as f:
+            state_dict_g_idx = f.get_tensor(state_dict_scale_path)
+
+        update_parameter_data(module, state_dict_g_idx, g_idx_name)
+
+    if state_dict_scale_path is not None:
         # module is quantized
+        with safe_open(state_dict_scale_path, framework="pt", device="cpu") as f:
+            state_dict_scale = f.get_tensor(state_dict_scale_path)
+
         update_parameter_data(module, state_dict_scale, scale_name)
-        if state_dict_zp is None:
+
+        if state_dict_zp_path is None:
             # fill in zero point for symmetric quantization
             state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
-        update_parameter_data(module, state_dict_zp, zp_name)
+        else:
+            with safe_open(state_dict_zp_path, framework="pt", device="cpu") as f:
+                state_dict_zp = f.get_tensor(state_dict_zp_path)
 
-    if state_dict_g_idx is not None:
-        update_parameter_data(module, state_dict_g_idx, g_idx_name)
+        update_parameter_data(module, state_dict_zp, zp_name)
 
 
 def _scheme_from_targets(
