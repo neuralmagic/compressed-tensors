@@ -29,8 +29,8 @@ from compressed_tensors.quantization.utils import (
     compute_dynamic_scales_and_zp,
 )
 from compressed_tensors.transforms.apply import (
-    apply_inverse_transforms_to_parameter,
-    apply_transforms_to_parameter,
+    apply_inverse_transforms_to_activations_or_parameter,
+    apply_transforms_to_activations_or_parameter,
 )
 from compressed_tensors.utils import safe_permute
 from torch.nn import Module
@@ -260,30 +260,30 @@ def _process_quantization(
     return output
 
 
-def pre_forward_quantize(module: Module, args: Any):
-    print("pre forward")
+def pre_forward_quantize(module: Module, input: Any):
     if not getattr(module, "quantization_enabled", True):
-        return args[0]
+        return input
 
+    input = input[0]
     scheme = module.quantization_scheme
     compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
-    input_ = args[0]
-    breakpoint()
     if scheme.input_activations is not None:
         # prehook should calibrate activations before forward call
-        input_ = forward_quantize(module, input_, "input", scheme.input_activations)
+        breakpoint()
+        input = forward_quantize(module, input, "input", scheme.input_activations)
+        breakpoint()
 
     if scheme.weights is not None and not compressed:
         setattr(module, "unquantized_weight", module.weight.data.clone())
         module.weight.data = forward_quantize(
             module, module.weight, "weight", scheme.weights
         )
-    return input_
+        breakpoint()
+    return (input,)
 
 
-def post_forward_quantize(module: Module, _args: Any, output: torch.Tensor):
-    print("post forward")
+def post_forward_quantize(module: Module, input: Any, output: torch.Tensor):
     if not getattr(module, "quantization_enabled", True):
         return output
 
@@ -323,19 +323,33 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         input_ = args[0]
 
         compressed = module.quantization_status == QuantizationStatus.COMPRESSED
+        transform_data = getattr(module, "transform_data", None)
 
         if scheme.input_activations is not None:
             # prehook should calibrate activations before forward call
+            if transform_data is not None:
+                input_ = apply_transforms_to_activations_or_parameter(
+                    module=module,
+                    module_activation_or_parameter=input_,
+                    transform_data=transform_data,
+                    update_in_place=False,
+                )
             input_ = forward_quantize(module, input_, "input", scheme.input_activations)
+            if transform_data is not None:
+                input_ = apply_inverse_transforms_to_activations_or_parameter(
+                    module=module,
+                    module_activation_or_parameter=input_,
+                    transform_data=transform_data,
+                    update_in_place=False,
+                )
 
         if scheme.weights is not None and not compressed:
             # calibrate and (fake) quantize weights when applicable
             unquantized_weight = self.weight.data.clone()
-            transform_data = getattr(module, "transform_data", None)
             if transform_data is not None:
-                apply_transforms_to_parameter(
+                apply_transforms_to_activations_or_parameter(
                     module=module,
-                    module_parameter=self.weight,
+                    module_activation_or_parameter=self.weight,
                     transform_data=transform_data,
                 )
 
@@ -344,9 +358,9 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             )
 
             if transform_data is not None:
-                apply_inverse_transforms_to_parameter(
+                apply_inverse_transforms_to_activations_or_parameter(
                     module=module,
-                    module_parameter=self.weight,
+                    module_activation_or_parameter=self.weight,
                     transform_data=transform_data,
                 )
 
@@ -405,6 +419,7 @@ def forward_quantize(
         scale = getattr(module, f"{base_name}_scale")
         zero_point = getattr(module, f"{base_name}_zero_point", None)
 
+    breakpoint()
     return fake_quantize(
         x=value,
         scale=scale,

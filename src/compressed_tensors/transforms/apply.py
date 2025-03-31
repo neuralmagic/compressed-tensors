@@ -17,58 +17,66 @@ from typing import Optional
 import torch
 from compressed_tensors.transforms import Transforms
 from compressed_tensors.transforms.transform_data import TransformData
+from compressed_tensors.utils import update_parameter_data
 
 
-__all__ = ["apply_transforms_to_parameter", "apply_inverse_transforms_to_parameter"]
+__all__ = [
+    "apply_transforms_to_activations_or_parameter",
+    "apply_inverse_transforms_to_activations_or_parameter",
+]
 
 
-def apply_transforms_to_parameter(
+def apply_transforms_to_activations_or_parameter(
     module: torch.nn.Module,
-    module_parameter: torch.nn.Parameter,
+    module_activation_or_parameter: torch.Tensor,
     transform_data: TransformData,
-):
+    update_in_place: Optional[bool] = True,
+    base_name: Optional[str] = "weight",
+) -> Optional[torch.Tensor]:
     """
     Apply all transforms relevant to a parameter using a module's
     transform data. The parameter data is updated in-place.
 
     :param module: torch.nn.Moudle
-    :param module_parameter: the torch.nn.Parameter to transform
+    :param module_activation_or_parameter: module Parameter or activations to transform
     :param transform_data: a module's TransformData
-
-    Only implemented for weight parameters thus far.
-
     """
 
     for transform_name, transform_values in transform_data.data.items():
         transform = transform_values.get("transform")
         call_args = transform_values.get("call_args")
-        transformed_param_data = transform.apply(
-            input_tensor=module_parameter, **call_args
+        transformed_output_data = transform.apply(
+            input_tensor=module_activation_or_parameter, **call_args
         )
-        module_parameter.data.copy_(transformed_param_data)
+        if not update_in_place:
+            return transformed_output_data
+
+        update_parameter_data(module, transformed_output_data, base_name)
 
 
-def apply_inverse_transforms_to_parameter(
+def apply_inverse_transforms_to_activations_or_parameter(
     module: torch.nn.Module,
-    module_parameter: torch.nn.Parameter,
+    module_activation_or_parameter: torch.nn.Parameter,
     transform_data: TransformData,
-):
+    update_in_place: Optional[bool] = True,
+    base_name: Optional[str] = "weight",
+) -> Optional[torch.Tensor]:
     """
     Apply all inverse transform operations relevant to a parameter using a module's
     TransformData. The parameter data is updated in-place.
 
     :param module: torch.nn.Moudle
-    :param module_parameter: the torch.nn.Parameter to transform
+    :param module_activation_or_parameter:  module Parameter or activations to transform
     :param transform_data: a module's TransformData
-
-    Only implemented for weight parameters thus far.
-
     """
 
     for transform_name, transform_values in reversed(transform_data.data.items()):
         transform = transform_values.get("transform")
         call_args = transform_values.get("call_args")
-        transformed_param_data = transform.inverse_apply(
-            input_tensor=module_parameter, **call_args
+        transformed_output_data = transform.inverse_apply(
+            input_tensor=module_activation_or_parameter, **call_args
         )
-        module_parameter.data.copy_(transformed_param_data)
+        if not update_in_place:
+            return transformed_output_data
+
+        update_parameter_data(module, transformed_output_data, base_name)

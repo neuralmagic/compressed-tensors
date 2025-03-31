@@ -122,9 +122,9 @@ def initialize_module_for_quantization(
         with disable_hf_hook(module):
             # wrap forward call of module to perform
             # quantized actions based on calltime status
-            module.register_forward_pre_hook(pre_forward_quantize)
-            module.register_forward_hook(post_forward_quantize)
-            # wrap_module_forward_quantized(module, scheme)
+            # module.register_forward_pre_hook(pre_forward_quantize)
+            # module.register_forward_hook(post_forward_quantize)
+            wrap_module_forward_quantized(module, scheme)
 
 
 def is_attention_module(module: Module):
