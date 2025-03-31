@@ -55,7 +55,10 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 def calculate_qparams(
-    min_vals: Tensor, max_vals: Tensor, quantization_args: QuantizationArgs
+    min_vals: Tensor,
+    max_vals: Tensor,
+    quantization_args: QuantizationArgs,
+    global_scale: Optional[Tensor] = None,
 ) -> Tuple[FloatTensor, IntTensor]:
     """
     :param min_vals: tensor of min value(s) to calculate scale(s) and zero point(s)
@@ -81,17 +84,19 @@ def calculate_qparams(
             quantization_args.num_bits == 4
             and quantization_args.type == QuantizationType.FLOAT
         ):
+            assert global_scale is not None
             # TODO: how do we pass in the global scale?
             # An observer is attached per module, we can conditionally pass in
-            # the global scale
-            scale = global_scale * (max_val_pos / FP4_NVFP4_DATA.max)
-            scale = scale.to(FP8_E4M3_DATA.dtype).to(torch.float32)
+            # the global scale --> TODO: check for presence of the global when updating the scale
+            # TODO: maybe remove FP8 scale cast
+            scale = max_val_pos / FP4_NVFP4_DATA.max
             scale = scale / global_scale
+            scale = scale.to(FP8_E4M3_DATA.dtype)  # .to(torch.float32)
+
         else:
             # Divide over bit range over max value?
             scales = max_val_pos / (float(bit_range) / 2)
 
-        # needed for fp4?
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:

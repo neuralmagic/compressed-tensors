@@ -56,6 +56,7 @@ FP8_E4M3_DATA = FloatArgs(
     min=torch.finfo(torch.float8_e4m3fn).min,
     dtype=torch.float8_e4m3fn,
 )
+# Don't call NVFP4; should be based on exponent and mantissa
 FP4_NVFP4_DATA = FloatArgs(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
 
 
@@ -265,6 +266,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 return FP8_E4M3_DATA.dtype
             else:
                 assert self.num_bits == 4
+                # TODO: Use the look-up?
                 # TODO: will return None for now until updated in FloatArgs
                 return FP4_NVFP4_DATA.dtype
         elif self.type == QuantizationType.INT:
@@ -299,6 +301,7 @@ def round_to_quantized_type(
             rounded = tensor.to(FP8_E4M3_DATA.dtype)
         else:
             assert args.num_bits == 4
+            # TODO: Use the FP4_NVFP4_DATA class to use a look-up table
             # TODO: cast to whatever value we want fp4 to be post quantization/clamping
             rounded = tensor.to(FP4_NVFP4_DATA.dtype)
     elif args.type == QuantizationType.INT:
