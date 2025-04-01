@@ -45,6 +45,22 @@ class FloatArgs:
     dtype: Optional[torch.dtype] = None
 
 
+@dataclass
+class FloatArgsFP4E2M1(FloatArgs):
+    def cast_to_fp4(self, x):
+        sign = torch.sign(x)
+        x = torch.abs(x)
+        x[(x >= 0.0) & (x <= 0.25)] = 0.0
+        x[(x > 0.25) & (x < 0.75)] = 0.5
+        x[(x >= 0.75) & (x <= 1.25)] = 1.0
+        x[(x > 1.25) & (x < 1.75)] = 1.5
+        x[(x >= 1.75) & (x <= 2.5)] = 2.0
+        x[(x > 2.5) & (x < 3.5)] = 3.0
+        x[(x >= 3.5) & (x <= 5.0)] = 4.0
+        x[x > 5.0] = 6.0
+        return x * sign
+
+
 # TODO: Remove soon in favour of a more descriptive FloatArgs
 FP8_DTYPE = torch.float8_e4m3fn
 
@@ -56,7 +72,8 @@ FP8_E4M3_DATA = FloatArgs(
     min=torch.finfo(torch.float8_e4m3fn).min,
     dtype=torch.float8_e4m3fn,
 )
-FP4_E2M1_DATA = FloatArgs(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
+
+FP4_E2M1_DATA = FloatArgsFP4E2M1(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
 
 
 class QuantizationType(str, Enum):
@@ -265,9 +282,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 return FP8_E4M3_DATA.dtype
             else:
                 assert self.num_bits == 4
-                # TODO: Use the look-up?
-                # TODO: will return None for now until updated in FloatArgs
-                return FP4_NVFP4_DATA.dtype
+                raise NotImplementedError("Not supported for FP4")
         elif self.type == QuantizationType.INT:
             if self.num_bits <= 8:
                 return torch.int8
@@ -300,9 +315,7 @@ def round_to_quantized_type(
             rounded = tensor.to(FP8_E4M3_DATA.dtype)
         else:
             assert args.num_bits == 4
-            # TODO: Use the FP4_NVFP4_DATA class to use a look-up table
-            # TODO: cast to whatever value we want fp4 to be post quantization/clamping
-            rounded = tensor.to(FP4_NVFP4_DATA.dtype)
+            rounded = FP4_E2M1_DATA.cast_to_fp4(tensor)
     elif args.type == QuantizationType.INT:
         rounded = torch.round(tensor)
     else:

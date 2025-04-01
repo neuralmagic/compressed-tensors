@@ -143,7 +143,7 @@ def fake_quantize(
     zero_point: torch.Tensor,
     args: QuantizationArgs,
     g_idx: Optional[torch.Tensor] = None,
-    global_scale: Optiona[torch.Tensor] = None,
+    global_scale: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
     Fake quantize the input tensor x by quantizing then dequantizing with
