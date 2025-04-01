@@ -92,7 +92,7 @@ def calculate_qparams(
             scales = scales.to(FP8_E4M3_DATA.dtype)
         else:
             # Divide over bit range over max value?
-            scales = max_val_pos / (float(bit_radnge) / 2)
+            scales = max_val_pos / (float(bit_range) / 2)
 
         # TODO: clamp not implemented for FP8 '
         # scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
