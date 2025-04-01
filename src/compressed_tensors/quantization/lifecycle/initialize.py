@@ -22,7 +22,7 @@ from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
 from compressed_tensors.quantization.quant_args import (
-    FP4_NVFP4_DATA,
+    FP4_E2M1_DATA,
     FP8_E4M3_DATA,
     ActivationOrdering,
     QuantizationArgs,
@@ -167,19 +167,17 @@ def _initialize_scale_zero_point(
 
     # NVFP4 support; use FP8 scales
     # For weight quant, attach global scales for NVFP4
-    # TODO: How do we know if we need a global scale?
     # TODO: NVFP4 Scheme
     if (
-        base_name == "weight"
-        and quantization_args.num_bits == 4
+        quantization_args.num_bits == 4
         and quantization_args.type == QuantizationType.FLOAT
     ):
         scale_dtype = FP8_E4M3_DATA.dtype
         # create and attach nvfp4 data
         tensor_amax = torch.abs(module.weight.data).max().to(torch.float32)
         # Setting data for now - could possibly be handled later in the pipeline
-        value = FP8_E4M3_DATA.max * FP4_NVFP4_DATA.max / tensor_amax
-        # use the weight dtype (bfloat) maybe use float32 to start?
+        value = FP8_E4M3_DATA.max * FP4_E2M1_DATA.max / tensor_amax
+        # TODO: use model.weight.dtype
         value = value.to(torch.float32).to(device)
         # Assuming the global scale can be torch.float16/bfloat16/module weight dtype and not only torch.float32?
         init_global_scale = Parameter(value, requires_grad=False)

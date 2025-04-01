@@ -17,7 +17,7 @@ from typing import Generator, List, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import (
-    FP4_NVFP4_DATA,
+    FP4_E2M1_DATA,
     FP8_E4M3_DATA,
     QuantizationArgs,
     QuantizationStrategy,
@@ -85,11 +85,7 @@ def calculate_qparams(
             and quantization_args.type == QuantizationType.FLOAT
         ):
             assert global_scale is not None
-            # TODO: how do we pass in the global scale?
-            # An observer is attached per module, we can conditionally pass in
-            # the global scale --> TODO: check for presence of the global when updating the scale
-            # TODO: maybe remove FP8 scale cast
-            scale = max_val_pos / FP4_NVFP4_DATA.max
+            scale = max_val_pos / FP4_E2M1_DATA.max  # Not needed
             scale = scale / global_scale
             scale = scale.to(FP8_E4M3_DATA.dtype)  # .to(torch.float32)
 
@@ -166,8 +162,8 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         else:
             # nvfp4 ranges
             assert quantization_args.num_bits == 4
-            q_max = torch.tensor(FP4_NVFP4_DATA.max, device=device)
-            q_min = torch.tensor(FP4_NVFP4_DATA.min, device=device)
+            q_max = torch.tensor(FP4_E2M1_DATA.max, device=device)
+            q_min = torch.tensor(FP4_E2M1_DATA.min, device=device)
     else:
         raise ValueError(f"Invalid quantization type {quantization_args.type}")
 

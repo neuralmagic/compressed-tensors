@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 __all__ = [
     "FP8_DTYPE",
     "FP8_E4M3_DATA",
-    "FP4_NVFP4_DATA",
+    "FP4_E2M1_DATA",
     "QuantizationType",
     "QuantizationStrategy",
     "QuantizationArgs",
@@ -56,8 +56,7 @@ FP8_E4M3_DATA = FloatArgs(
     min=torch.finfo(torch.float8_e4m3fn).min,
     dtype=torch.float8_e4m3fn,
 )
-# Don't call NVFP4; should be based on exponent and mantissa
-FP4_NVFP4_DATA = FloatArgs(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
+FP4_E2M1_DATA = FloatArgs(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
 
 
 class QuantizationType(str, Enum):
