@@ -242,7 +242,7 @@ def _process_quantization(
             if do_dequantize:
                 input = output[:, start:end] if do_quantize else x[:, start:end]
                 output[:, start:end] = _dequantize(
-                    x=input, scale=sc, zero_point=zp, global_scale=global_scale
+                    x_q=input, scale=sc, zero_point=zp, global_scale=global_scale
                 )
 
         if not is_column_order:
