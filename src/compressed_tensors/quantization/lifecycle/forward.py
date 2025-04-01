@@ -380,7 +380,7 @@ def _quantize(
 ) -> torch.Tensor:
 
     if global_scale:
-        scale = scale.to(global_scale.dtype) * global_scale
+        scale = scale.to(global_scale.dtype) / global_scale
 
     scaled = x / scale
     if zero_point is not None:
@@ -409,7 +409,7 @@ def _dequantize(
 ) -> torch.Tensor:
 
     if global_scale:
-        scale = scale.to(global_scale.dtype) * global_scale
+        scale = scale.to(global_scale.dtype) / global_scale
 
     dequant_value = x_q.to(scale.dtype)
 

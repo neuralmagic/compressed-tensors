@@ -87,17 +87,14 @@ def calculate_qparams(
             and quantization_args.type == QuantizationType.FLOAT
         ):
             assert global_scale is not None
-            breakpoint()
-            scales = max_val_pos / FP4_E2M1_DATA.max  # Not needed
-            scales = scales / global_scale
-            scales = scales.to(FP8_E4M3_DATA.dtype)  # .to(torch.float32)
-
+            scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)  # Not needed
+            # scales = scales / global_scale
+            scales = scales.to(FP8_E4M3_DATA.dtype)
         else:
             # Divide over bit range over max value?
-            scales = max_val_pos / (float(bit_range) / 2)
+            scales = max_val_pos / (float(bit_radnge) / 2)
 
         # TODO: clamp not implemented for FP8 '
-        breakpoint()
         # scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
