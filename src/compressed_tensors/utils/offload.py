@@ -28,7 +28,7 @@ Utilities associated with offloading functionality provided by `accelerate`.
 import contextlib
 import warnings
 from functools import wraps
-from typing import Any, Callable, Dict, Literal, Optional, Union
+from typing import Any, Callable, Dict, Iterable, Literal, Optional, Union
 
 import torch
 
@@ -67,6 +67,7 @@ __all__ = [
     "delete_offload_parameter",
     "has_offloaded_params",
     "disable_hf_hook",
+    "align_modules",
     "align_module_device",
 ]
 
@@ -339,6 +340,17 @@ def delete_from_weights_map(
             "Updating offload data not implemented for weights_map of type "
             f"{type(weights_map)}"
         )
+
+
+@contextlib.contextmanager
+def align_modules(
+    modules: Iterable[torch.nn.Module], execution_device: Optional[torch.device] = None
+):
+    with contextlib.ExitStack() as stack:
+        [
+            stack.enter_context(align_module_device(module, execution_device))
+            for module in modules
+        ]
 
 
 """ Upstreamed Functions """
