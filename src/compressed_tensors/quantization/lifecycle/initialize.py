@@ -177,12 +177,12 @@ def _initialize_scale_zero_point(
         tensor_amax = torch.abs(module.weight.data).max().to(torch.float32)
         # Setting data for now - could possibly be handled later in the pipeline
         value = FP8_E4M3_DATA.max * FP4_E2M1_DATA.max / tensor_amax
-        # TODO: use model.weight.dtype
+        # TODO: use model.weight.dtype after checking
         value = value.to(torch.float32).to(device)
         # Assuming the global scale can be torch.float16/bfloat16/module weight dtype and not only torch.float32?
         init_global_scale = Parameter(value, requires_grad=False)
         register_offload_parameter(
-            module, f"f{base_name}_global_scale", init_global_scale
+            module, f"{base_name}_global_scale", init_global_scale
         )
 
     if scale_dtype not in [
@@ -201,7 +201,14 @@ def _initialize_scale_zero_point(
     register_offload_parameter(module, f"{base_name}_scale", init_scale)
 
     if force_zero_point or not quantization_args.symmetric:
-        zp_dtype = quantization_args.pytorch_dtype()
+        if (
+            quantization_args.num_bits == 4
+            and quantization_args.type == QuantizationType.FLOAT
+        ):
+            zp_dtype = FP8_E4M3_DATA.dtype
+        else:
+            zp_dtype = quantization_args.pytorch_dtype()
+
         init_zero_point = Parameter(
             torch.zeros(expected_shape, device=device, dtype=zp_dtype),
             requires_grad=False,

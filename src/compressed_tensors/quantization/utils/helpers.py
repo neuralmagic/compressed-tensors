@@ -74,7 +74,9 @@ def calculate_qparams(
 
     bit_min, bit_max = calculate_range(quantization_args, device)
     bit_range = bit_max - bit_min
-    zp_dtype = quantization_args.pytorch_dtype()
+    # TODO: update
+    # zp_dtype = quantization_args.pytorch_dtype()
+    zp_dtype = FP8_E4M3_DATA.dtype
 
     if quantization_args.symmetric:
         # TODO: update for NVFP4 when applying observers
@@ -85,15 +87,18 @@ def calculate_qparams(
             and quantization_args.type == QuantizationType.FLOAT
         ):
             assert global_scale is not None
-            scale = max_val_pos / FP4_E2M1_DATA.max  # Not needed
-            scale = scale / global_scale
-            scale = scale.to(FP8_E4M3_DATA.dtype)  # .to(torch.float32)
+            breakpoint()
+            scales = max_val_pos / FP4_E2M1_DATA.max  # Not needed
+            scales = scales / global_scale
+            scales = scales.to(FP8_E4M3_DATA.dtype)  # .to(torch.float32)
 
         else:
             # Divide over bit range over max value?
             scales = max_val_pos / (float(bit_range) / 2)
 
-        scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
+        # TODO: clamp not implemented for FP8 '
+        breakpoint()
+        # scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
         scales = (max_vals - min_vals) / float(bit_range)
