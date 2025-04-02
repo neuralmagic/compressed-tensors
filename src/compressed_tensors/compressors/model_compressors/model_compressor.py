@@ -41,7 +41,6 @@ from compressed_tensors.quantization import (
     load_pretrained_quantization,
 )
 from compressed_tensors.quantization.lifecycle import expand_target_names
-from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
@@ -62,7 +61,7 @@ from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
 
 
-__all__ = ["ModelCompressor", "map_modules_to_quant_scheme"]
+__all__ = ["ModelCompressor", "map_module_to_scheme"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -373,11 +372,8 @@ class ModelCompressor:
         if state_dict is None:
             state_dict = model.state_dict()
 
-        module_to_scheme: Dict[str, QuantizationScheme] = map_modules_to_quant_scheme(
-            model
-        )
-
         if self.quantization_compressor is not None:
+            module_to_scheme = map_module_to_scheme(model)
             state_dict = self.quantization_compressor.compress(
                 state_dict, names_to_scheme=module_to_scheme
             )
@@ -521,7 +517,7 @@ class ModelCompressor:
                 update_parameter_data(module, data, param_name)
 
 
-def map_modules_to_quant_scheme(
+def map_module_to_scheme(
     model: Module,
 ) -> Dict[str, QuantizationScheme]:
     """
