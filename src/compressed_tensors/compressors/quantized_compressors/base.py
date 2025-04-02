@@ -102,7 +102,7 @@ class BaseQuantizationCompressor(BaseCompressor):
                     model_state[name] = value.to(save_device)
                     continue
 
-                # compress values on cpu. TODO: experiment with different devices
+                # compress values on cpu (memory movement too expensive)
                 quant_args = names_to_scheme[prefix].weights
                 compressed_values = self.compress_weight(
                     weight=value,
