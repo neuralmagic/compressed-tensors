@@ -519,11 +519,7 @@ class ModelCompressor:
 
 def map_module_to_scheme(model: Module) -> Dict[str, QuantizationScheme]:
     """
-    Given a pytorch model, map out the submodule name (usually linear layers)
-    to the weight QuantizationArgs. If running input activation quantization, will also
-    map to the input QuantizationArgs in a tuple.
-
-    :param model: pytorch model
+    Returns a dictionary which maps quantized module names to their quantization schemes
     """
     quantized_modules_to_args = {}
     for name, submodule in iter_named_leaf_modules(model):
