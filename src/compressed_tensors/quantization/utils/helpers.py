@@ -17,7 +17,8 @@ from typing import Generator, List, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import (
-    FP8_DTYPE,
+    FP4_E2M1_DATA,
+    FP8_E4M3_DATA,
     QuantizationArgs,
     QuantizationStrategy,
     QuantizationType,
@@ -54,7 +55,10 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 def calculate_qparams(
-    min_vals: Tensor, max_vals: Tensor, quantization_args: QuantizationArgs
+    min_vals: Tensor,
+    max_vals: Tensor,
+    quantization_args: QuantizationArgs,
+    global_scale: Optional[Tensor] = None,
 ) -> Tuple[FloatTensor, IntTensor]:
     """
     :param min_vals: tensor of min value(s) to calculate scale(s) and zero point(s)
@@ -70,12 +74,29 @@ def calculate_qparams(
 
     bit_min, bit_max = calculate_range(quantization_args, device)
     bit_range = bit_max - bit_min
-    zp_dtype = quantization_args.pytorch_dtype()
+    # TODO: update
+    # zp_dtype = quantization_args.pytorch_dtype()
+    zp_dtype = FP8_E4M3_DATA.dtype
 
     if quantization_args.symmetric:
+        # TODO: update for NVFP4 when applying observers
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
-        scales = max_val_pos / (float(bit_range) / 2)
-        scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
+
+        if (
+            quantization_args.num_bits == 4
+            and quantization_args.type == QuantizationType.FLOAT
+        ):
+            assert global_scale is not None
+            scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)  # Not needed
+            scales = scales.to(FP8_E4M3_DATA.dtype)
+        else:
+            # Divide over bit range over max value?
+            scales = max_val_pos / (float(bit_range) / 2)
+
+        # TODO: clamp not implemented for FP8 - we shouldn't need to clamp this anyway as we're
+        # casting to FP8 on line 92?
+        if scales.dtype != FP8_E4M3_DATA.dtype:
+            scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
         scales = (max_vals - min_vals) / float(bit_range)
@@ -138,14 +159,14 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         q_max = torch.tensor(bit_range / 2 - 1, device=device)
         q_min = torch.tensor(-bit_range / 2, device=device)
     elif quantization_args.type == QuantizationType.FLOAT:
-        if quantization_args.num_bits != 8:
-            raise ValueError(
-                "Floating point quantization is only supported for 8 bits,"
-                f"got {quantization_args.num_bits}"
-            )
-        fp_range_info = torch.finfo(FP8_DTYPE)
-        q_max = torch.tensor(fp_range_info.max, device=device)
-        q_min = torch.tensor(fp_range_info.min, device=device)
+        if quantization_args.num_bits == 8:
+            q_max = torch.tensor(FP8_E4M3_DATA.max, device=device)
+            q_min = torch.tensor(FP8_E4M3_DATA.min, device=device)
+        else:
+            # nvfp4 ranges
+            assert quantization_args.num_bits == 4
+            q_max = torch.tensor(FP4_E2M1_DATA.max, device=device)
+            q_min = torch.tensor(FP4_E2M1_DATA.min, device=device)
     else:
         raise ValueError(f"Invalid quantization type {quantization_args.type}")
 
