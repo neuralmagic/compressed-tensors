@@ -35,6 +35,7 @@ from compressed_tensors.config import CompressionFormat, SparsityCompressionConf
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
+    QuantizationScheme,
     QuantizationStatus,
     apply_quantization_config,
     load_pretrained_quantization,
@@ -61,7 +62,7 @@ from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
 
 
-__all__ = ["ModelCompressor", "map_modules_to_quant_args"]
+__all__ = ["ModelCompressor", "map_modules_to_quant_scheme"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -372,15 +373,13 @@ class ModelCompressor:
         if state_dict is None:
             state_dict = model.state_dict()
 
-        compressed_state_dict = state_dict
-
-        quantized_modules_to_args: Dict[
-            str, QuantizationArgs
-        ] = map_modules_to_quant_args(model)
+        module_to_scheme: Dict[str, QuantizationScheme] = map_modules_to_quant_scheme(
+            model
+        )
 
         if self.quantization_compressor is not None:
-            compressed_state_dict = self.quantization_compressor.compress(
-                state_dict, names_to_scheme=quantized_modules_to_args
+            state_dict = self.quantization_compressor.compress(
+                state_dict, names_to_scheme=module_to_scheme
             )
             if self.quantization_config.format != CompressionFormat.dense.value:
                 self.quantization_config.quantization_status = (
@@ -393,8 +392,8 @@ class ModelCompressor:
                 targets=self.sparsity_config.targets,
                 ignore=self.sparsity_config.ignore,
             )
-            compressed_state_dict = self.sparsity_compressor.compress(
-                compressed_state_dict,
+            state_dict = self.sparsity_compressor.compress(
+                state_dict,
                 compression_targets=sparse_compression_targets,
             )
 
@@ -403,7 +402,7 @@ class ModelCompressor:
         # https://github.com/huggingface/transformers/pull/30488
         transformers.modeling_utils.dtype_byte_size = new_dtype_byte_size
 
-        return compressed_state_dict
+        return state_dict
 
     def decompress(self, model_path: str, model: Module):
         """
@@ -522,9 +521,9 @@ class ModelCompressor:
                 update_parameter_data(module, data, param_name)
 
 
-def map_modules_to_quant_args(
+def map_modules_to_quant_scheme(
     model: Module,
-) -> Dict[str, Union[QuantizationArgs, Tuple[QuantizationArgs, QuantizationArgs]]]:
+) -> Dict[str, QuantizationScheme]:
     """
     Given a pytorch model, map out the submodule name (usually linear layers)
     to the weight QuantizationArgs. If running input activation quantization, will also
@@ -535,15 +534,8 @@ def map_modules_to_quant_args(
     quantized_modules_to_args = {}
     for name, submodule in iter_named_leaf_modules(model):
         if is_module_quantized(submodule):
-            if submodule.quantization_scheme.weights is not None:
-                name = fix_fsdp_module_name(name)
-                quantized_modules_to_args[name] = submodule.quantization_scheme.weights
-                if submodule.quantization_scheme.input_activations is not None:
-                    weight_args = quantized_modules_to_args.get(name)
-                    quantized_modules_to_args[name] = (
-                        weight_args,
-                        submodule.quantization_scheme.input_activations,
-                    )
+            name = fix_fsdp_module_name(name)
+            quantized_modules_to_args[name] = submodule.quantization_scheme
 
     return quantized_modules_to_args
 

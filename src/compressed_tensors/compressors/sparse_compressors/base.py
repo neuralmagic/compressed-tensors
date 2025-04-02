@@ -76,7 +76,7 @@ class BaseSparseCompressor(BaseCompressor):
         _LOGGER.debug(
             f"Compressing model with {len(model_state)} parameterized layers..."
         )
-        for name, value in tqdm(model_state.items(), desc="Compressing model"):
+        for name, value in tqdm(model_state.items(), desc="Compressing with sparsity"):
             if not self.should_compress(name, compression_targets):
                 compressed_dict[name] = value
                 continue
