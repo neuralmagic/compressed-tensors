@@ -76,8 +76,7 @@ class BaseQuantizationCompressor(BaseCompressor):
         """
         Compresses a dense state dict
 
-        :param model_state: state dict of uncompressed model, consumed during
-            compression
+        :param model_state: state dict of uncompressed model, consumed by compression
         :param names_to_scheme: quantization args for each quantized weight, needed for
             quantize function to calculate bit depth
         :return: compressed state dict
