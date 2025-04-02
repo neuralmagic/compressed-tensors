@@ -517,9 +517,7 @@ class ModelCompressor:
                 update_parameter_data(module, data, param_name)
 
 
-def map_module_to_scheme(
-    model: Module,
-) -> Dict[str, QuantizationScheme]:
+def map_module_to_scheme(model: Module) -> Dict[str, QuantizationScheme]:
     """
     Given a pytorch model, map out the submodule name (usually linear layers)
     to the weight QuantizationArgs. If running input activation quantization, will also
