@@ -88,14 +88,15 @@ def calculate_qparams(
         ):
             assert global_scale is not None
             scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)  # Not needed
-            # scales = scales / global_scale
             scales = scales.to(FP8_E4M3_DATA.dtype)
         else:
             # Divide over bit range over max value?
             scales = max_val_pos / (float(bit_range) / 2)
 
-        # TODO: clamp not implemented for FP8 '
-        # scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
+        # TODO: clamp not implemented for FP8 - we shouldn't need to clamp this anyway as we're
+        # casting to FP8 on line 92?
+        if scales.dtype != FP8_E4M3_DATA.dtype:
+            scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
         scales = (max_vals - min_vals) / float(bit_range)
