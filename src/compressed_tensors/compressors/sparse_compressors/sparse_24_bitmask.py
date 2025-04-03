@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
@@ -52,14 +52,16 @@ class Sparse24BitMaskCompressor(BaseSparseCompressor):
             "bitmask",
         )
 
-    def compress_weight(self, name, value):
+    def compress_weight(
+        self, name: str, value: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
         bitmask_tensor = Sparse24BitMaskTensor.from_dense(
             value, self.config.sparsity_structure
         )
         bitmask_dict = bitmask_tensor.dict(name_prefix=name, device="cpu")
         return bitmask_dict
 
-    def decompress_weight(self, weight_data):
+    def decompress_weight(self, weight_data: Dict[str, Any]) -> torch.Tensor:
         data = Sparse24BitMaskTensor.from_compressed_data(**weight_data)
         decompressed = data.decompress()
         return decompressed

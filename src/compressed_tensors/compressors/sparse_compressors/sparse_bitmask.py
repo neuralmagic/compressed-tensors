@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
@@ -46,12 +46,14 @@ class BitmaskCompressor(BaseSparseCompressor):
         """
         return ("shape", "compressed", "bitmask", "row_offsets")
 
-    def compress_weight(self, name, value):
+    def compress_weight(
+        self, name: str, value: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
         bitmask_tensor = BitmaskTensor.from_dense(value)
         bitmask_dict = bitmask_tensor.dict(name_prefix=name, device="cpu")
         return bitmask_dict
 
-    def decompress_weight(self, weight_data):
+    def decompress_weight(self, weight_data: Dict[str, Any]) -> torch.Tensor:
         data = BitmaskTensor(**weight_data)
         decompressed = data.decompress()
         return decompressed

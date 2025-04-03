@@ -360,7 +360,7 @@ class ModelCompressor:
         return list(unexpected_keys)
 
     def compress(
-        self, model: Module, state_dict: Optional[Dict[str, Tensor]] = None
+        self, model: Module, state_dict: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Tensor]:
         """
         Compresses a dense state dict or model with sparsity and/or quantization
@@ -388,6 +388,10 @@ class ModelCompressor:
                 )
 
         if self.sparsity_compressor is not None:
+            # in quantized compression, targets and ignores are determined by which
+            # modules have qparams. Sparsity does not have qparams, so some logic
+            # is needed for determining which modules are compression targets.
+            # this could be determined lazily by the sparsity compressor
             sparse_compression_targets: Set[str] = expand_target_names(
                 model=model,
                 targets=self.sparsity_config.targets,

@@ -15,8 +15,13 @@
 import logging
 from typing import Dict, Generator, Optional, Set, Tuple
 
+import torch
 from compressed_tensors.compressors.base import BaseCompressor
-from compressed_tensors.utils import get_nested_weight_mappings, merge_names
+from compressed_tensors.utils import (
+    get_nested_weight_mappings,
+    merge_names,
+    remove_suffix,
+)
 from safetensors import safe_open
 from torch import Tensor
 from tqdm import tqdm
@@ -67,35 +72,44 @@ class BaseSparseCompressor(BaseCompressor):
         """
         Compresses a dense state dict using bitmask compression
 
-        :param model_state: state dict of uncompressed model
+        :param model_state: state dict of uncompressed model, consumed by compression
         :param compression_targets: optional set of layer prefixes to compress,
             otherwise compress all layers (for backwards compatibility)
         :return: compressed state dict
         """
-        compressed_dict = {}
-        _LOGGER.debug(
-            f"Compressing model with {len(model_state)} parameterized layers..."
-        )
-        for name, value in tqdm(model_state.items(), desc="Compressing model"):
-            if not self.should_compress(name, compression_targets):
-                compressed_dict[name] = value
-                continue
-            prefix = name
-            if prefix.endswith(".weight"):
-                prefix = prefix[: -(len(".weight"))]
+        save_device = "cpu"
 
-            compression_data = self.compress_weight(prefix, value)
-            for key in compression_data.keys():
-                if key in compressed_dict:
-                    _LOGGER.warn(
-                        f"Expected all compressed state_dict keys to be unique, but "
-                        f"found an existing entry for {key}. The existing entry will "
-                        "be replaced."
-                    )
+        uncompressed_names = list(model_state.keys())
+        for name in tqdm(uncompressed_names, desc="Compressing with sparsity"):
+            value = model_state[name]
 
-            compressed_dict.update(compression_data)
+            # compress weights
+            if self.should_compress(name, compression_targets):
+                if name.endswith(".weight"):
+                    prefix = remove_suffix(name, ".weight")
+                else:
+                    prefix = name
 
-        return compressed_dict
+                # compress values (most compressors do this on cpu)
+                compressed_data: Dict[str, torch.Tensor] = self.compress_weight(
+                    prefix, value
+                )
+
+                # update state dict
+                del model_state[name]
+                for key, value in compressed_data.items():
+                    if key in model_state:
+                        _LOGGER.warning(
+                            f"Expected all compressed state_dict keys to be unique, "
+                            f"but found an existing entry for {key}. The existing "
+                            "entry will be replaced."
+                        )
+                    model_state[name] = value.to(save_device)
+
+            else:
+                model_state[name] = value.to(save_device)
+
+        return model_state
 
     def decompress(
         self, path_to_model_or_tensors: str, device: str = "cpu", **kwargs
