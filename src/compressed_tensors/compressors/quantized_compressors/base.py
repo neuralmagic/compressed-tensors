@@ -113,6 +113,9 @@ class BaseQuantizationCompressor(BaseCompressor):
                 scale = model_state.get(merge_names(prefix, "weight_scale"), None)
                 zp = model_state.get(merge_names(prefix, "weight_zero_point"), None)
                 g_idx = model_state.get(merge_names(prefix, "weight_g_idx"), None)
+                global_scale = model_state.get(
+                    merge_names(prefix, "weight_global_scale"), None
+                )
                 if scale is not None:
                     # weight is quantized, compress it
                     if isinstance(names_to_scheme[prefix], tuple):
@@ -125,6 +128,7 @@ class BaseQuantizationCompressor(BaseCompressor):
                         scale=scale,
                         zero_point=zp,
                         g_idx=g_idx,
+                        global_scale=global_scale,
                         quantization_args=quant_args,
                         device="cpu",
                     )

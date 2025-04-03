@@ -32,6 +32,7 @@ class CompressionFormat(Enum):
     naive_quantized = "naive-quantized"
     pack_quantized = "pack-quantized"
     marlin_24 = "marlin-24"
+    modelopt_quantized = "modelopt-quantized"
 
 
 @unique
