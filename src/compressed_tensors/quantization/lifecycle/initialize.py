@@ -21,7 +21,6 @@ import torch
 from compressed_tensors.quantization.lifecycle.forward import (
     post_forward_quantize,
     pre_forward_quantize,
-    wrap_module_forward_quantized,
 )
 from compressed_tensors.quantization.quant_args import (
     ActivationOrdering,
@@ -43,6 +42,7 @@ __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
     "KVCacheScaleType",
+    "register_quantization_hooks",
 ]
 
 
@@ -54,10 +54,22 @@ class KVCacheScaleType(Enum):
     VALUE = "v_scale"
 
 
+def register_quantization_hooks(module: Module):
+    # TODO: some of these checks may be redundant
+    quantization_scheme = getattr(module, "quantization_scheme", None)
+    if not quantization_scheme:
+        return
+
+    if not is_attention_module(module):
+        module.register_forward_pre_hook(pre_forward_quantize)
+        module.register_forward_hook(post_forward_quantize)
+
+
 def initialize_module_for_quantization(
     module: Module,
     scheme: Optional[QuantizationScheme] = None,
     force_zero_point: bool = True,
+    delay_forward_quantize: bool = False,
 ):
     """
     attaches appropriate scales, zero points, and observers to a layer
@@ -119,12 +131,9 @@ def initialize_module_for_quantization(
         module.quantization_status = QuantizationStatus.INITIALIZED
 
         # TODO: shouldn't need this anymore as we're no longer wrapping?
-        with disable_hf_hook(module):
-            # wrap forward call of module to perform
-            # quantized actions based on calltime status
-            # module.register_forward_pre_hook(pre_forward_quantize)
-            # module.register_forward_hook(post_forward_quantize)
-            wrap_module_forward_quantized(module, scheme)
+        if not delay_forward_quantize:
+            with disable_hf_hook(module):
+                register_quantization_hooks(module)
 
 
 def is_attention_module(module: Module):

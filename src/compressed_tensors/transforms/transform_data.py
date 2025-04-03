@@ -31,5 +31,6 @@ class TransformData:
         transform_data = TransformData(data=data)
     """
 
-    data: Dict
-    idx: int = 0
+    weight_transforms: Dict
+    input_transforms: Dict
+    output_transforms: Dict

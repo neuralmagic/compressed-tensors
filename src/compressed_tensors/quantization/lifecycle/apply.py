@@ -227,6 +227,7 @@ def process_transforms_config(
                         transform_data = TransformData(data=OrderedDict(data))
                         submodule.transform_data = transform_data
     # 10358 for now mib; 1/3 of memory if caching/sharing parameter data
+    breakpoint()  # memory should not go up with inputs, same transform
     return model
 
 
@@ -234,7 +235,8 @@ def apply_quantization_config(
     model: Module,
     config: Union[QuantizationConfig, None],
     run_compressed: bool = False,
-    transforms_config=None,
+    transforms_config: Optional[TransformationConfig] = None,
+    delay_forward_quantize: Optional[bool] = False,
 ) -> OrderedDict:
     """
     Initializes the model for quantization in-place based on the given config.
@@ -320,7 +322,9 @@ def apply_quantization_config(
         )
 
     # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
+    apply_quantization_status(
+        model, config.quantization_status, delay_forward_quantize=delay_forward_quantize
+    )
     return names_to_scheme
 
 
@@ -360,7 +364,9 @@ def process_kv_cache_config(
     return config
 
 
-def apply_quantization_status(model: Module, status: QuantizationStatus):
+def apply_quantization_status(
+    model: Module, status: QuantizationStatus, delay_forward_quantize: bool
+):
     """
     Applies in place the quantization lifecycle up to the given status
 
@@ -374,7 +380,9 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init
+                module,
+                force_zero_point=force_zero_point_init,
+                delay_forward_quantize=delay_forward_quantize,
             )
         )
 
