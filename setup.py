@@ -97,7 +97,7 @@ def _setup_extras() -> Dict:
     }
 
 setup(
-    name="compressed-tensors"
+    name="compressed-tensors",
     use_scm_version={
         "version_scheme": version_func,
         "local_scheme": localversion_func,
