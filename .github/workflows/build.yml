@@ -74,7 +74,7 @@ jobs:
 
             - name: build
               id: build
-              uses: neuralmagic/nm-actions/actions/build-ml-whl@v1.12.0
+              uses: neuralmagic/nm-actions/actions/build-ml-whl@build
               with:
                   dev: false
                   release: ${{ inputs.wf_category == 'RELEASE' }}
