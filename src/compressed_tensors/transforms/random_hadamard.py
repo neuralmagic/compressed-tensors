@@ -31,8 +31,8 @@ class RandomHadamard(Transforms):
     def __init__(
         self,
         size: int,
-        transform_name: str,
-        permutation_name: str,
+        transform_name: Optional[str] = None,
+        permutation_name: Optional[str] = None,
         empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cpu",
         dtype: Optional[torch.dtype] = torch.bfloat16,
@@ -72,7 +72,7 @@ class RandomHadamard(Transforms):
             transform = torch.empty((size, size)).to(dtype)
             permutation = torch.empty((size)).to(dtype).to(device)
         else:
-            transform = self.fetch().to(dtype).to(device)
+            transform = self.fetch(dtype, device)
             permutation = (
                 (torch.randint(low=0, high=2, size=(self.size,)) * 2 - 1)
                 .to(dtype)
@@ -86,13 +86,11 @@ class RandomHadamard(Transforms):
             permutation_name=permutation_name,
         )
 
-        if not self.matrix_registry.contains(size):
-            self.matrix_registry.set_matrix(self.size, self.transform)
-
-    def fetch(self):
+    def fetch(self, dtype, device):
         transform = self.matrix_registry.get_matrix(self.size)
         if transform is None:
-            transform = random_hadamard_matrix(size=self.size)
+            transform = random_hadamard_matrix(size=self.size).to(dtype).to(device)
+            self.matrix_registry.set_matrix(self.size, transform)
         return transform
 
     def apply(
@@ -101,8 +99,10 @@ class RandomHadamard(Transforms):
         transpose: bool = False,
         first: bool = True,
     ) -> torch.Tensor:
+
+        # Too slow?
         return apply_matrix_transform(
-            transform=(self.transform * self.permutation) / self.normalized_size,
+            transform=(self.transform.to(input_tensor.device) * self.permutation.to(input_tensor.device)) / self.normalized_size,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,
@@ -124,10 +124,9 @@ class RandomHadamard(Transforms):
         :param first: if the transform matrix will be the first or second matrix to be
             multiplied
         """
-
         transpose = not transpose
         return apply_matrix_transform(
-            transform=(self.transform * self.permutation) / self.normalized_size,
+            transform=(self.transform.to(input_tensor.device) * self.permutation.to(input_tensor.device)) / self.normalized_size,
             input_tensor=input_tensor,
             transpose=transpose,
             first=first,

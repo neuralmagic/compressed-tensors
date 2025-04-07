@@ -33,7 +33,7 @@ class Transforms(RegistryMixin):
     def __init__(
         self,
         transform: torch.Tensor,
-        transform_name: str,
+        transform_name: Optional[str] = None,
         permutation: Optional[torch.Tensor] = None,
         permutation_name: Optional[str] = None,
     ):

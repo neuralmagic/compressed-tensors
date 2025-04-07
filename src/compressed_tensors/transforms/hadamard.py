@@ -28,7 +28,7 @@ class Hadamard(Transforms):
     def __init__(
         self,
         size: int,
-        transform_name: str,
+        transform_name: Optional[str] = None,
         empty: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = "cpu",
         dtype: Optional[torch.dtype] = torch.bfloat16,

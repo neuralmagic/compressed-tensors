@@ -150,6 +150,8 @@ def process_transforms_config(
         # Each group/scheme targets one type of transform
         transform_type = group.transform_type
         transform_creation_args = group.transform_creation_args
+        shared = group.shared
+        transform = None 
 
         # Need a better name - too many groups
         for transform_arg in group.groups:
@@ -201,17 +203,19 @@ def process_transforms_config(
                             **transform_creation_args,
                         )
                     else:
-                        transform = Transforms.load_from_registry(
-                            transform_type,
-                            dtype=dtype,
-                            transform_name=transform_name,
-                            permutation_name=permutation_name,
-                            device=next(submodule.parameters()).device,
-                            **transform_creation_args,
-                        )
-
+                        # should mean we have identical permuation matrices for all shared submodules
+                        if transform is None:
+                            transform = Transforms.load_from_registry(
+                                transform_type,
+                                dtype=dtype,
+                                device=next(submodule.parameters()).device,
+                                **transform_creation_args,
+                            )  
+                            
+                        transform.transform_name = transform_name
+                        transform.permutation_name = permutation_name
                         transform.register_to_module(module=submodule)
-
+                
                     # add relevant transform data to the submodule as well
                     data = {
                         transform_name: {
@@ -226,6 +230,10 @@ def process_transforms_config(
                     else:
                         transform_data = TransformData(data=OrderedDict(data))
                         submodule.transform_data = transform_data
+
+                if not shared:
+                    transform = None
+
     # 10358 for now mib; 1/3 of memory if caching/sharing parameter data
     breakpoint()  # memory should not go up with inputs, same transform
     return model
