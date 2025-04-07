@@ -14,7 +14,7 @@
 
 from functools import wraps
 from math import ceil
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 from compressed_tensors.quantization.quant_args import (
@@ -29,8 +29,8 @@ from compressed_tensors.quantization.utils import (
     compute_dynamic_scales_and_zp,
 )
 from compressed_tensors.transforms.apply import (
-    apply_inverse_transforms_to_parameter,
-    apply_transforms_to_parameter,
+    apply_inverse_transforms_to_activations_or_parameter,
+    apply_transforms_to_activations_or_parameter,
 )
 from compressed_tensors.utils import safe_permute
 from torch.nn import Module
@@ -40,8 +40,9 @@ __all__ = [
     "quantize",
     "dequantize",
     "fake_quantize",
-    "wrap_module_forward_quantized",
     "forward_quantize",
+    "pre_forward_quantize",
+    "post_forward_quantize",
 ]
 
 
@@ -258,77 +259,77 @@ def _process_quantization(
     return output
 
 
-def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
-    # expects a module already initialized and injected with the parameters in
-    # initialize_module_for_quantization
-    if hasattr(module.forward, "__func__"):
-        forward_func_orig = module.forward.__func__
-    else:
-        forward_func_orig = module.forward.func
+def pre_forward_quantize(module: Module, input: Any):
+    if not getattr(module, "quantization_enabled", True):
+        return input
 
-    @wraps(forward_func_orig)  # ensures docstring, names, etc are propagated
-    def wrapped_forward(self, *args, **kwargs):
-        if not getattr(module, "quantization_enabled", True):
-            # quantization is disabled on forward passes, return baseline
-            # forward call
-            return forward_func_orig.__get__(module, module.__class__)(*args, **kwargs)
+    input_ = input[0]
+    scheme = module.quantization_scheme
+    compressed = module.quantization_status == QuantizationStatus.COMPRESSED
 
-        input_ = args[0]
+    transform_data = getattr(module, "transform_data", None)
 
-        compressed = module.quantization_status == QuantizationStatus.COMPRESSED
-
-        if scheme.input_activations is not None:
-            # prehook should calibrate activations before forward call
-            input_ = forward_quantize(module, input_, "input", scheme.input_activations)
-
-        if scheme.weights is not None and not compressed:
-            # calibrate and (fake) quantize weights when applicable
-            unquantized_weight = self.weight.data.clone()
-            transform_data = getattr(module, "transform_data", None)
-            if transform_data is not None:
-                apply_transforms_to_parameter(
-                    module=module,
-                    module_parameter=self.weight,
-                    transform_data=transform_data,
-                )
-
-            self.weight.data = forward_quantize(
-                module, self.weight, "weight", scheme.weights
+    # Input Activations
+    # TODO: break into their own func/hook
+    if scheme.input_activations is not None:
+        if transform_data is not None:
+            input_ = apply_transforms_to_activations_or_parameter(
+                module=module,
+                module_activation_or_parameter=input_,
+                transform_data=transform_data,
+                update_in_place=False,
             )
 
-            if transform_data is not None:
-                apply_inverse_transforms_to_parameter(
-                    module=module,
-                    module_parameter=self.weight,
-                    transform_data=transform_data,
-                )
+        input_ = forward_quantize(module, input_, "input", scheme.input_activations)
 
-        # perform wrapped forward call
-        output = forward_func_orig.__get__(module, module.__class__)(
-            input_, *args[1:], **kwargs
+        if transform_data is not None:
+            input_ = apply_inverse_transforms_to_activations_or_parameter(
+                module=module,
+                module_activation_or_parameter=input_,
+                transform_data=transform_data,
+                update_in_place=False,
+            )
+
+    # Weights
+    # TODO: break into their own func/hook
+    if scheme.weights is not None and not compressed:
+        setattr(module, "unquantized_weight", module.weight.data.clone())
+
+        if transform_data is not None:
+            apply_transforms_to_activations_or_parameter(
+                module=module,
+                module_activation_or_parameter=module.weight,
+                transform_data=transform_data,
+            )
+
+        module.weight.data = forward_quantize(
+            module, module.weight, "weight", scheme.weights
         )
 
-        # restore back to unquantized_value
-        if scheme.weights is not None and not compressed:
-            self.weight.data = unquantized_weight
-
-        if scheme.output_activations is not None:
-            # forward-hook should calibrate/forward_quantize
-            if (
-                module.quantization_status == QuantizationStatus.CALIBRATION
-                and not scheme.output_activations.dynamic
-            ):
-                return output
-
-            output = forward_quantize(
-                module, output, "output", scheme.output_activations
+        if transform_data is not None:
+            apply_inverse_transforms_to_activations_or_parameter(
+                module=module,
+                module_activation_or_parameter=module.weight,
+                transform_data=transform_data,
             )
+
+    return (input_,)
+
+
+def post_forward_quantize(module: Module, input: Any, output: torch.Tensor):
+    if not getattr(module, "quantization_enabled", True):
         return output
 
-    # bind wrapped forward to module class so reference to `self` is correct
-    bound_wrapped_forward = wrapped_forward.__get__(module, module.__class__)
-    # set forward to wrapped forward
-    setattr(module, "forward", bound_wrapped_forward)
+    scheme = module.quantization_scheme
+    compressed = module.quantization_status == QuantizationStatus.COMPRESSED
+
+    if scheme.weights is not None and not compressed:
+        module.weight.data = getattr(module, "unquantized_weight")
+
+    if scheme.output_activations is not None:
+        output = forward_quantize(module, output, "output", scheme.output_activations)
+
+    return output
 
 
 def forward_quantize(
