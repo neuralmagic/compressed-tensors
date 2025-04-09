@@ -45,7 +45,7 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         return (
             "weight_packed",
             "weight_scale",
-            "weight_zero_point",
+            "weight_zero_point_packed",
             "weight_g_idx",
             "weight_shape",
         )
@@ -69,7 +69,7 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         return {
             "weight_packed": (torch.Size((weight_shape[0], packed_size)), torch.int32),
             "weight_shape": (torch.Size((2,)), torch.int32),
-            "weight_zero_point": (torch.Size((packed_size_zp, weight_shape[-1] // quantization_args.group_size)), torch.int32)
+            "weight_zero_point_packed": (torch.Size((packed_size_zp, weight_shape[-1] // quantization_args.group_size)), torch.int32)
         }
 
     def compress_weight(
@@ -115,7 +115,7 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
 
         compressed_dict["weight_shape"] = weight_shape
         compressed_dict["weight_packed"] = packed_weight
-        compressed_dict["weight_zero_point"] = packed_zp
+        compressed_dict["weight_zero_point_packed"] = packed_zp
 
         return compressed_dict
 
@@ -133,20 +133,20 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         """
         weight = compressed_data["weight_packed"]
         scale = compressed_data["weight_scale"]
-        zero_point = compressed_data.get("weight_zero_point", None)
+        zero_point = compressed_data.get("weight_zero_point_packed", None)
         g_idx = compressed_data.get("weight_g_idx", None)
         original_shape = torch.Size(compressed_data["weight_shape"])
         num_bits = quantization_args.num_bits
         unpacked = unpack_from_int32(weight, num_bits, original_shape)
         original_zp_shape = (original_shape[0], scale.shape[-1])
-        print(zero_point.shape)
+        # NOTE: this will fail decompression as we don't currently handle packed zp
         zero_point = unpack_from_int32(zero_point, num_bits, original_zp_shape, packed_dim=0)
-        print(zero_point.shape)
         decompressed_weight = dequantize(
             x_q=unpacked, scale=scale, zero_point=zero_point, g_idx=g_idx
         )
 
         return decompressed_weight
+
 
 
 def pack_to_int32(value: torch.Tensor, num_bits: int, packed_dim=1) -> torch.Tensor:

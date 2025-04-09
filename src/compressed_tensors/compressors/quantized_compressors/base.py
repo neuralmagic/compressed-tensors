@@ -140,11 +140,11 @@ class BaseQuantizationCompressor(BaseCompressor):
                 continue
             elif name.endswith("g_idx") and torch.any(value <= -1):
                 continue
+            elif name.endswith("weight_zero_point_packed"):
+                continue
             else:
-                if "zero_point" not in name:
-                    compressed_dict[name] = value.to("cpu")
+                compressed_dict[name] = value.to("cpu")
 
-        breakpoint()
         return compressed_dict
 
     def decompress(
