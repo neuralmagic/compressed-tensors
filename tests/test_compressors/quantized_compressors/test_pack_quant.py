@@ -76,7 +76,7 @@ def test_quant_format(shape):
     dense_state_dict = {
         "dummy.weight": torch.rand(shape),
         "dummy.weight_scale": torch.tensor(0.01, dtype=torch.float32),
-        "dummy.weight_zero_point": torch.tensor(0, dtype=torch.int32),
+        "dummy.weight_zero_point": torch.tensor(0, dtype=torch.int8),
     }
     quant_config = get_dummy_quant_config()
 
