@@ -101,7 +101,7 @@ jobs:
               id: check-whl
               uses: neuralmagic/nm-actions/actions/check-whl-on-pypi@scm
               with:
-                asset: ${{ steps.find-asset-whl.outputs.asset }}
+                whl: ${{ steps.find-asset-whl.outputs.asset }}
 
             - name: upload whl to "nm-pypi"
               if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
