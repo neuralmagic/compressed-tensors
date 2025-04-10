@@ -18,7 +18,7 @@ from typing import Any, Dict, Generator, Tuple, Union
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
-from compressed_tensors.quantization import QuantizationArgs
+from compressed_tensors.quantization import QuantizationArgs, QuantizationStrategy
 from compressed_tensors.utils import (
     get_nested_mappings_from_state_dict,
     get_nested_weight_mappings,
@@ -141,9 +141,25 @@ class BaseQuantizationCompressor(BaseCompressor):
             elif name.endswith("g_idx") and torch.any(value <= -1):
                 continue
             else:
-                compressed_dict[name] = value.to("cpu")
+                # Hacks - zp may have been conditionally updated
+                # and will be part of the compressed_dict
+                if self._check_if_zp_pack_quantized(quant_args):
+                    continue
+                else:
+                    compressed_dict[name] = value.to("cpu")
 
         return compressed_dict
+
+    def _check_if_zp_pack_quantized(self, quant_args):
+        from compressed_tensors.compressors import PackedQuantizationCompressor
+
+        if isinstance(self, PackedQuantizationCompressor):
+            if not quant_args.symmetric and quant_args.strategy in [
+                QuantizationStrategy.GROUP.value,
+                QuantizationStrategy.CHANNEL.value,
+            ]:
+                return True
+        return False
 
     def decompress(
         self,
