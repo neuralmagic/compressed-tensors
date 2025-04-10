@@ -129,6 +129,7 @@ def apply_quantization_config(
     target_to_scheme = OrderedDict()
     config = process_quantization_config(config)
     names_to_scheme = OrderedDict()
+
     for scheme in config.config_groups.values():
         for target in scheme.targets:
             target_to_scheme[target] = scheme
@@ -152,7 +153,6 @@ def apply_quantization_config(
             continue  # layer matches ignore list, continue
 
         targets = find_name_or_class_matches(name, submodule, target_to_scheme)
-
         if targets:
             # mark modules to be quantized by adding
             # quant scheme to the matching layers

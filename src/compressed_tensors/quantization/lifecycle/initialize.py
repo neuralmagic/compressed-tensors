@@ -80,7 +80,6 @@ def initialize_module_for_quantization(
         _initialize_attn_scales(module)
 
     else:
-
         if scheme.input_activations is not None:
             _initialize_scale_zero_point(
                 module,
@@ -109,8 +108,14 @@ def initialize_module_for_quantization(
 
         if scheme.output_activations is not None:
             if not is_kv_cache_quant_scheme(scheme):
+                weight_shape = None
+                if isinstance(module, torch.nn.Linear) and hasattr(module, "weight"):
+                    weight_shape = module.weight.shape
                 _initialize_scale_zero_point(
-                    module, "output", scheme.output_activations
+                    module,
+                    "output",
+                    scheme.output_activations,
+                    weight_shape=weight_shape,
                 )
 
         module.quantization_scheme = scheme
@@ -153,12 +158,17 @@ def _initialize_scale_zero_point(
         expected_shape = 1
 
     if base_name == "weight" and weight_shape is not None:
+
         if quantization_args.strategy == QuantizationStrategy.CHANNEL:
-            # (output_channels, 1)
             expected_shape = (weight_shape[0], 1)
+
         elif quantization_args.strategy == QuantizationStrategy.GROUP:
             num_groups = weight_shape[1] // quantization_args.group_size
             expected_shape = (weight_shape[0], max(num_groups, 1))
+
+    if base_name == "output" and weight_shape is not None:
+        if quantization_args.strategy == QuantizationStrategy.CHANNEL:
+            expected_shape = weight_shape[0]
 
     scale_dtype = module.weight.dtype
     if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
@@ -190,10 +200,13 @@ def _initialize_scale_zero_point(
         register_offload_parameter(module, f"{base_name}_g_idx", init_g_idx)
 
 
-def _initialize_attn_scales(module: Module) -> None:
+def _initialize_attn_scales(
+    module: Module,
+) -> None:
     """Initlaize k_scale, v_scale for  self_attn"""
 
-    expected_shape = 1  # per tensor
+    # per token for each layer
+    expected_shape = 1
 
     param = next(module.parameters())
     scale_dtype = param.dtype
