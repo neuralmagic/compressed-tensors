@@ -111,9 +111,9 @@ jobs:
                 asset: ${{ steps.find-asset-whl.outputs.asset }}
 
             - name: find tar.gz
+              if: ${{ steps.check-whl.outputs.status }}
               id: find-asset-targz
               uses: neuralmagic/nm-actions/actions/find-asset@v1.1.0
-              if: ${{ steps.check-whl.outputs.status }}
               with:
                 run_id: ${{ inputs.run_id }}
                 asset_identifier: 'compressed*.tar.gz'
