@@ -71,12 +71,14 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
             "weight_shape": (torch.Size((2,)), torch.int32),
         }
         if not quantization_args.symmetric and quantization_strategy in [
-            QuantizationStrategy.GROUP,
-            QuantizationStrategy.CHANNEL,
+            QuantizationStrategy.GROUP.value,
+            QuantizationStrategy.CHANNEL.value,
         ]:
+            zp_dim = quantization_args.group_size if quantization_strategy == QuantizationStrategy.GROUP.value else 1
+
             output["weight_zero_point"] = (
                 torch.Size(
-                    (packed_size_zp, weight_shape[-1] // quantization_args.group_size)
+                    (packed_size_zp, weight_shape[-1] // zp_dim)
                 ),
                 torch.int32,
             )
@@ -127,14 +129,13 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
 
         # We typically don't compress zp; apart from when using the packed_compressor and when storing group/channel zp
         if not quantization_args.symmetric and quantization_args.strategy in [
-            QuantizationStrategy.GROUP,
-            QuantizationStrategy.CHANNEL,
+            QuantizationStrategy.GROUP.value,
+            QuantizationStrategy.CHANNEL.value,
         ]:
             packed_zp = pack_to_int32(
                 zero_point, quantization_args.num_bits, packed_dim=0
             )
             compressed_dict["weight_zero_point"] = packed_zp
-
         return compressed_dict
 
     def decompress_weight(
@@ -159,8 +160,8 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
 
         # NOTE: this will fail decompression as we don't currently handle packed zp on decompression
         if not quantization_args.symmetric and quantization_args.strategy in [
-            QuantizationStrategy.GROUP,
-            QuantizationStrategy.CHANNEL,
+            QuantizationStrategy.GROUP.group,
+            QuantizationStrategy.CHANNEL.group,
         ]:
             assert zero_point is not None
             original_zp_shape = (original_shape[0], scale.shape[-1])

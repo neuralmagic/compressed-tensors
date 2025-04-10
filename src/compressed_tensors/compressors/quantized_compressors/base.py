@@ -141,7 +141,9 @@ class BaseQuantizationCompressor(BaseCompressor):
             elif name.endswith("g_idx") and torch.any(value <= -1):
                 continue
             else:
-                compressed_dict[name] = value.to("cpu")
+                # Hacks - zp may have been conditionally updated
+                if "zero_point" not in name:
+                    compressed_dict[name] = value.to("cpu")
 
         return compressed_dict
 
