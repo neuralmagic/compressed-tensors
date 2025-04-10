@@ -70,16 +70,18 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
             "weight_packed": (torch.Size((weight_shape[0], packed_size)), torch.int32),
             "weight_shape": (torch.Size((2,)), torch.int32),
         }
-        if not quantization_args.symmetric and quantization_strategy in [
+        if not quantization_args.symmetric and quantization_args.strategy in [
             QuantizationStrategy.GROUP.value,
             QuantizationStrategy.CHANNEL.value,
         ]:
-            zp_dim = quantization_args.group_size if quantization_strategy == QuantizationStrategy.GROUP.value else 1
+            zp_dim = (
+                quantization_args.group_size
+                if quantization_args.strategy == QuantizationStrategy.GROUP.value
+                else 1
+            )
 
             output["weight_zero_point"] = (
-                torch.Size(
-                    (packed_size_zp, weight_shape[-1] // zp_dim)
-                ),
+                torch.Size((packed_size_zp, weight_shape[-1] // zp_dim)),
                 torch.int32,
             )
         return output
