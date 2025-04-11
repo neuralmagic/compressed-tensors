@@ -103,21 +103,15 @@ jobs:
               with:
                 whl: ${{ steps.find-asset-whl.outputs.asset }}
 
-            - name: test check
-              if: ${{ steps.check-whl.outputs.status }}
-              run: |
-                 echo "treated as true"
-              shell: bash
-
             - name: upload whl to "nm-pypi"
-              if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
+              if: ${{ steps.check-whl.outputs.status =='0' && inputs.push_to_pypi }}
               uses: neuralmagic/nm-actions/actions/gcp-upload-asset@v1.1.0
               with:
                 bucket_target: ${{ secrets.GCP_NM_PYPI_DIST }}
                 asset: ${{ steps.find-asset-whl.outputs.asset }}
 
             - name: find tar.gz
-              if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
+              if: ${{ steps.check-whl.outputs.status =='0' && inputs.push_to_pypi }}
               id: find-asset-targz
               uses: neuralmagic/nm-actions/actions/find-asset@v1.1.0
               with:
@@ -125,14 +119,14 @@ jobs:
                 asset_identifier: 'compressed*.tar.gz'
 
             - name: upload tar.gz to "nm-pypi"
-              if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
+              if: ${{ steps.check-whl.outputs.status =='0' && inputs.push_to_pypi }}
               uses: neuralmagic/nm-actions/actions/gcp-upload-asset@v1.1.0
               with:
                 bucket_target: ${{ secrets.GCP_NM_PYPI_DIST }}
                 asset: ${{ steps.find-asset-targz.outputs.asset }}
 
             - name: update "nm-pypi" index
-              if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
+              if: ${{ steps.check-whl.outputs.status =='0' && inputs.push_to_pypi }}
               uses: actions/github-script@v6
               with:
                 github-token: ${{ secrets.NM_PYPI_WORKFLOW }}
@@ -147,7 +141,7 @@ jobs:
 
             # publish the wheel file to public pypi
             - name: push wheel to pypi.org
-              if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
+              if: ${{ steps.check-whl.outputs.status =='0' && inputs.push_to_pypi }}
               uses: neuralmagic/nm-actions/actions/publish-whl@v1.0.0
               with:
                 username: ${{ secrets.PYPI_PUBLIC_USER }}
@@ -156,7 +150,7 @@ jobs:
 
             # publish the tar.gz file to public pypi
             - name: push wheel to pypi.org
-              if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
+              if: ${{ steps.check-whl.outputs.status =='0' && inputs.push_to_pypi }}
               uses: neuralmagic/nm-actions/actions/publish-whl@v1.0.0
               with:
                 username: ${{ secrets.PYPI_PUBLIC_USER }}
