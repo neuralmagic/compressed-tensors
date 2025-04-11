@@ -103,6 +103,12 @@ jobs:
               with:
                 whl: ${{ steps.find-asset-whl.outputs.asset }}
 
+            - name: test check
+              if: ${{ steps.check-whl.outputs.status }}
+              run: |
+                 echo "treated as true"
+              shell: bash
+
             - name: upload whl to "nm-pypi"
               if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
               uses: neuralmagic/nm-actions/actions/gcp-upload-asset@v1.1.0
