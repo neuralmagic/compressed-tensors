@@ -150,7 +150,6 @@ class BaseQuantizationCompressor(BaseCompressor):
         path_to_model_or_tensors: Union[str, Path, Dict[str, Any]],
         names_to_scheme: Dict[str, QuantizationArgs],
         device: str = "cpu",
-        skip_compression_params: Optional[bool] = False,
     ) -> Generator[Tuple[str, Tensor], None, None]:
         """
         Reads a compressed state dict located at path_to_model_or_tensors
@@ -169,7 +168,7 @@ class BaseQuantizationCompressor(BaseCompressor):
 
         else:
             yield from self._decompress_from_state_dict(
-                path_to_model_or_tensors, names_to_scheme, skip_compression_params
+                path_to_model_or_tensors, names_to_scheme
             )
 
     def _decompress_from_path(self, path_to_model, names_to_scheme, device):

@@ -470,6 +470,8 @@ class ModelCompressor:
             dense_gen = self.quantization_compressor.decompress(
                 model_path_or_state_dict, names_to_scheme=names_to_scheme
             )
+            # TODO: all weight quantization params will be moved to the compressor
+            # to prevent duplicate parameter updates in update_parameter_data
             self._replace_weights(dense_gen, model)
 
             def freeze_quantization_status(module):
@@ -548,7 +550,12 @@ class ModelCompressor:
             params_device = next(module.parameters()).device
             device = "cpu" if has_offloaded_params(module) else params_device
             delattr(module, param_name)
-            param = torch.nn.Parameter(data.to(device))
+            requires_grad = (
+                False
+                if data.dtype not in [torch.float16, torch.float32, torch.bfloat16]
+                else True
+            )
+            param = torch.nn.Parameter(data.to(device), requires_grad=requires_grad)
             register_offload_parameter(module, param_name, param)
 
     # TODO: potentially separate original functionality for sparsisty
@@ -581,7 +588,15 @@ class ModelCompressor:
                     # however, update_data does a good shape check - should be moved to the compressor
                     if param_name == "weight":
                         delattr(module, param_name)
-                        param = torch.nn.Parameter(param_data.to(device))
+                        requires_grad = (
+                            False
+                            if param_data.dtype
+                            not in [torch.float16, torch.float32, torch.bfloat16]
+                            else True
+                        )
+                        param = torch.nn.Parameter(
+                            param_data.to(device), requires_grad=requires_grad
+                        )
                         register_offload_parameter(module, param_name, param)
                     else:
                         # Should already be registered to the correct device for

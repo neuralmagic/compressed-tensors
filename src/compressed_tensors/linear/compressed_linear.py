@@ -78,7 +78,6 @@ class CompressedLinear(Linear):
 
         # populate compressed weights and quantization parameters
         for name, (shape, dtype) in compression_params.items():
-            breakpoint()
             param = Parameter(
                 torch.empty(shape, device=device, dtype=dtype), requires_grad=False
             )
@@ -99,7 +98,6 @@ class CompressedLinear(Linear):
         """
         Decompresses the weight, then runs the wrapped forward pass
         """
-        breakpoint()
         if self.quantization_status == QuantizationStatus.COMPRESSED:
             weight_data = self.compressor.decompress_module(self)
             param = Parameter(weight_data, requires_grad=False)
