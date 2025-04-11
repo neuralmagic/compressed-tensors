@@ -44,6 +44,7 @@ from compressed_tensors.quantization.utils import (
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
+from safetensors import safe_open
 from torch.nn import Module
 
 
@@ -64,7 +65,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def load_pretrained_quantization_inputs_outputs(
-    model: Module, model_name_or_path: Optional[str] = None
+    model: Module,
+    model_name_or_path: Optional[str] = None,
+    load_weight_quantization: Optional[bool] = False,
 ):
     """
     Loads the quantization parameters (scale and zero point) from model_name_or_path to
@@ -92,6 +95,15 @@ def load_pretrained_quantization_inputs_outputs(
             )
         if submodule.quantization_scheme.output_activations is not None:
             base_name = "output"
+            _load_quant_args_from_state_dict(
+                base_name=base_name,
+                module_name=name,
+                module=submodule,
+                state_dict=state_dict,
+            )
+
+        if load_weight_quantization and submodule.quantization_scheme.weights:
+            base_name = "weight"
             _load_quant_args_from_state_dict(
                 base_name=base_name,
                 module_name=name,
@@ -235,7 +247,10 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
 
         # TODO: Can likely be used for both init and frozen? better than module.dtype?
-        scale_dtype = model.dtype if status == QuantizationStatus.FROZEN else None
+        scale_dtype = None
+        if status == QuantizationStatus.FROZEN:
+            if hasattr(model, "dtype"):
+                scale_dtype = model.dtype
 
         model.apply(
             lambda module: initialize_module_for_quantization(
@@ -366,15 +381,15 @@ def _load_quant_args_from_state_dict(
     state_dict_g_idx_path = state_dict.get(f"{module_name}.{g_idx_name}", None)
 
     if state_dict_g_idx_path is not None:
-        with safe_open(state_dict_scale_path, framework="pt", device="cpu") as f:
-            state_dict_g_idx = f.get_tensor(state_dict_scale_path)
+        with safe_open(state_dict_g_idx_path, framework="pt", device="cpu") as f:
+            state_dict_g_idx = f.get_tensor(f"{module_name}.{g_idx_name}")
 
         update_parameter_data(module, state_dict_g_idx, g_idx_name)
 
     if state_dict_scale_path is not None:
         # module is quantized
         with safe_open(state_dict_scale_path, framework="pt", device="cpu") as f:
-            state_dict_scale = f.get_tensor(state_dict_scale_path)
+            state_dict_scale = f.get_tensor(f"{module_name}.{scale_name}")
 
         update_parameter_data(module, state_dict_scale, scale_name)
 
@@ -383,7 +398,7 @@ def _load_quant_args_from_state_dict(
             state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
         else:
             with safe_open(state_dict_zp_path, framework="pt", device="cpu") as f:
-                state_dict_zp = f.get_tensor(state_dict_zp_path)
+                state_dict_zp = f.get_tensor(f"{module_name}.{zp_name}")
 
         update_parameter_data(module, state_dict_zp, zp_name)
 

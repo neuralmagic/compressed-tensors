@@ -19,9 +19,9 @@ import torch
 from compressed_tensors.config import SparsityCompressionConfig
 from compressed_tensors.quantization import QuantizationArgs, QuantizationConfig
 from compressed_tensors.registry import RegistryMixin
+from compressed_tensors.utils import has_offloaded_params
 from torch import Tensor
 from torch.nn import Module
-from compressed_tensors.utils import has_offloaded_params
 
 
 __all__ = ["BaseCompressor"]

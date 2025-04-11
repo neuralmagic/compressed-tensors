@@ -98,7 +98,11 @@ class BaseSparseCompressor(BaseCompressor):
         return compressed_dict
 
     def decompress(
-        self, path_to_model_or_tensors: str, device: str = "cpu", **kwargs
+        self,
+        path_to_model_or_tensors: str,
+        device: str = "cpu",
+        params_to_skip_load: Optional[Tuple] = None,
+        **kwargs,
     ) -> Generator[Tuple[str, Tensor], None, None]:
         """
         Reads a bitmask compressed state dict located
@@ -121,13 +125,21 @@ class BaseSparseCompressor(BaseCompressor):
                 full_name = merge_names(weight_name, param_name)
                 with safe_open(safe_path, framework="pt", device=device) as f:
                     weight_data[param_name] = f.get_tensor(full_name)
+
             decompressed = self.decompress_weight(weight_data)
             yield merge_names(weight_name, "weight"), decompressed
 
         for ignored_param_name, safe_path in ignored_params.items():
-            with safe_open(safe_path, framework="pt", device=device) as f:
-                value = f.get_tensor(ignored_param_name)
-            yield ignored_param_name, value
+            should_skip = False
+            if params_to_skip_load is not None:
+                for param_to_skip in params_to_skip_load:
+                    if param_to_skip in ignored_param_name:
+                        should_skip = True
+
+            if not should_skip:
+                with safe_open(safe_path, framework="pt", device=device) as f:
+                    value = f.get_tensor(ignored_param_name)
+                yield ignored_param_name, value
 
     @staticmethod
     def should_compress(name: str, expanded_targets: Optional[Set[str]] = None) -> bool:

@@ -31,6 +31,7 @@ from compressed_tensors.base import (
     SPARSITY_CONFIG_NAME,
 )
 from compressed_tensors.compressors.base import BaseCompressor
+from compressed_tensors.compressors.sparse_compressors import DenseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
@@ -421,9 +422,14 @@ class ModelCompressor:
             self.sparsity_compressor is not None
             and self.sparsity_config.format != CompressionFormat.dense.value
         ):
+            params_to_ignore = None
+            if self.quantization_compressor is not None:
+                params_to_ignore = self.quantization_compressor.compression_param_names
             # Sparse decompression is applied on the model_path
-            dense_gen = self.sparsity_compressor.decompress(model_path)
-            self._replace_weights(dense_gen, model)
+            dense_gen = self.sparsity_compressor.decompress(
+                model_path, params_to_skip_load=params_to_ignore
+            )
+            self._replace_sparsity_weights(dense_gen, model)
             setattr(model, SPARSITY_CONFIG_NAME, self.sparsity_compressor.config)
             sparse_decompressed = True
 
@@ -432,21 +438,35 @@ class ModelCompressor:
             # quantization during apply_quantization_config. This ensures
             # that the dtypes of the weights are not unintentionally updated.
             # The status is restored after quantization params are loaded.
+
             with override_quantization_status(
                 self.quantization_config, QuantizationStatus.FROZEN
             ):
+
                 # TODO: need to pass in dtype from CompressionConfig, if we want to override the saved dtype of compressed tensors
                 names_to_scheme = apply_quantization_config(
                     model, self.quantization_config
                 )
-                load_pretrained_quantization_inputs_outputs(model, model_path)
+                # Load activation scales/zp or any other quantization parameters
+                # Conditionally load the weight quantization parameters if we have a dense compressor
+                # Or if a sparsity compressor has already been applied
+                load_pretrained_quantization_inputs_outputs(
+                    model,
+                    model_path,
+                    load_weight_quantization=(
+                        sparse_decompressed
+                        or isinstance(self.quantization_compressor, DenseCompressor)
+                    ),
+                )
 
             model_path_or_state_dict = (
                 model.state_dict() if sparse_decompressed else model_path
             )
 
             dense_gen = self.quantization_compressor.decompress(
-                model_path_or_state_dict, names_to_scheme=names_to_scheme
+                model_path_or_state_dict,
+                names_to_scheme=names_to_scheme,
+                skip_compression_params=sparse_decompressed,
             )
             self._replace_weights(dense_gen, model)
 
@@ -503,6 +523,32 @@ class ModelCompressor:
         with open(config_file_path, "w") as config_file:
             json.dump(config_data, config_file, indent=2, sort_keys=True)
 
+    def _replace_sparsity_weights(self, dense_weight_generator, model: Module):
+        """
+        Replace the weights of the model with the
+        provided dense weights.
+
+        This method iterates over the dense_weight_generator and
+        updates the corresponding weights in the model. If a parameter
+        name does not exist in the model, it will be skipped.
+
+        :param dense_weight_generator (generator): A generator that yields
+            tuples of (name, data), where 'name' is the parameter name and
+            'data' is the updated param data
+        :param model: The model whose weights are to be updated.
+        """
+        for name, data in tqdm(dense_weight_generator, desc="Decompressing model"):
+
+            split_name = name.split(".")
+            prefix, param_name = ".".join(split_name[:-1]), split_name[-1]
+            module = operator.attrgetter(prefix)(model)
+
+            params_device = next(module.parameters()).device
+            device = "cpu" if has_offloaded_params(module) else params_device
+            delattr(module, param_name)
+            param = torch.nn.Parameter(data.to(device))
+            register_offload_parameter(module, param_name, param)
+
     # TODO: potentially separate original functionality for sparsisty
     def _replace_weights(self, dense_weight_generator, model: Module):
         """
@@ -527,15 +573,17 @@ class ModelCompressor:
 
             for param_name, param_data in data.items():
                 if hasattr(module, param_name):
-                    # If compressed, will have an incorrect dtype
+                    # If compressed, will have an incorrect dtype for transformers >4.49
                     # TODO: we can also just skip initialization of scales/zp if in decompression in init
                     # to be consistent with loading which happens later as well
-                    # however, update_data does a good shape check
+                    # however, update_data does a good shape check - should be moved to the compressor
                     if param_name == "weight":
                         delattr(module, param_name)
-                        param = torch.nn.Parameter(param_data.to(device), requires_grad=False)
+                        param = torch.nn.Parameter(param_data.to(device))
                         register_offload_parameter(module, param_name, param)
                     else:
+                        # Should already be registered to the correct device for
+                        # for scales/zero-points
                         update_parameter_data(module, param_data, param_name)
 
 

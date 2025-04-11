@@ -14,7 +14,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Generator, Tuple, Union
+from typing import Any, Dict, Generator, Optional, Tuple, Union
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
@@ -150,6 +150,7 @@ class BaseQuantizationCompressor(BaseCompressor):
         path_to_model_or_tensors: Union[str, Path, Dict[str, Any]],
         names_to_scheme: Dict[str, QuantizationArgs],
         device: str = "cpu",
+        skip_compression_params: Optional[bool] = False,
     ) -> Generator[Tuple[str, Tensor], None, None]:
         """
         Reads a compressed state dict located at path_to_model_or_tensors
@@ -168,7 +169,7 @@ class BaseQuantizationCompressor(BaseCompressor):
 
         else:
             yield from self._decompress_from_state_dict(
-                path_to_model_or_tensors, names_to_scheme
+                path_to_model_or_tensors, names_to_scheme, skip_compression_params
             )
 
     def _decompress_from_path(self, path_to_model, names_to_scheme, device):
@@ -189,7 +190,9 @@ class BaseQuantizationCompressor(BaseCompressor):
                 weight_data["weight"] = decompressed
                 yield weight_name, weight_data
 
-    def _decompress_from_state_dict(self, state_dict, names_to_scheme):
+    def _decompress_from_state_dict(
+        self, state_dict, names_to_scheme, skip_compression_params
+    ):
         weight_mappings = get_nested_mappings_from_state_dict(
             state_dict, self.compression_param_names
         )
@@ -204,4 +207,7 @@ class BaseQuantizationCompressor(BaseCompressor):
                     compressed_data=weight_data, quantization_args=quant_args
                 )
                 weight_data["weight"] = decompressed
-                yield weight_name, weight_data
+                if skip_compression_params:
+                    yield weight_name, {"weight": decompressed}
+                else:
+                    yield weight_name, weight_data
