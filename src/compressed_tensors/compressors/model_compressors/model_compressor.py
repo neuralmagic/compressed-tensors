@@ -426,6 +426,8 @@ class ModelCompressor:
             if self.quantization_compressor is not None:
                 params_to_ignore = self.quantization_compressor.compression_param_names
             # Sparse decompression is applied on the model_path
+            # The compressor will try and load any quantization parameters as well
+            # params_to_skip_load will skip over these params from being loaded
             dense_gen = self.sparsity_compressor.decompress(
                 model_path, params_to_skip_load=params_to_ignore
             )
@@ -453,6 +455,8 @@ class ModelCompressor:
                 load_pretrained_quantization_inputs_outputs(
                     model,
                     model_path,
+                    # TODO: all weight quantization params will be moved to the compressor in a follow-up
+                    # including initialization
                     load_weight_quantization=(
                         sparse_decompressed
                         or isinstance(self.quantization_compressor, DenseCompressor)
@@ -464,9 +468,7 @@ class ModelCompressor:
             )
 
             dense_gen = self.quantization_compressor.decompress(
-                model_path_or_state_dict,
-                names_to_scheme=names_to_scheme,
-                skip_compression_params=sparse_decompressed,
+                model_path_or_state_dict, names_to_scheme=names_to_scheme
             )
             self._replace_weights(dense_gen, model)
 
