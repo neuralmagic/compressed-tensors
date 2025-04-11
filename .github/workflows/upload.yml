@@ -111,7 +111,7 @@ jobs:
                 asset: ${{ steps.find-asset-whl.outputs.asset }}
 
             - name: find tar.gz
-              if: ${{ steps.check-whl.outputs.status }}
+              if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
               id: find-asset-targz
               uses: neuralmagic/nm-actions/actions/find-asset@v1.1.0
               with:
@@ -126,7 +126,7 @@ jobs:
                 asset: ${{ steps.find-asset-targz.outputs.asset }}
 
             - name: update "nm-pypi" index
-              if: ${{ steps.check-whl.outputs.status }}
+              if: ${{ inputs.push_to_pypi && steps.check-whl.outputs.status }}
               uses: actions/github-script@v6
               with:
                 github-token: ${{ secrets.NM_PYPI_WORKFLOW }}
