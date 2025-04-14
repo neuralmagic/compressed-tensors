@@ -65,10 +65,36 @@ __all__ = ["ModelCompressor", "map_module_to_scheme"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
+import tracemalloc
+import linecache
+import objgraph
 
 if TYPE_CHECKING:
     # dummy type if not available from transformers
     CompressedTensorsConfig = TypeVar("CompressedTensorsConfig")
+
+def display_top(snapshot, key_type='lineno', limit=3):
+    snapshot = snapshot.filter_traces((
+        tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+        tracemalloc.Filter(False, "<unknown>"),
+    ))
+    top_stats = snapshot.statistics(key_type)
+
+    print("Top %s lines" % limit)
+    for index, stat in enumerate(top_stats[:limit], 1):
+        frame = stat.traceback[0]
+        print("#%s: %s:%s: %.1f MB"
+              % (index, frame.filename, frame.lineno, stat.size / (1024 * 1024)))
+        line = linecache.getline(frame.filename, frame.lineno).strip()
+        if line:
+            print('    %s' % line)
+
+    other = top_stats[limit:]
+    if other:
+        size = sum(stat.size for stat in other)
+        print("%s other: %.1f MB" % (len(other), size / (1024 * 1024)))
+    total = sum(stat.size for stat in top_stats)
+    print(f"Total Python-tracked memory: {total / (1024 * 1024):.2f} MB")
 
 
 class ModelCompressor:
@@ -362,6 +388,8 @@ class ModelCompressor:
     def compress(
         self, model: Module, state_dict: Optional[Dict[str, Tensor]] = None
     ) -> Dict[str, Tensor]:
+        from torch.profiler import profile, ProfilerActivity
+        from .track_tensor_memory import TrackTensorAllocations
         """
         Compresses a dense state dict or model with sparsity and/or quantization
 
@@ -369,18 +397,28 @@ class ModelCompressor:
         :param state_dict: optional uncompressed state_dict to insert into model
         :return: compressed state dict
         """
+
         if state_dict is None:
             state_dict = model.state_dict()
 
         if self.quantization_compressor is not None:
-            module_to_scheme = map_module_to_scheme(model)
-            state_dict = self.quantization_compressor.compress(
-                state_dict, names_to_scheme=module_to_scheme
-            )
-            if self.quantization_config.format != CompressionFormat.dense.value:
-                self.quantization_config.quantization_status = (
-                    QuantizationStatus.COMPRESSED
+            #with profile(activities=[ProfilerActivity.CUDA], profile_memory=True, record_shapes=True, with_stack=True) as prof:
+            with TrackTensorAllocations() as prof:
+                module_to_scheme = map_module_to_scheme(model)
+                state_dict = self.quantization_compressor.compress(
+                    state_dict, names_to_scheme=module_to_scheme
                 )
+            print(prof.total_tensor_memory_mib)
+            breakpoint()
+            # if self.quantization_config.format != CompressionFormat.dense.value:
+            #     self.quantization_config.quantization_status = (
+            #         QuantizationStatus.COMPRESSED
+            #     )
+
+            #prof.export_memory_timeline("memory.html")
+            #print(prof.key_averages().table(sort_by="self_device_memory_usage", row_limit=3))
+            #breakpoint()
+            return state_dict
 
         if self.sparsity_compressor is not None:
             sparse_compression_targets: Set[str] = expand_target_names(
