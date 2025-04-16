@@ -73,7 +73,7 @@ def load_pretrained_quantization_inputs_outputs(
     Loads the quantization parameters (scale and zero point) from model_name_or_path to
     a model that has already been initialized with a quantization config.
 
-    NOTE: only loads inputs/output parameters. Weight parameters are loaded by the decomrpessor
+    NOTE: only loads inputs/output parameters. Weight parameters are loaded by the decompressor
 
     :param model: model to load pretrained quantization parameters to
     :param model_name_or_path: Hugging Face stub or local folder containing a quantized
@@ -246,7 +246,10 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     if status >= QuantizationStatus.INITIALIZED > current_status:
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
 
-        # TODO: Can likely be used for both init and frozen? better than module.dtype?
+        # TODO: Can likely be used for both init and frozen? Would need to test
+        # When decompressing, we set the scale_dtype as the model's dtype
+        # This is because the normal workflow of using the weight's dtype
+        # will be incorrect as the model weight will be compressed
         scale_dtype = None
         if status == QuantizationStatus.FROZEN:
             if hasattr(model, "dtype"):

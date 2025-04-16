@@ -445,7 +445,6 @@ class ModelCompressor:
                 self.quantization_config, QuantizationStatus.FROZEN
             ):
 
-                # TODO: need to pass in dtype from CompressionConfig, if we want to override the saved dtype of compressed tensors
                 names_to_scheme = apply_quantization_config(
                     model, self.quantization_config
                 )
@@ -558,7 +557,6 @@ class ModelCompressor:
             param = torch.nn.Parameter(data.to(device), requires_grad=requires_grad)
             register_offload_parameter(module, param_name, param)
 
-    # TODO: potentially separate original functionality for sparsisty
     def _replace_weights(self, dense_weight_generator, model: Module):
         """
         Replace the weights of the model with the

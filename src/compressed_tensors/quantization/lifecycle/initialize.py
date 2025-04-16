@@ -70,6 +70,8 @@ def initialize_module_for_quantization(
         if not provided, the layer will be skipped
     :param force_zero_point: whether to force initialization of a zero point for
         symmetric quantization
+    :param scale_dtype: dtype to used for the scales, if overriding the
+        weight dtype as the scale dtype
     """
     # TODO: dont run in running decompression, unless we want to override the dtype using the value given from AutoModel
     scheme = scheme or getattr(module, "quantization_scheme", None)
@@ -168,6 +170,8 @@ def _initialize_scale_zero_point(
             expected_shape = (weight_shape[0], max(num_groups, 1))
 
     scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
+    # Should we really be setting a case here? More so would indicate that something
+    # is wrong if the condition below is not True
     if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
         scale_dtype = torch.float16
 

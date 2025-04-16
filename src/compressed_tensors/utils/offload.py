@@ -142,10 +142,7 @@ def update_prefix_dict(module: torch.nn.Module, key: str, data: torch.Tensor):
 
 
 def update_parameter_data(
-    module: torch.nn.Module,
-    new_param_data: torch.Tensor,
-    param_name: str,
-    cast_to_param: Optional[bool] = True,
+    module: torch.nn.Module, new_param_data: torch.Tensor, param_name: str
 ):
     """
     Update the data of an existing parameter and its offload dict. Supports both
@@ -155,7 +152,7 @@ def update_parameter_data(
     :param new_param_data: tensor to update parameter with
     :param param_name: name of module parameter to update
     """
-    update_offload_parameter(module, param_name, new_param_data, cast_to_param)
+    update_offload_parameter(module, param_name, new_param_data)
 
 
 """ Candidates for Upstreaming """
@@ -191,7 +188,6 @@ def update_offload_parameter(
     name: str,
     data: Optional[torch.Tensor],
     offload_device: Optional[Union[torch.device, Literal["disk"]]] = None,
-    cast_to_param: Optional[bool] = True,
 ):
     """
     Update the data of an existing parameter and its offload dict. Supports both
@@ -204,8 +200,6 @@ def update_offload_parameter(
         provided, then infer device from parameters on module
     """
     param = getattr(module, name)
-    if cast_to_param:
-        data = data.to(param.dtype)
     if param.data.shape != data.shape:
         warnings.warn(
             f"Shape of parameter being updated {param.data.shape} does not match shape "

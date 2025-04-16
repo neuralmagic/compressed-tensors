@@ -175,13 +175,16 @@ class BaseQuantizationCompressor(BaseCompressor):
         weight_mappings = get_nested_weight_mappings(
             path_to_model, self.compression_param_names
         )
+        breakpoint()
         for weight_name in weight_mappings.keys():
             weight_data = {}
             for param_name, safe_path in weight_mappings[weight_name].items():
                 full_name = merge_names(weight_name, param_name)
+                breakpoint()
                 with safe_open(safe_path, framework="pt", device=device) as f:
                     weight_data[param_name] = f.get_tensor(full_name)
             if "weight_scale" in weight_data:
+                breakpoint()
                 quant_args = names_to_scheme[weight_name]
                 decompressed = self.decompress_weight(
                     compressed_data=weight_data, quantization_args=quant_args
