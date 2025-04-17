@@ -165,6 +165,9 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
             QuantizationStrategy.GROUP.group,
             QuantizationStrategy.CHANNEL.group,
         ]:
+            raise ValueError(
+                "Decompression of packed zero points is currently not supported"
+            )
             assert zero_point is not None
             original_zp_shape = (original_shape[0], scale.shape[-1])
             zero_point = unpack_from_int32(

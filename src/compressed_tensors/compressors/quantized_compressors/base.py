@@ -132,8 +132,10 @@ class BaseQuantizationCompressor(BaseCompressor):
                         compressed_dict[merge_names(prefix, key)] = value
                 else:
                     compressed_dict[name] = value.to("cpu")
-            # only save if asym
-            elif is_weight_zp and quant_args_zp.symmetric:
+            # only save zp if asym and not packed zp
+            elif is_weight_zp and (
+                quant_args_zp.symmetric or self._check_if_zp_pack_quantized(quant_args)
+            ):
                 continue
             # only save if asym
             elif is_input_zp and input_args_zp.symmetric:
@@ -141,12 +143,7 @@ class BaseQuantizationCompressor(BaseCompressor):
             elif name.endswith("g_idx") and torch.any(value <= -1):
                 continue
             else:
-                # Hacks - zp may have been conditionally updated
-                # and will be part of the compressed_dict
-                if self._check_if_zp_pack_quantized(quant_args):
-                    continue
-                else:
-                    compressed_dict[name] = value.to("cpu")
+                compressed_dict[name] = value.to("cpu")
 
         return compressed_dict
 
