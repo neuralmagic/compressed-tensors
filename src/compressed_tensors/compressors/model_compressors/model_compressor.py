@@ -19,9 +19,11 @@ import os
 import re
 from contextlib import contextmanager
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, TypeVar, Union, Callable
 
 import compressed_tensors
+from compressed_tensors.linear.compressed_linear import CompressedLinear
+from compressed_tensors.utils.offload import update_offload_parameter
 import torch
 import transformers
 from compressed_tensors.base import (
@@ -65,36 +67,35 @@ __all__ = ["ModelCompressor", "map_module_to_scheme"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
-import tracemalloc
-import linecache
-import objgraph
+def module_replace_dfs(
+    module: Module,
+    func: Callable[[Module], Module],
+    pre: bool = True,
+    progress: Union[bool, tqdm] = False,
+) -> Module:
+    if progress is True:
+        total = len(list(module.modules()))
+        progress = tqdm(total=total)
+
+    if pre:
+        module = func(module)
+
+    for name, child in list(module.named_children()):
+        module.add_module(name, module_replace_dfs(child, func, pre, progress))
+
+    if not pre:
+        module = func(module)
+
+    if isinstance(progress, tqdm):
+        progress.update(1)
+
+    return module
+
+
 
 if TYPE_CHECKING:
     # dummy type if not available from transformers
     CompressedTensorsConfig = TypeVar("CompressedTensorsConfig")
-
-def display_top(snapshot, key_type='lineno', limit=3):
-    snapshot = snapshot.filter_traces((
-        tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
-        tracemalloc.Filter(False, "<unknown>"),
-    ))
-    top_stats = snapshot.statistics(key_type)
-
-    print("Top %s lines" % limit)
-    for index, stat in enumerate(top_stats[:limit], 1):
-        frame = stat.traceback[0]
-        print("#%s: %s:%s: %.1f MB"
-              % (index, frame.filename, frame.lineno, stat.size / (1024 * 1024)))
-        line = linecache.getline(frame.filename, frame.lineno).strip()
-        if line:
-            print('    %s' % line)
-
-    other = top_stats[limit:]
-    if other:
-        size = sum(stat.size for stat in other)
-        print("%s other: %.1f MB" % (len(other), size / (1024 * 1024)))
-    total = sum(stat.size for stat in top_stats)
-    print(f"Total Python-tracked memory: {total / (1024 * 1024):.2f} MB")
 
 
 class ModelCompressor:
@@ -384,6 +385,30 @@ class ModelCompressor:
                 )
 
         return list(unexpected_keys)
+    
+    def apply_compression_status(self, model: Module) -> Module:
+        quantization_format = self.quantization_config.format
+
+        def replace_with_compressed(module: Module) -> Module:
+            scheme = getattr(module, "quantization_scheme", None)
+            if isinstance(module, torch.nn.Linear) and scheme is not None:
+                #compressed_state_dict_2 = self.compress(module)  # debug
+
+                module = CompressedLinear.from_linear(
+                    module,
+                    quantization_scheme=scheme,
+                    quantization_format=quantization_format
+                )
+                state_dict = module.compressor.compress(module.state_dict(), {"": scheme})  # added by compressed linear
+
+                for name, value in state_dict.items():
+                    update_offload_parameter(module, name, value)
+
+            return module
+
+
+        progress = tqdm(total=len(list(model.modules())))
+        return module_replace_dfs(model, replace_with_compressed, progress=progress)
 
     def compress(
         self, model: Module, state_dict: Optional[Dict[str, Tensor]] = None
@@ -403,13 +428,11 @@ class ModelCompressor:
 
         if self.quantization_compressor is not None:
             #with profile(activities=[ProfilerActivity.CUDA], profile_memory=True, record_shapes=True, with_stack=True) as prof:
-            with TrackTensorAllocations() as prof:
-                module_to_scheme = map_module_to_scheme(model)
-                state_dict = self.quantization_compressor.compress(
-                    state_dict, names_to_scheme=module_to_scheme
-                )
-            print(prof.total_tensor_memory_mib)
-            breakpoint()
+            #with TrackTensorAllocations() as prof:
+            module_to_scheme = map_module_to_scheme(model)
+            state_dict = self.quantization_compressor.compress(
+                state_dict, names_to_scheme=module_to_scheme
+            )
             # if self.quantization_config.format != CompressionFormat.dense.value:
             #     self.quantization_config.quantization_status = (
             #         QuantizationStatus.COMPRESSED
@@ -559,13 +582,11 @@ def map_module_to_scheme(model: Module) -> Dict[str, QuantizationScheme]:
     """
     Returns a dictionary which maps quantized module names to their quantization schemes
     """
-    quantized_modules_to_args = {}
-    for name, submodule in iter_named_leaf_modules(model):
-        if is_module_quantized(submodule):
-            name = fix_fsdp_module_name(name)
-            quantized_modules_to_args[name] = submodule.quantization_scheme
-
-    return quantized_modules_to_args
+    return {
+        fix_fsdp_module_name(name): module.quantization_scheme
+        for name, module in iter_named_leaf_modules(model)
+        if is_module_quantized(module)
+    }
 
 
 # HACK: Override the dtype_byte_size function in transformers to support float8 types

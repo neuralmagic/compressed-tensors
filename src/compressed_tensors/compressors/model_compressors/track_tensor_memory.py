@@ -1,5 +1,6 @@
 from typing import Callable, Any, Type, List, Set
 from functools import partial
+import matplotlib.pyplot as plt
 
 import gc
 import torch
@@ -66,3 +67,25 @@ class TrackTensorAllocations:
     
     def _add_to_timeline(self):
         self.memory_timeline.append(self.total_tensor_memory)
+
+
+    def plot_values_over_time(self, dpi=300):
+        values = self.memory_timeline
+        """
+        Plots a list of float values over time using matplotlib.
+
+        Parameters:
+            values (list of float): The values to plot.
+        """
+        if not values:
+            print("The list of values is empty.")
+            return
+
+        plt.figure(figsize=(10, 4))
+        plt.plot(range(len(values)), values, marker='o', linestyle='-')
+        plt.title("Values Over Time")
+        plt.xlabel("Time")
+        plt.ylabel("Value")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig("file.png", dpi=dpi)

@@ -88,13 +88,13 @@ class BaseQuantizationCompressor(BaseCompressor):
             value = model_state[name]
 
             # compress weights
-            if name.endswith(".weight"):
-                prefix = remove_suffix(name, ".weight")
+            if name.endswith("weight"):
+                prefix = remove_suffix(name, "weight")
 
                 # gather qparams
-                scale = model_state.get(merge_names(prefix, "weight_scale"), None)
-                g_idx = model_state.get(merge_names(prefix, "weight_g_idx"), None)
-                zp = model_state.get(merge_names(prefix, "weight_zero_point"), None)
+                scale = model_state.get(prefix + "weight_scale", None)
+                g_idx = model_state.get(prefix + "weight_g_idx", None)
+                zp = model_state.get(prefix + "weight_zero_point", None)
 
                 # is scale does not exist, then weight cannot be compressed
                 if scale is None:
@@ -102,7 +102,8 @@ class BaseQuantizationCompressor(BaseCompressor):
                     continue
 
                 # compress values on cpu (memory movement too expensive)
-                quant_args = names_to_scheme[prefix].weights
+                module_path = prefix[:-1] if prefix.endswith(".") else prefix
+                quant_args = names_to_scheme[module_path].weights
                 compressed_values = self.compress_weight(
                     weight=value,
                     scale=scale,
@@ -115,7 +116,7 @@ class BaseQuantizationCompressor(BaseCompressor):
                 # update state dict
                 del model_state[name]
                 for key, value in compressed_values.items():
-                    model_state[merge_names(prefix, key)] = value.to(save_device)
+                    model_state[prefix + key] = value.to(save_device)
 
             else:
                 # omit saving zero points for symmetric quantization
@@ -202,7 +203,10 @@ class BaseQuantizationCompressor(BaseCompressor):
 
 
 def _is_symmetric(name: str, names_to_scheme: Dict[str, QuantizationScheme]) -> bool:
-    weight_name, zp_name = name.rsplit(".", 1)
+    try:
+        weight_name, zp_name = name.rsplit(".", 1) if "." in name else ("", name)
+    except:
+        breakpoint()
     scheme = names_to_scheme[weight_name]
 
     if zp_name == "weight_zero_point":
