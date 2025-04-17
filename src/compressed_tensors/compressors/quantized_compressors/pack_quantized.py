@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Dict, Optional, Tuple
+from typing import Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -162,8 +162,8 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
 
         # NOTE: this will fail decompression as we don't currently handle packed zp on decompression
         if not quantization_args.symmetric and quantization_args.strategy in [
-            QuantizationStrategy.GROUP.group,
-            QuantizationStrategy.CHANNEL.group,
+            QuantizationStrategy.GROUP.value,
+            QuantizationStrategy.CHANNEL.value,
         ]:
             raise ValueError(
                 "Decompression of packed zero points is currently not supported"
@@ -181,7 +181,11 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         return decompressed_weight
 
 
-def pack_to_int32(value: torch.Tensor, num_bits: int, packed_dim=1) -> torch.Tensor:
+def pack_to_int32(
+    value: torch.Tensor,
+    num_bits: int,
+    packed_dim: Union[Literal[0], Literal[1]] = 1,
+) -> torch.Tensor:
     """
     Packs a tensor of quantized weights stored in int8 into int32s with padding
 
