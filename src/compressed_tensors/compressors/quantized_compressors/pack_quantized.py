@@ -241,7 +241,10 @@ def pack_to_int32(
 
 
 def unpack_from_int32(
-    value: torch.Tensor, num_bits: int, shape: torch.Size, packed_dim=1
+    value: torch.Tensor,
+    num_bits: int,
+    shape: torch.Size,
+    packed_dim: Union[Literal[0], Literal[1]] = 1,
 ) -> torch.Tensor:
     """
     Unpacks a tensor of packed int32 weights into individual int8s, maintaining the
