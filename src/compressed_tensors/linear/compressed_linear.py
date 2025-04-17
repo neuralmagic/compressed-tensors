@@ -15,6 +15,7 @@
 import warnings
 from typing import Dict, Tuple
 
+from compressed_tensors.utils.offload import get_execution_device
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.quantization import (
@@ -60,7 +61,7 @@ class CompressedLinear(Linear):
         """
         module.__class__ = CompressedLinear
         module.compressor = BaseCompressor.load_from_registry(quantization_format)
-        device = next(module.parameters()).device
+        init_device = get_execution_device(module)
 
         # this will initialize all the scales and zero points
         initialize_module_for_quantization(
@@ -79,7 +80,7 @@ class CompressedLinear(Linear):
         # populate compressed weights and quantization parameters
         for name, (shape, dtype) in compression_params.items():
             param = Parameter(
-                torch.empty(shape, device=device, dtype=dtype), requires_grad=False
+                torch.empty(shape, device=init_device, dtype=dtype), requires_grad=False
             )
             register_offload_parameter(module, name, param)
 
