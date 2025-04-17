@@ -74,14 +74,14 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
             QuantizationStrategy.GROUP.value,
             QuantizationStrategy.CHANNEL.value,
         ]:
-            zp_dim = (
+            zp_factor = (
                 quantization_args.group_size
                 if quantization_args.strategy == QuantizationStrategy.GROUP.value
-                else 1
+                else weight_shape[-1]
             )
 
             output["weight_zero_point"] = (
-                torch.Size((packed_size_zp, weight_shape[-1] // zp_dim)),
+                torch.Size((packed_size_zp, weight_shape[-1] // zp_factor)),
                 torch.int32,
             )
         return output
