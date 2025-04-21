@@ -14,7 +14,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Generator, Tuple, Union
+from typing import Any, Dict, Generator, Optional, Tuple, Union
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
@@ -121,7 +121,9 @@ class BaseQuantizationCompressor(BaseCompressor):
 
             else:
                 # omit saving zero points for symmetric quantization
-                if name.endswith("zero_point") and _is_symmetric(name, names_to_scheme):
+                if name.endswith("zero_point") and not self._should_save_zp(
+                    name, names_to_scheme
+                ):
                     continue
 
                 # omit saving for g_idx if uninitialized
@@ -129,21 +131,36 @@ class BaseQuantizationCompressor(BaseCompressor):
                 elif name.endswith("g_idx") and torch.any(value <= -1):
                     continue
 
-                else:
-                    compressed_dict[name] = value.to(save_device)
+                compressed_dict[name] = value.to(save_device)
 
         return compressed_dict
 
-    def _check_if_zp_pack_quantized(self, quant_args):
+    def _should_save_zp(
+        self, name: str, names_to_scheme: Dict[str, QuantizationScheme]
+    ) -> bool:
         from compressed_tensors.compressors import PackedQuantizationCompressor
 
-        if isinstance(self, PackedQuantizationCompressor):
-            if not quant_args.symmetric and quant_args.strategy in [
-                QuantizationStrategy.GROUP.value,
-                QuantizationStrategy.CHANNEL.value,
-            ]:
-                return True
-        return False
+        module_name, zp_name = name.rsplit(".", 1) if "." in name else ("", name)
+        scheme = names_to_scheme[module_name]
+
+        if zp_name == "weight_zero_point":
+            args = scheme.weights
+        if zp_name == "input_zero_point":
+            args = scheme.input_activations
+        if zp_name == "output_zero_point":
+            args = scheme.output_activations
+
+        symmetric = args.symmetric
+        packable_strats = [
+            QuantizationStrategy.GROUP.value,
+            QuantizationStrategy.CHANNEL.value,
+        ]
+        packed = (
+            isinstance(self, PackedQuantizationCompressor)
+            and args.strategy in packable_strats
+        )
+
+        return not symmetric and not packed
 
     def decompress(
         self,
@@ -191,13 +208,10 @@ class BaseQuantizationCompressor(BaseCompressor):
                 decompressed = self.decompress_weight(
                     compressed_data=weight_data, quantization_args=quant_args
                 )
-                yield merge_names(weight_name, "weight"), decompressed
+                weight_data["weight"] = decompressed
+                yield weight_name, weight_data
 
-    def _decompress_from_state_dict(
-        self,
-        state_dict: Dict[str, torch.Tensor],
-        names_to_scheme: Dict[str, QuantizationScheme],
-    ):
+    def _decompress_from_state_dict(self, state_dict, names_to_scheme):
         weight_mappings = get_nested_mappings_from_state_dict(
             state_dict, self.compression_param_names
         )
@@ -207,26 +221,9 @@ class BaseQuantizationCompressor(BaseCompressor):
                 weight_data[param_name] = param_value
 
             if "weight_scale" in weight_data:
-                quant_args = names_to_scheme[weight_name].weights
+                quant_args = names_to_scheme[weight_name]
                 decompressed = self.decompress_weight(
                     compressed_data=weight_data, quantization_args=quant_args
                 )
-                yield merge_names(weight_name, "weight"), decompressed
-
-
-def _is_symmetric(name: str, names_to_scheme: Dict[str, QuantizationScheme]) -> bool:
-    try:
-        weight_name, zp_name = name.rsplit(".", 1) if "." in name else ("", name)
-    except:
-        breakpoint()
-    scheme = names_to_scheme[weight_name]
-
-    if zp_name == "weight_zero_point":
-        quant_args = scheme.weights
-    if zp_name == "input_zero_point":
-        quant_args = scheme.input_activations
-    if zp_name == "output_zero_point":
-        quant_args = scheme.output_activations
-
-    assert quant_args is not None
-    return quant_args.symmetric
+                weight_data["weight"] = decompressed
+                yield weight_name, weight_data
