@@ -18,7 +18,7 @@ from typing import Any, Dict, Generator, Tuple, Union
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
-from compressed_tensors.quantization import QuantizationStrategy
+from compressed_tensors.quantization import QuantizationScheme, QuantizationStrategy
 from compressed_tensors.utils import (
     get_nested_mappings_from_state_dict,
     get_nested_weight_mappings,
