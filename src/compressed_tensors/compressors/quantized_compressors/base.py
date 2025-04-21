@@ -76,11 +76,12 @@ class BaseQuantizationCompressor(BaseCompressor):
         """
         Compresses a dense state dict
 
-        :param model_state: state dict of uncompressed model, consumed by compression
+        :param model_state: state dict of uncompressed model
         :param names_to_scheme: quantization args for each quantized weight, needed for
             quantize function to calculate bit depth
         :return: compressed state dict
         """
+        compressed_dict = {}
         save_device = "cpu"
 
         uncompressed_names = list(model_state.keys())
@@ -98,7 +99,7 @@ class BaseQuantizationCompressor(BaseCompressor):
 
                 # is scale does not exist, then weight cannot be compressed
                 if scale is None:
-                    model_state[name] = value.to(save_device)
+                    compressed_dict[name] = value.to(save_device)
                     continue
 
                 # compress values on cpu (memory movement too expensive)
@@ -116,22 +117,22 @@ class BaseQuantizationCompressor(BaseCompressor):
                 # update state dict
                 del model_state[name]
                 for key, value in compressed_values.items():
-                    model_state[prefix + key] = value.to(save_device)
+                    compressed_dict[prefix + key] = value.to(save_device)
 
             else:
                 # omit saving zero points for symmetric quantization
                 if name.endswith("zero_point") and _is_symmetric(name, names_to_scheme):
-                    del model_state[name]
+                    continue
 
                 # omit saving for g_idx if uninitialized
                 # TODO: does this case actually occur?
                 elif name.endswith("g_idx") and torch.any(value <= -1):
-                    del model_state[name]
+                    continue
 
                 else:
-                    model_state[name] = value.to(save_device)
+                    compressed_dict[name] = value.to(save_device)
 
-        return model_state
+        return compressed_dict
 
     def decompress(
         self,

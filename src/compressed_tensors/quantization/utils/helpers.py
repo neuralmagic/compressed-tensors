@@ -322,7 +322,6 @@ def calculate_compression_ratio(model: Module) -> float:
     :param model: pytorch module to calculate compression ratio for
     :return: compression ratio of the whole model
     """
-    return 0.0
     total_compressed = 0.0
     total_uncompressed = 0.0
     for name, submodule in tqdm(

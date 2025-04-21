@@ -187,7 +187,7 @@ def pack_to_int32(value: torch.Tensor, num_bits: int) -> torch.Tensor:
 
     # convert back to signed and torch
     packed = np.ascontiguousarray(packed).view(np.int32)
-    return torch.Tensor(torch.from_numpy(packed))
+    return torch.from_numpy(packed)
 
 
 def unpack_from_int32(

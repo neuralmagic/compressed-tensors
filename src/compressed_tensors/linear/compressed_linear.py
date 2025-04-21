@@ -15,7 +15,6 @@
 import warnings
 from typing import Dict, Tuple
 
-from compressed_tensors.utils.offload import get_execution_device
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.quantization import (
@@ -24,6 +23,7 @@ from compressed_tensors.quantization import (
     initialize_module_for_quantization,
 )
 from compressed_tensors.utils import register_offload_parameter
+from compressed_tensors.utils.offload import get_execution_device
 from torch import Tensor
 from torch.nn import Parameter
 from torch.nn.functional import linear

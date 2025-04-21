@@ -19,11 +19,20 @@ import os
 import re
 from contextlib import contextmanager
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, TypeVar, Union, Callable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import compressed_tensors
-from compressed_tensors.linear.compressed_linear import CompressedLinear
-from compressed_tensors.utils.offload import update_offload_parameter
 import torch
 import transformers
 from compressed_tensors.base import (
@@ -34,6 +43,7 @@ from compressed_tensors.base import (
 )
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
+from compressed_tensors.linear.compressed_linear import CompressedLinear
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
@@ -50,12 +60,14 @@ from compressed_tensors.quantization.utils import (
 from compressed_tensors.utils import (
     get_safetensors_folder,
     merge_names,
+    module_replace_dfs,
     update_parameter_data,
 )
 from compressed_tensors.utils.helpers import (
     fix_fsdp_module_name,
     is_compressed_tensors_config,
 )
+from compressed_tensors.utils.offload import update_offload_parameter
 from torch import Tensor
 from torch.nn import Module
 from tqdm import tqdm
@@ -66,31 +78,6 @@ from transformers.file_utils import CONFIG_NAME
 __all__ = ["ModelCompressor", "map_module_to_scheme"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
-
-def module_replace_dfs(
-    module: Module,
-    func: Callable[[Module], Module],
-    pre: bool = True,
-    progress: Union[bool, tqdm] = False,
-) -> Module:
-    if progress is True:
-        total = len(list(module.modules()))
-        progress = tqdm(total=total)
-
-    if pre:
-        module = func(module)
-
-    for name, child in list(module.named_children()):
-        module.add_module(name, module_replace_dfs(child, func, pre, progress))
-
-    if not pre:
-        module = func(module)
-
-    if isinstance(progress, tqdm):
-        progress.update(1)
-
-    return module
-
 
 
 if TYPE_CHECKING:
@@ -385,27 +372,28 @@ class ModelCompressor:
                 )
 
         return list(unexpected_keys)
-    
+
     def apply_compression_status(self, model: Module) -> Module:
         quantization_format = self.quantization_config.format
 
         def replace_with_compressed(module: Module) -> Module:
             scheme = getattr(module, "quantization_scheme", None)
             if isinstance(module, torch.nn.Linear) and scheme is not None:
-                #compressed_state_dict_2 = self.compress(module)  # debug
+                # compressed_state_dict_2 = self.compress(module)  # debug
 
                 module = CompressedLinear.from_linear(
                     module,
                     quantization_scheme=scheme,
-                    quantization_format=quantization_format
+                    quantization_format=quantization_format,
                 )
-                state_dict = module.compressor.compress(module.state_dict(), {"": scheme})  # added by compressed linear
+                state_dict = module.compressor.compress(
+                    module.state_dict(), {"": scheme}
+                )  # added by compressed linear
 
                 for name, value in state_dict.items():
                     update_offload_parameter(module, name, value)
 
             return module
-
 
         progress = tqdm(total=len(list(model.modules())))
         return module_replace_dfs(model, replace_with_compressed, progress=progress)
@@ -413,8 +401,6 @@ class ModelCompressor:
     def compress(
         self, model: Module, state_dict: Optional[Dict[str, Tensor]] = None
     ) -> Dict[str, Tensor]:
-        from torch.profiler import profile, ProfilerActivity
-        from .track_tensor_memory import TrackTensorAllocations
         """
         Compresses a dense state dict or model with sparsity and/or quantization
 
@@ -427,21 +413,16 @@ class ModelCompressor:
             state_dict = model.state_dict()
 
         if self.quantization_compressor is not None:
-            #with profile(activities=[ProfilerActivity.CUDA], profile_memory=True, record_shapes=True, with_stack=True) as prof:
-            #with TrackTensorAllocations() as prof:
             module_to_scheme = map_module_to_scheme(model)
             state_dict = self.quantization_compressor.compress(
                 state_dict, names_to_scheme=module_to_scheme
             )
-            # if self.quantization_config.format != CompressionFormat.dense.value:
-            #     self.quantization_config.quantization_status = (
-            #         QuantizationStatus.COMPRESSED
-            #     )
 
-            #prof.export_memory_timeline("memory.html")
-            #print(prof.key_averages().table(sort_by="self_device_memory_usage", row_limit=3))
-            #breakpoint()
-            return state_dict
+            # TODO: consider sparse compression to also be compression
+            if self.quantization_config.format != CompressionFormat.dense.value:
+                self.quantization_config.quantization_status = (
+                    QuantizationStatus.COMPRESSED
+                )
 
         if self.sparsity_compressor is not None:
             sparse_compression_targets: Set[str] = expand_target_names(

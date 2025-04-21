@@ -14,10 +14,11 @@
 
 import warnings
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 import numpy
 import torch
+import tqdm
 from transformers import AutoConfig
 
 
@@ -39,6 +40,7 @@ __all__ = [
     "pack_bitmasks",
     "unpack_bitmasks",
     "remove_suffix",
+    "module_replace_dfs",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -335,3 +337,28 @@ def remove_suffix(value: str, suffix: str) -> str:
     # can replace with str.removesuffix in python3.9+
     assert value.endswith(suffix)
     return value[: -len(suffix)]
+
+
+def module_replace_dfs(
+    module: torch.nn.Module,
+    func: Callable[[torch.nn.Module], torch.nn.Module],
+    pre: bool = True,
+    progress: Union[bool, tqdm.tqdm] = False,
+) -> torch.nn.Module:
+    if progress is True:
+        total = len(list(module.modules()))
+        progress = tqdm.tqdm(total=total)
+
+    if pre:
+        module = func(module)
+
+    for name, child in list(module.named_children()):
+        module.add_module(name, module_replace_dfs(child, func, pre, progress))
+
+    if not pre:
+        module = func(module)
+
+    if isinstance(progress, tqdm.tqdm):
+        progress.update(1)
+
+    return module
