@@ -414,6 +414,13 @@ class ModelCompressor:
 
         :param model_path: path to compressed weights
         :param model: pytorch model to load decompressed weights into
+
+        Note: decompress makes use of both _replace_sparsity_weights and _replace_weights
+        The variations in these methods are a result of the subtle variations between the sparsity
+        and quantization compressors. Specifically, quantization compressors return not just the
+        decompressed weight, but the quantization parameters (e.g scales, zero_point) whereas sparsity
+        compressors only return the decompressed weight.
+
         """
         model_path = get_safetensors_folder(model_path)
         sparse_decompressed = False

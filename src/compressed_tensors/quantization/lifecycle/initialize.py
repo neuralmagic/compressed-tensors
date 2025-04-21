@@ -169,8 +169,9 @@ def _initialize_scale_zero_point(
             expected_shape = (weight_shape[0], max(num_groups, 1))
 
     scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
-    # Should we really be setting a case here? More so would indicate that something
-    # is wrong if the condition below is not True
+    # TODO: consider erroring out in the future as if the dtype if not one fo these,
+    # there is likely bug
+
     if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
         scale_dtype = torch.float16
 

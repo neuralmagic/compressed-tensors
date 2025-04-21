@@ -279,7 +279,7 @@ def get_nested_mappings_from_state_dict(
     return nested_weight_mappings
 
 
-def get_quantization_parameter_to_path_mapping(model_path: str) -> Dict[str, Tensor]:
+def get_quantization_parameter_to_path_mapping(model_path: str) -> Dict[str, str]:
     """
     Given a model path, return a mapping between a parameter and its path
     on disk
