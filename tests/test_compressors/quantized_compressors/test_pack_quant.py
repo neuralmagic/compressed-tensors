@@ -228,9 +228,9 @@ def test_asymmetric_packed_support(strategy):
     )
 
     compressor = PackedQuantizationCompressor(config=quant_config)
-    quantized_modules_to_args = {"dummy": quant_config.config_groups["group_1"].weights}
+    quantized_modules_to_scheme = {"dummy": quant_config.config_groups["group_1"]}
     compressed_state_dict = compressor.compress(
-        dense_state_dict, names_to_scheme=quantized_modules_to_args
+        dense_state_dict, names_to_scheme=quantized_modules_to_scheme
     )
 
     # compressed state_dict adds one entry for shape

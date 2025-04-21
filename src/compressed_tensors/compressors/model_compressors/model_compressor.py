@@ -382,8 +382,6 @@ class ModelCompressor:
         def replace_with_compressed(module: Module) -> Module:
             scheme = getattr(module, "quantization_scheme", None)
             if isinstance(module, torch.nn.Linear) and scheme is not None:
-                # compressed_state_dict_2 = self.compress(module)  # debug
-
                 module = CompressedLinear.from_linear(
                     module,
                     quantization_scheme=scheme,
