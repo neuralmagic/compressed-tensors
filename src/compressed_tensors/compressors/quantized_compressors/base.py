@@ -18,7 +18,7 @@ from typing import Any, Dict, Generator, Tuple, Union
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
-from compressed_tensors.quantization import QuantizationScheme
+from compressed_tensors.quantization import QuantizationStrategy
 from compressed_tensors.utils import (
     get_nested_mappings_from_state_dict,
     get_nested_weight_mappings,
@@ -133,6 +133,17 @@ class BaseQuantizationCompressor(BaseCompressor):
                     compressed_dict[name] = value.to(save_device)
 
         return compressed_dict
+
+    def _check_if_zp_pack_quantized(self, quant_args):
+        from compressed_tensors.compressors import PackedQuantizationCompressor
+
+        if isinstance(self, PackedQuantizationCompressor):
+            if not quant_args.symmetric and quant_args.strategy in [
+                QuantizationStrategy.GROUP.value,
+                QuantizationStrategy.CHANNEL.value,
+            ]:
+                return True
+        return False
 
     def decompress(
         self,
