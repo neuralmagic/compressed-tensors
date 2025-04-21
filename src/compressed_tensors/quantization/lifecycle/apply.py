@@ -49,7 +49,7 @@ from torch.nn import Module
 
 
 __all__ = [
-    "load_pretrained_quantization_inputs_outputs",
+    "load_pretrained_quantization_parameters",
     "apply_quantization_config",
     "apply_quantization_status",
     "find_name_or_class_matches",
@@ -58,13 +58,15 @@ __all__ = [
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
-from compressed_tensors.utils.safetensors_load import get_quantization_state_dict
+from compressed_tensors.utils.safetensors_load import (
+    get_quantization_parameter_to_path_mapping,
+)
 
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def load_pretrained_quantization_inputs_outputs(
+def load_pretrained_quantization_parameters(
     model: Module,
     model_name_or_path: Optional[str] = None,
     load_weight_quantization: Optional[bool] = False,
@@ -73,42 +75,45 @@ def load_pretrained_quantization_inputs_outputs(
     Loads the quantization parameters (scale and zero point) from model_name_or_path to
     a model that has already been initialized with a quantization config.
 
-    NOTE: only loads inputs/output parameters. Weight parameters are loaded by the decompressor
+    NOTE: Will always load inputs/output parameters.
+    Will conditioanlly load weight parameters, if load_weight_quantization is set to True.
 
     :param model: model to load pretrained quantization parameters to
     :param model_name_or_path: Hugging Face stub or local folder containing a quantized
-    model, which is used to load quantization parameters
+        model, which is used to load quantization parameters
+    :param load_weight_quantization: whether or not the weight quantization parameters shoud
+        be laoded
     """
     model_path = get_safetensors_folder(model_name_or_path)
-    state_dict = get_quantization_state_dict(model_path)
+    mapping = get_quantization_parameter_to_path_mapping(model_path)
 
     for name, submodule in iter_named_leaf_modules(model):
         if not is_module_quantized(submodule):
             continue
         if submodule.quantization_scheme.input_activations is not None:
             base_name = "input"
-            _load_quant_args_from_state_dict(
+            _load_quant_args_from_mapping(
                 base_name=base_name,
                 module_name=name,
                 module=submodule,
-                state_dict=state_dict,
+                mapping=mapping,
             )
         if submodule.quantization_scheme.output_activations is not None:
             base_name = "output"
-            _load_quant_args_from_state_dict(
+            _load_quant_args_from_mapping(
                 base_name=base_name,
                 module_name=name,
                 module=submodule,
-                state_dict=state_dict,
+                mapping=mapping,
             )
 
         if load_weight_quantization and submodule.quantization_scheme.weights:
             base_name = "weight"
-            _load_quant_args_from_state_dict(
+            _load_quant_args_from_mapping(
                 base_name=base_name,
                 module_name=name,
                 module=submodule,
-                state_dict=state_dict,
+                mapping=mapping,
             )
 
 
@@ -246,10 +251,10 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     if status >= QuantizationStatus.INITIALIZED > current_status:
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
 
-        # TODO: Can likely be used for both init and frozen? Would need to test
         # When decompressing, we set the scale_dtype as the model's dtype
         # This is because the normal workflow of using the weight's dtype
         # will be incorrect as the model weight will be compressed
+        # Therfore, use the dtype set by the user using the PretrainedModel
         scale_dtype = None
         if status == QuantizationStatus.FROZEN:
             if hasattr(model, "dtype"):
@@ -362,8 +367,8 @@ def _infer_status(model: Module) -> Optional[QuantizationStatus]:
     return None
 
 
-def _load_quant_args_from_state_dict(
-    base_name: str, module_name: str, module: Module, state_dict: Dict
+def _load_quant_args_from_mapping(
+    base_name: str, module_name: str, module: Module, mapping: Dict
 ):
     # TODO: skip update and just register here, don't do it in initialize
     """
@@ -373,15 +378,15 @@ def _load_quant_args_from_state_dict(
     output_activations
     :param module_name: pytorch module name to look up in state_dict
     :module: pytorch module associated with module_name
-    :state_dict: state_dict to search for matching quantization parameters
+    :mapping: mapping to search fetch paths on disk for a given parameter
     """
     scale_name = f"{base_name}_scale"
     zp_name = f"{base_name}_zero_point"
     g_idx_name = f"{base_name}_g_idx"
 
-    state_dict_scale_path = state_dict.get(f"{module_name}.{scale_name}", None)
-    state_dict_zp_path = state_dict.get(f"{module_name}.{zp_name}", None)
-    state_dict_g_idx_path = state_dict.get(f"{module_name}.{g_idx_name}", None)
+    state_dict_scale_path = mapping.get(f"{module_name}.{scale_name}", None)
+    state_dict_zp_path = mapping.get(f"{module_name}.{zp_name}", None)
+    state_dict_g_idx_path = mapping.get(f"{module_name}.{g_idx_name}", None)
 
     if state_dict_g_idx_path is not None:
         with safe_open(state_dict_g_idx_path, framework="pt", device="cpu") as f:

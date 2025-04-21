@@ -112,6 +112,11 @@ class BaseSparseCompressor(BaseCompressor):
         :param model_path: path to compressed safetensors model (directory with
             one or more safetensors files) or compressed tensors file
         :param device: device to load decompressed weights onto
+        :param params_to_skip_load: a list of non-sparsity parameters (e.g quantization
+            parameters) that we want to skip loading. As the sparsity compresssor does
+            not handle quantized decompression, this should contain any quantization
+            parameters when decompressing stacked compressors. We want these parameters
+            to be handled by the quantization decompressor
         :return: iterator for generating decompressed weights
         """
         weight_mappings, ignored_params = get_nested_weight_mappings(

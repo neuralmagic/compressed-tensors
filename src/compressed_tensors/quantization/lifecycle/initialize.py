@@ -73,7 +73,7 @@ def initialize_module_for_quantization(
     :param scale_dtype: dtype to used for the scales, if overriding the
         weight dtype as the scale dtype
     """
-    # TODO: dont run in running decompression, unless we want to override the dtype using the value given from AutoModel
+    # TODO: don't initialize parameters when running decompression
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:
         # no scheme passed and layer not targeted for quantization - skip
@@ -114,7 +114,6 @@ def initialize_module_for_quantization(
                     f"for {type(module)}"
                 )
 
-        # 0s in fp8?
         if scheme.output_activations is not None:
             if not is_kv_cache_quant_scheme(scheme):
                 _initialize_scale_zero_point(

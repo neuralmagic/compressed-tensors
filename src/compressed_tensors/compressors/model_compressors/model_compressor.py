@@ -38,7 +38,7 @@ from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationStatus,
     apply_quantization_config,
-    load_pretrained_quantization_inputs_outputs,
+    load_pretrained_quantization_parameters,
 )
 from compressed_tensors.quantization.lifecycle import expand_target_names
 from compressed_tensors.quantization.quant_args import QuantizationArgs
@@ -427,7 +427,7 @@ class ModelCompressor:
                 params_to_ignore = self.quantization_compressor.compression_param_names
             # Sparse decompression is applied on the model_path
             # The compressor will try and load any quantization parameters as well
-            # params_to_skip_load will skip over these params from being loaded
+            # params_to_skip_load will skip over quantization params from being loaded
             dense_gen = self.sparsity_compressor.decompress(
                 model_path, params_to_skip_load=params_to_ignore
             )
@@ -451,7 +451,7 @@ class ModelCompressor:
                 # Load activation scales/zp or any other quantization parameters
                 # Conditionally load the weight quantization parameters if we have a dense compressor
                 # Or if a sparsity compressor has already been applied
-                load_pretrained_quantization_inputs_outputs(
+                load_pretrained_quantization_parameters(
                     model,
                     model_path,
                     # TODO: all weight quantization params will be moved to the compressor in a follow-up
@@ -549,11 +549,7 @@ class ModelCompressor:
             params_device = next(module.parameters()).device
             device = "cpu" if has_offloaded_params(module) else params_device
             delattr(module, param_name)
-            requires_grad = (
-                False
-                if data.dtype not in [torch.float16, torch.float32, torch.bfloat16]
-                else True
-            )
+            requires_grad = data.dtype in (torch.float16, torch.float32, torch.bfloat16)
             param = torch.nn.Parameter(data.to(device), requires_grad=requires_grad)
             register_offload_parameter(module, param_name, param)
 
@@ -586,11 +582,10 @@ class ModelCompressor:
                     # however, update_data does a good shape check - should be moved to the compressor
                     if param_name == "weight":
                         delattr(module, param_name)
-                        requires_grad = (
-                            False
-                            if param_data.dtype
-                            not in [torch.float16, torch.float32, torch.bfloat16]
-                            else True
+                        requires_grad = param_data.dtype in (
+                            torch.float16,
+                            torch.float32,
+                            torch.bfloat16,
                         )
                         param = torch.nn.Parameter(
                             param_data.to(device), requires_grad=requires_grad
