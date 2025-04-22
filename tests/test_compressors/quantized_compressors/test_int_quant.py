@@ -153,7 +153,7 @@ def test_reload_match(strategy, group_size, sc, zp, tmp_path):
         dense_state_dict["dummy2.weight"],
         scale=dense_state_dict["dummy2.weight_scale"],
         zero_point=dense_state_dict["dummy2.weight_zero_point"],
-        args=module_name_to_scheme["dummy2"].weight,
+        args=module_name_to_scheme["dummy2"].weights,
     )
     assert torch.equal(
         fake_quant_dummy2, reconstructed_dense["dummy2"].get("weight").to(torch.float32)

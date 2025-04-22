@@ -115,7 +115,6 @@ class BaseQuantizationCompressor(BaseCompressor):
                 )
 
                 # update state dict
-                del model_state[name]
                 for key, value in compressed_values.items():
                     compressed_dict[prefix + key] = value.to(save_device)
 

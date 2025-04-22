@@ -158,7 +158,7 @@ def test_reload_match(
         model.dummy.weight,
         scale=model.dummy.weight_scale,
         zero_point=model.dummy.weight_zero_point,
-        args=module_name_to_scheme["dummy"].weight,
+        args=module_name_to_scheme["dummy"].weights,
     )
     assert torch.equal(fake_quant_dummy, reconstructed_dense["dummy"].get("weight"))
 
