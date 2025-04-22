@@ -62,7 +62,6 @@ from compressed_tensors.utils import (
     get_safetensors_folder,
     has_offloaded_params,
     merge_names,
-    module_replace_dfs,
     register_offload_parameter,
     update_parameter_data,
 )
@@ -70,7 +69,6 @@ from compressed_tensors.utils.helpers import (
     fix_fsdp_module_name,
     is_compressed_tensors_config,
 )
-from compressed_tensors.utils.offload import update_offload_parameter
 from torch import Tensor
 from torch.nn import Module
 from tqdm import tqdm
