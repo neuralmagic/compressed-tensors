@@ -62,7 +62,7 @@ from compressed_tensors.utils import (
     get_safetensors_folder,
     has_offloaded_params,
     merge_names,
-    module_replace_dfs,
+    module_map_replace,
     register_offload_parameter,
     update_parameter_data,
 )
@@ -397,7 +397,7 @@ class ModelCompressor:
             return module
 
         progress = tqdm(total=len(list(model.modules())))
-        return module_replace_dfs(model, replace_with_compressed, progress=progress)
+        return module_map_replace(model, replace_with_compressed, progress=progress)
 
     def compress(
         self, model: Module, state_dict: Optional[Dict[str, Tensor]] = None

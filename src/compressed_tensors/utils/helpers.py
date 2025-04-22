@@ -40,7 +40,7 @@ __all__ = [
     "pack_bitmasks",
     "unpack_bitmasks",
     "remove_suffix",
-    "module_replace_dfs",
+    "module_map_replace",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -339,12 +339,26 @@ def remove_suffix(value: str, suffix: str) -> str:
     return value[: -len(suffix)]
 
 
-def module_replace_dfs(
+def module_map_replace(
     module: torch.nn.Module,
     func: Callable[[torch.nn.Module], torch.nn.Module],
-    pre: bool = True,
     progress: Union[bool, tqdm.tqdm] = False,
+    pre: bool = True,
 ) -> torch.nn.Module:
+    """
+    Replaces modules in a given `torch.nn.Module` recursively using a provided function.
+
+    This function traverses the module hierarchy and applies the `func` transformation
+    either before (`pre=True`) or after (`pre=False`) recursing into children modules.
+    Optionally displays progress using tqdm.
+
+    :param module: root module to replace
+    :param func: module mapping function
+    :param progress: if True, display a tqdm progress bar.
+        If a `tqdm.tqdm` instance is provided, the instance will be updated
+    :param pre: if True, apply with pre-order, post-order otherwise
+    :return: the modified module after applying the function to all submodules
+    """
     if progress is True:
         total = len(list(module.modules()))
         progress = tqdm.tqdm(total=total)
@@ -353,7 +367,7 @@ def module_replace_dfs(
         module = func(module)
 
     for name, child in list(module.named_children()):
-        module.add_module(name, module_replace_dfs(child, func, pre, progress))
+        module.add_module(name, module_map_replace(child, func, pre, progress))
 
     if not pre:
         module = func(module)
