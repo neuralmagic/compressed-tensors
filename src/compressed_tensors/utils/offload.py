@@ -353,6 +353,28 @@ def align_modules(
         ]
 
 
+@contextlib.contextmanager
+def disable_offload(module: torch.nn.Module):
+    if has_offloaded_params(module):
+        module._hf_hook.offload = False
+        yield
+        module._hf_hook.offload = True
+    else:
+        yield
+
+
+# TODO remove after https://github.com/neuralmagic/compressed-tensors/pull/282 lands
+@contextlib.contextmanager
+def align_modules(
+    modules: Iterable[torch.nn.Module], execution_device: Optional[torch.device] = None
+):
+    with contextlib.ExitStack() as stack:
+        for module in modules:
+            stack.enter_context(align_module_device(module, execution_device))
+            stack.enter_context(disable_offload(module))  # disable redudant onloading
+        yield
+
+
 """ Upstreamed Functions """
 
 
