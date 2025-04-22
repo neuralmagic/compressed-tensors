@@ -14,7 +14,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional, Tuple, Union
+from typing import Any, Dict, Generator, Tuple, Union
 
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
@@ -119,10 +119,8 @@ class BaseQuantizationCompressor(BaseCompressor):
                     compressed_dict[prefix + key] = value.to(save_device)
 
             else:
-                # omit saving zero points for symmetric quantization
-                if name.endswith("zero_point") and not self._should_save_zp(
-                    name, names_to_scheme
-                ):
+                # omit saving zero points for symmetric or packed quantization
+                if name.endswith("zero_point") and self._skip_zp(name, names_to_scheme):
                     continue
 
                 # omit saving for g_idx if uninitialized
@@ -134,7 +132,7 @@ class BaseQuantizationCompressor(BaseCompressor):
 
         return compressed_dict
 
-    def _should_save_zp(
+    def _skip_zp(
         self, name: str, names_to_scheme: Dict[str, QuantizationScheme]
     ) -> bool:
         from compressed_tensors.compressors import PackedQuantizationCompressor
@@ -150,16 +148,16 @@ class BaseQuantizationCompressor(BaseCompressor):
             args = scheme.output_activations
 
         symmetric = args.symmetric
-        packable_strats = [
+        packable_strategies = [
             QuantizationStrategy.GROUP.value,
             QuantizationStrategy.CHANNEL.value,
         ]
         packed = (
             isinstance(self, PackedQuantizationCompressor)
-            and args.strategy in packable_strats
+            and args.strategy in packable_strategies
         )
 
-        return not symmetric and not packed
+        return symmetric or packed
 
     def decompress(
         self,
