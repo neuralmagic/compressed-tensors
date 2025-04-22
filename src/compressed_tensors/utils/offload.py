@@ -103,10 +103,6 @@ def get_execution_device(module: torch.nn.Module) -> torch.device:
         return module._hf_hook.execution_device
     device = next(module.parameters()).device
 
-    # offload only gets set for leaf modules, fallback to checking for device type
-    if device.type == "meta":
-        return module._hf_hook.execution_device
-
     return device
 
 
