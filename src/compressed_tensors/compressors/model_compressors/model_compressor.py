@@ -19,18 +19,7 @@ import os
 import re
 from contextlib import contextmanager
 from copy import deepcopy
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, TypeVar, Union
 
 import compressed_tensors
 import torch
@@ -44,7 +33,6 @@ from compressed_tensors.base import (
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.sparse_compressors import DenseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
-from compressed_tensors.linear.compressed_linear import CompressedLinear
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,

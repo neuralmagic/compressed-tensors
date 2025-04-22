@@ -14,11 +14,10 @@
 
 import warnings
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import numpy
 import torch
-import tqdm
 from transformers import AutoConfig
 
 
