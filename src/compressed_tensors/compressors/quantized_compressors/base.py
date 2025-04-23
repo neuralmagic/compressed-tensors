@@ -163,7 +163,7 @@ class BaseQuantizationCompressor(BaseCompressor):
         self,
         path_to_model_or_tensors: Union[str, Path, Dict[str, Any]],
         names_to_scheme: Dict[str, QuantizationScheme],
-        device: torch.device = "cpu",
+        device: torch.device = torch.device("cpu"),
     ) -> Generator[Tuple[str, Tensor], None, None]:
         """
         Reads a compressed state dict located at path_to_model_or_tensors
