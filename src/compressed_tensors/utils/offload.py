@@ -359,7 +359,6 @@ def disable_offload(module: torch.nn.Module):
         yield
 
 
-# TODO remove after https://github.com/neuralmagic/compressed-tensors/pull/282 lands
 @contextlib.contextmanager
 def align_modules(
     modules: Union[torch.nn.Module, Iterable[torch.nn.Module]],
