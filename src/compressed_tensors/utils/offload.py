@@ -67,6 +67,7 @@ __all__ = [
     "delete_offload_parameter",
     "has_offloaded_params",
     "disable_hf_hook",
+    "disable_offload",
     "align_modules",
     "align_module_device",
 ]
@@ -343,18 +344,13 @@ def delete_from_weights_map(
 
 
 @contextlib.contextmanager
-def align_modules(
-    modules: Iterable[torch.nn.Module], execution_device: Optional[torch.device] = None
-):
-    with contextlib.ExitStack() as stack:
-        [
-            stack.enter_context(align_module_device(module, execution_device))
-            for module in modules
-        ]
-
-
-@contextlib.contextmanager
 def disable_offload(module: torch.nn.Module):
+    """
+    Disable module onloading and offloading. Parameters will stay on their current
+    device
+
+    :param module: module to disable offloading for
+    """
     if has_offloaded_params(module):
         module._hf_hook.offload = False
         yield
@@ -366,8 +362,17 @@ def disable_offload(module: torch.nn.Module):
 # TODO remove after https://github.com/neuralmagic/compressed-tensors/pull/282 lands
 @contextlib.contextmanager
 def align_modules(
-    modules: Iterable[torch.nn.Module], execution_device: Optional[torch.device] = None
+    modules: Union[torch.nn.Module, Iterable[torch.nn.Module]],
+    execution_device: Optional[torch.device] = None,
 ):
+    """
+    Onload modules to a device, disable onload attempts triggered by forward calls
+
+    :param modules: `torch.nn.Module` or iterable of `torch.nn.Module`s to onload
+    :param execution_device: device to onload to
+    """
+    modules = (modules,) if isinstance(modules, torch.nn.Module) else modules
+
     with contextlib.ExitStack() as stack:
         for module in modules:
             stack.enter_context(align_module_device(module, execution_device))
