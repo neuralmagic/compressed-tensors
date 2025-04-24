@@ -87,8 +87,8 @@ def calculate_qparams(
         if (
             quantization_args.num_bits == 4
             and quantization_args.type == QuantizationType.FLOAT
+            and global_scale is not None
         ):
-            assert global_scale is not None
             scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)  # Not needed
             scales = scales.to(FP8_E4M3_DATA.dtype)
         else:

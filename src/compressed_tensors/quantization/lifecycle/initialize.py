@@ -175,23 +175,26 @@ def _initialize_scale_zero_point(
 
     # NVFP4 support; use FP8 scales
     # For weight quant, attach global scales for NVFP4
-    # TODO: NVFP4 Scheme
     if (
         quantization_args.num_bits == 4
         and quantization_args.type == QuantizationType.FLOAT
     ):
-        scale_dtype = FP8_E4M3_DATA.dtype
-        # create and attach nvfp4 data
-        tensor_amax = torch.abs(module.weight.data).max().to(torch.float32)
-        # Setting data for now - could possibly be handled later in the pipeline
-        value = FP8_E4M3_DATA.max * FP4_E2M1_DATA.max / tensor_amax
-        # TODO: use model.weight.dtype after checking
-        value = value.to(torch.float32).to(device)
-        # Assuming the global scale can be torch.float16/bfloat16/module weight dtype and not only torch.float32?
-        init_global_scale = Parameter(value, requires_grad=False)
-        register_offload_parameter(
-            module, f"{base_name}_global_scale", init_global_scale
-        )
+        if base_name == "weight":
+            scale_dtype = FP8_E4M3_DATA.dtype
+            # create and attach nvfp4 data
+            tensor_amax = torch.abs(module.weight.data).max().to(torch.float32)
+            # Setting data for now - could possibly be handled later in the pipeline
+            value = FP8_E4M3_DATA.max * FP4_E2M1_DATA.max / tensor_amax
+            # TODO: use model.weight.dtype after checking
+            value = value.to(torch.float32).to(device)
+            # Assuming the global scale can be torch.float16/bfloat16/module weight dtype and not only torch.float32?
+            init_global_scale = Parameter(value, requires_grad=False)
+            register_offload_parameter(
+                module, f"{base_name}_global_scale", init_global_scale
+            )
+        else:
+            # input scales should be float32
+            scale_dtype = torch.float32
 
     # TODO: consider erroring out in the future as if the dtype if not one fo these,
     # there is likely bug

@@ -108,7 +108,15 @@ NVFP4 = dict(
         symmetric=True,
         dynamic=False,
         group_size=16,
-    )
+    ),
+    input_activations=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.TENSOR,
+        symmetric=True,
+        dynamic=False,
+        observer=None,
+    ),
 )
 
 # 8 bit integer weights and 8 bit activations quantization
