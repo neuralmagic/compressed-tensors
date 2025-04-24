@@ -193,17 +193,16 @@ def _initialize_scale_zero_point(
             module, f"{base_name}_global_scale", init_global_scale
         )
 
-        
     # TODO: consider erroring out in the future as if the dtype if not one fo these,
     # there is likely bug
-   
+
     if scale_dtype not in [
         torch.float16,
         torch.bfloat16,
         torch.float32,
         FP8_E4M3_DATA.dtype,
     ]:
-      scale_dtype = torch.float16
+        scale_dtype = torch.float16
 
     # initializes empty scale, zero point, and g_idx parameters for the module
     init_scale = Parameter(

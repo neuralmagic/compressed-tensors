@@ -377,9 +377,9 @@ class ModelCompressor:
 
         compressed_state_dict = state_dict
 
-        quantized_modules_to_args: Dict[str, QuantizationArgs] = (
-            map_modules_to_quant_args(model)
-        )
+        quantized_modules_to_args: Dict[
+            str, QuantizationArgs
+        ] = map_modules_to_quant_args(model)
 
         if self.quantization_compressor is not None:
             compressed_state_dict = self.quantization_compressor.compress(

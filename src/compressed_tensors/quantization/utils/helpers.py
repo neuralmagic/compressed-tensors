@@ -82,7 +82,6 @@ def calculate_qparams(
     zp_dtype = FP8_E4M3_DATA.dtype
 
     if quantization_args.symmetric:
-        # TODO: update for NVFP4 when applying observers
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
 
         if (
@@ -96,10 +95,15 @@ def calculate_qparams(
             # Divide over bit range over max value?
             scales = max_val_pos / (float(bit_range) / 2)
 
-        # TODO: clamp not implemented for FP8 - we shouldn't need to clamp this anyway as we're
-        # casting to FP8 on line 92?
-        if scales.dtype != FP8_E4M3_DATA.dtype:
+        if scales.dtype == FP8_E4M3_DATA.dtype:
+            # use the next largest fp8 value from 0
+            # Optionally, we swap to use the reciporcal
+            scales = torch.where(
+                scales == 0, torch.tensor(0.125, dtype=FP8_E4M3_DATA.dtype), scales
+            )
+        else:
             scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
+
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
         scales = (max_vals - min_vals) / float(bit_range)
