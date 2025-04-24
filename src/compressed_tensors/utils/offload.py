@@ -94,22 +94,6 @@ def is_module_offloaded(module: torch.nn.Module) -> bool:
     return has_offloaded_params(module)
 
 
-def get_execution_device(module: torch.nn.Module) -> torch.device:
-    """
-    :param module: module to check
-    :return: device module is loaded onto during forward pass
-    """
-    if has_offloaded_params(module):
-        return module._hf_hook.execution_device
-    device = next(module.parameters()).device
-
-    # offload only gets set for leaf modules, fallback to checking for device type
-    if device.type == "meta":
-        return module._hf_hook.execution_device
-
-    return device
-
-
 def get_offloaded_device(module: torch.nn.Module) -> torch.device:
     """
     :param module: module to check
@@ -158,6 +142,26 @@ def update_parameter_data(
 """ Candidates for Upstreaming """
 
 
+def get_execution_device(module: torch.nn.Module) -> torch.device:
+    """
+    Get the device which inputs should be moved to before module execution
+
+    :param module: module to check, may be offloaded
+    :return: onload device of module
+    """
+    if has_offloaded_params(module):
+        return module._hf_hook.execution_device
+
+    first_param = next(module.parameters(), None)
+    if first_param is None:
+        warnings.warn(
+            f"Unable able to infer execution device of {module}, falling back to CPU"
+        )
+        return torch.device("cpu")
+
+    return first_param.device
+
+
 def register_offload_parameter(
     module: torch.nn.Module,
     name: str,
@@ -200,7 +204,6 @@ def update_offload_parameter(
         provided, then infer device from parameters on module
     """
     param = getattr(module, name)
-    data = data.to(param.dtype)
     if param.data.shape != data.shape:
         warnings.warn(
             f"Shape of parameter being updated {param.data.shape} does not match shape "
