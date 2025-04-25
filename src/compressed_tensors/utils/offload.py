@@ -346,8 +346,8 @@ def delete_from_weights_map(
 @contextlib.contextmanager
 def disable_offload(module: torch.nn.Module):
     """
-    Disable module onloading and offloading. Parameters will stay on their current
-    device
+    Context manager to disable module onloading and offloading. Parameters will stay on
+    their current device
 
     :param module: module to disable offloading for
     """
@@ -365,7 +365,8 @@ def align_modules(
     execution_device: Optional[torch.device] = None,
 ):
     """
-    Onload modules to a device, disable onload attempts triggered by forward calls
+    Context manager for onloading modules to a device, and disabling onload and offload
+    attempts triggered by forward calls. Used for sequential onloading of layers
 
     :param modules: `torch.nn.Module` or iterable of `torch.nn.Module`s to onload
     :param execution_device: device to onload to
@@ -375,7 +376,7 @@ def align_modules(
     with contextlib.ExitStack() as stack:
         for module in modules:
             stack.enter_context(align_module_device(module, execution_device))
-            stack.enter_context(disable_offload(module))  # disable redudant onloading
+            stack.enter_context(disable_offload(module))  # disable redundant onloading
         yield
 
 
