@@ -22,9 +22,6 @@ jobs:
         - name: Set Env
           run: |
             pip3 install --upgrade pip && pip3 install --upgrade setuptools
-            pip3 install virtualenv
-            virtualenv venv
-            source venv/bin/activate
         - name: "⚙️ Install dependencies"
           run: pip3 install .[dev,accelerate]
         - name: "🔬 Running tests"
