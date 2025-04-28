@@ -33,6 +33,7 @@ from compressed_tensors.base import (
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.sparse_compressors import DenseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
+from compressed_tensors.linear.compressed_linear import CompressedLinear
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
@@ -40,6 +41,7 @@ from compressed_tensors.quantization import (
     QuantizationStatus,
     apply_quantization_config,
     load_pretrained_quantization_parameters,
+    unwrap_module_forward_quantized,
 )
 from compressed_tensors.quantization.lifecycle import expand_target_names
 from compressed_tensors.quantization.utils import (
@@ -58,7 +60,7 @@ from compressed_tensors.utils.helpers import (
     fix_fsdp_module_name,
     is_compressed_tensors_config,
 )
-from compressed_tensors.utils.offload import update_offload_parameter
+from compressed_tensors.utils.offload import disable_hf_hook, update_offload_parameter
 from torch import Tensor
 from torch.nn import Module
 from tqdm import tqdm
@@ -99,6 +101,9 @@ class ModelCompressor:
     :param sparsity_config: config specifying sparsity compression parameters
     :param quantization_config: config specifying quantization compression parameters
     """
+
+    sparsity_config: Optional[SparsityCompressionConfig] = None
+    quantization_config: Optional[QuantizationConfig] = None
 
     @classmethod
     def from_pretrained(
@@ -364,12 +369,22 @@ class ModelCompressor:
 
         return list(unexpected_keys)
 
-    def apply_compression_status(self, model: Module) -> Module:
+    def apply_compression_status(self, model: Module):
+        if self.quantization_config is None:
+            for module in model.modules():
+                module.quantization_status = QuantizationStatus.COMPRESSED
+            return
+
         quantization_format = self.quantization_config.format
 
         def replace_with_compressed(module: Module) -> Module:
             scheme = getattr(module, "quantization_scheme", None)
             if isinstance(module, torch.nn.Linear) and scheme is not None:
+                # TODO: after refactored into hook, just remove hook
+                if hasattr(module, "quantization_status"):
+                    with disable_hf_hook(module):
+                        unwrap_module_forward_quantized(module)
+
                 module = CompressedLinear.from_linear(
                     module,
                     quantization_scheme=scheme,
@@ -385,7 +400,7 @@ class ModelCompressor:
             return module
 
         progress = tqdm(total=len(list(model.modules())))
-        return module_map_replace(model, replace_with_compressed, progress=progress)
+        module_map_replace(model, replace_with_compressed, progress=progress)
 
     def compress(
         self, model: Module, state_dict: Optional[Dict[str, Tensor]] = None

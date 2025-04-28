@@ -21,9 +21,11 @@ import torch
 import torch.nn as nn
 from compressed_tensors.compressors import ModelCompressor
 from compressed_tensors.config import SparsityCompressionConfig
+from compressed_tensors.linear.compressed_linear import CompressedLinear
 from compressed_tensors.quantization import QuantizationConfig
 from safetensors.torch import save_file
 from tests.testing_utils import induce_sparsity, requires_hf_quantizer
+from transformers import AutoModelForCausalLM
 
 
 def sparsity_config():
@@ -365,3 +367,38 @@ def _get_combined_config(s_config, q_config):
         combined["sparsity_config"] = s_config
 
     return combined
+
+
+@pytest.mark.parametrize(
+    "model_stub,q_format,s_format",
+    [
+        (
+            "nm-testing/llama2.c-stories42M-gsm8k-quantized-only-uncompressed",
+            "float-quantized",
+            None,
+        ),
+        (
+            "nm-testing/llama2.c-stories42M-gsm8k-sparse-only-uncompressed",
+            None,
+            "sparse-24-bitmask",
+        ),
+        (
+            "nm-testing/llama2.c-stories42M-gsm8k-stacked-uncompressed",
+            "float-quantized",
+            "sparse-24-bitmask",
+        ),
+    ],
+)
+def test_apply_compression_status(model_stub, q_format, s_format):
+    model = AutoModelForCausalLM.from_pretrained(model_stub)
+    compressor = ModelCompressor.from_pretrained_model(model, s_format, q_format)
+    compressor.apply_compression_status(model)
+
+    for module in model.modules():
+        # scheme <=> CompressedLinear
+        has_scheme = hasattr(module, "quantization_scheme")
+        is_compressed = isinstance(module, CompressedLinear)
+        assert has_scheme == is_compressed
+
+    # can run to completion
+    model(**model.dummy_inputs)

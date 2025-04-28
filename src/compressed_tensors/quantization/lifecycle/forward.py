@@ -37,6 +37,7 @@ __all__ = [
     "dequantize",
     "fake_quantize",
     "wrap_module_forward_quantized",
+    "unwrap_module_forward_quantized",
     "forward_quantize",
 ]
 
@@ -310,6 +311,10 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
     bound_wrapped_forward = wrapped_forward.__get__(module, module.__class__)
     # set forward to wrapped forward
     setattr(module, "forward", bound_wrapped_forward)
+
+
+def unwrap_module_forward_quantized(module: Module):
+    delattr(module, "forward")  # revert to class implementation
 
 
 def forward_quantize(
