@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import math
+from typing import Tuple
 
 import numpy
 import torch
@@ -22,7 +23,7 @@ __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix"]
 
 # adapted from:
 # https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py
-def deterministic_hadamard_matrix(size: int):
+def deterministic_hadamard_matrix(size: int) -> numpy.ndarray:
     """
     Construct an Hadamard matrix.
 
@@ -33,19 +34,17 @@ def deterministic_hadamard_matrix(size: int):
 
     returns a (size, size) hadamard matrix
     """
+    if size <= 0:
+        raise ValueError("Cannot construct deterministic hadamard of size <= 0")
 
-    dtype = int
-    if size < 1:
-        lg2 = 0
-    else:
-        lg2 = int(math.log(size, 2))
-    if 2**lg2 != size:
-        raise ValueError("size must be an positive integer and a power of 2")
+    log2 = int(math.log(size, 2))
+    if size != 2**log2:
+        raise ValueError("Cannot construct deterministic hadamard of size != 2^n")
 
-    H = numpy.array([[1]], dtype=dtype)
+    H = numpy.array([[1]], dtype=int)
 
     # Sylvester's construction
-    for i in range(0, lg2):
+    for i in range(0, log2):
         H = numpy.vstack((numpy.hstack((H, H)), numpy.hstack((H, -H))))
 
     return H
@@ -79,7 +78,7 @@ def random_hadamard_matrix(size: int) -> torch.Tensor:
     return _matmul_hadU(Q)
 
 
-def _get_hadK(n, transpose=False):
+def _get_hadK(n: int, transpose: bool = False) -> Tuple[torch.Tensor, int]:
     # NOTE: we can easily extend the list of supported shapes/sizes
     # by adding to these methods
     hadK, K = None, None
@@ -98,7 +97,7 @@ def _get_hadK(n, transpose=False):
     return hadK, K
 
 
-def _matmul_hadU(X, transpose=False):
+def _matmul_hadU(X, transpose=False) -> torch.Tensor:
     n = X.shape[-1]
     # Check if we have the determined hadamard matrix
     hadK, K = _get_hadK(n, transpose)
@@ -132,11 +131,11 @@ def _matmul_hadU(X, transpose=False):
     return input.view(X.shape) / torch.tensor(n).sqrt()
 
 
-def _is_pow2(n):
+def _is_pow2(n: int) -> bool:
     return (n & (n - 1) == 0) and (n > 0)
 
 
-def _reshape_bits(packed_bits, original_size):
+def _reshape_bits(packed_bits: numpy.ndarray, original_size: int) -> numpy.ndarray:
     had_unpacked = numpy.unpackbits(packed_bits)
     had_unpacked = [1 if x == 1 else -1 for x in had_unpacked]
     had_unpacked = numpy.array(had_unpacked).reshape((original_size, original_size))
@@ -144,17 +143,17 @@ def _reshape_bits(packed_bits, original_size):
 
 
 # http://www.neilsloane.com/hadamard/index.html
-def _get_had12():
+def _get_had12() -> torch.Tensor:
     # fmt: off
     had_12 = numpy.array([128,  13,  29, 232, 235,  71, 218,  
         62, 209, 246, 139, 180, 157, 168, 237, 199, 106,  59], dtype=numpy.uint8)
     # fmt: on
     # TODO: just unpack during apply
     had_12_unpacked = _reshape_bits(had_12, original_size=12)
-    return torch.FloatTensor(had_12_unpacked)
+    return torch.tensor(had_12_unpacked)
 
 
-def _get_had20():
+def _get_had20() -> torch.Tensor:
     # fmt: off
     had_20 = numpy.array([128, 0,  13, 133, 121, 236,  43, 203,  97,  94, 155,  10, 252, 
         216, 87, 230, 194, 191,  54,  21, 249, 176, 171, 205, 133, 222, 108,  42, 243,  
@@ -163,4 +162,4 @@ def _get_had20():
     # fmt: on
     # TODO: just unpack during apply
     had_20_unpacked = _reshape_bits(had_20, original_size=20)
-    return torch.FloatTensor(had_20_unpacked)
+    return torch.tensor(had_20_unpacked)
