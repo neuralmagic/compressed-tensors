@@ -140,11 +140,13 @@ def _initialize_scale_zero_point(
     if quantization_args.dynamic:
         return
 
-    # begin on the same device as other parameters or cpu if offloaded.
-    # in the offloaded case, there's no point moving tensors to the execution device
-    # if they're going to be immediately offloaded by `register_offload_parameter`
+    # initialize on execution device to avoid performing quantized ops on cpu
     params_device = next(module.parameters()).device
-    device = module._hf_hook.execution_device if has_offloaded_params(module) else params_device
+    device = (
+        module._hf_hook.execution_device
+        if has_offloaded_params(module)
+        else params_device
+    )
 
     # infer expected scale/zero point shape
     if quantization_args.strategy == QuantizationStrategy.TOKEN:
