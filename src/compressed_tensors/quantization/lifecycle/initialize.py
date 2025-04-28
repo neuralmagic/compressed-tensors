@@ -32,7 +32,6 @@ from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
-    has_offloaded_params,
     register_offload_parameter,
 )
 from torch.nn import Module, Parameter
