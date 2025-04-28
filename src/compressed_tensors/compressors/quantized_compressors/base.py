@@ -163,7 +163,7 @@ class BaseQuantizationCompressor(BaseCompressor):
         self,
         path_to_model_or_tensors: Union[str, Path, Dict[str, Any]],
         names_to_scheme: Dict[str, QuantizationScheme],
-        device: torch.device = "cpu",
+        device: str = "cpu",
     ) -> Generator[Tuple[str, Tensor], None, None]:
         """
         Reads a compressed state dict located at path_to_model_or_tensors
@@ -172,7 +172,8 @@ class BaseQuantizationCompressor(BaseCompressor):
         :param path_to_model_or_tensors: path to compressed safetensors model (directory
             with one or more safetensors files) or compressed tensors file
         :param names_to_scheme: quantization scheme for each quantized weight
-        :param device: optional device to load intermediate weights into
+        :param device: optional device to load intermediate weights into (must be `str`,
+            not `torch.device`)
         :return: compressed state dict
         """
         if isinstance(path_to_model_or_tensors, (str, Path)):
@@ -189,7 +190,7 @@ class BaseQuantizationCompressor(BaseCompressor):
         self,
         path_to_model: Union[str, Path, Dict[str, Any]],
         names_to_scheme: Dict[str, QuantizationScheme],
-        device: torch.device,
+        device: str,
     ):
         weight_mappings = get_nested_weight_mappings(
             path_to_model, self.compression_param_names
