@@ -31,6 +31,7 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
     disable_hf_hook,
+    get_execution_device,
     has_offloaded_params,
     register_offload_parameter,
 )
@@ -141,12 +142,7 @@ def _initialize_scale_zero_point(
         return
 
     # initialize on execution device to avoid performing quantized ops on cpu
-    params_device = next(module.parameters()).device
-    device = (
-        module._hf_hook.execution_device
-        if has_offloaded_params(module)
-        else params_device
-    )
+    device = get_execution_device(module)
 
     # infer expected scale/zero point shape
     if quantization_args.strategy == QuantizationStrategy.TOKEN:
