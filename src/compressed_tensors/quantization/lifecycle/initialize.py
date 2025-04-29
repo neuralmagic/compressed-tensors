@@ -162,7 +162,7 @@ def _initialize_scale_zero_point(
             # (output_channels, 1)
             expected_shape = (weight_shape[0], 1)
         elif quantization_args.strategy == QuantizationStrategy.GROUP:
-            num_groups = weight_shape[1] // quantization_args.group_size
+            num_groups = torch.ceil(weight_shape[1] / quantization_args.group_size)
             expected_shape = (weight_shape[0], max(num_groups, 1))
 
     scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
