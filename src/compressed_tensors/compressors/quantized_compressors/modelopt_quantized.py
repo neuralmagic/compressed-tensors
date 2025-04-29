@@ -43,14 +43,15 @@ conversion_dict = {}
 for i in range(len(FLOAT_TO_E2M1)):
     conversion_dict[FLOAT_TO_E2M1[i]] = i
 
+
 def fp4_to_index(value):
     sign = torch.signbit(value)
     x = torch.abs(value)
     index = conversion_dict.get(x.item())
 
-    if not sign: # all positives 
+    if not sign:  # all positives
         return index
-    else: # all negatives
+    else:  # all negatives
         return index + 8
 
 
@@ -123,7 +124,9 @@ def pack_fp4_to_uint8(x: torch.Tensor):
     x_index = numpy.array([fp4_to_index(i) for i in x_flatten], dtype=numpy.uint8)
     x_index_bits = torch.from_numpy(numpy.unpackbits(x_index)).to("cuda:0")
 
-    packed_shape = torch.zeros([x_index_bits.shape[0] // 2]).to(torch.uint8).to("cuda:0")
+    packed_shape = (
+        torch.zeros([x_index_bits.shape[0] // 2]).to(torch.uint8).to("cuda:0")
+    )
     start = 0
     end = 16
     i = 0
@@ -131,7 +134,7 @@ def pack_fp4_to_uint8(x: torch.Tensor):
     # janky bit manipulation
     while end <= len(x_index_bits):
         subset = x_index_bits[start:end]
-        
+
         subset_a = subset[4:8]
         subset_b = subset[12:16]
         packed_shape[i + 4 : i + 8] = subset_a
@@ -150,22 +153,22 @@ def pack_fp4_to_uint8(x: torch.Tensor):
 # reference: : https://github.com/vllm-project/vllm/pull/16362
 def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.float32):
     assert a.dtype == torch.uint8
-    
+
     # Vectorized nibble processing
     a_flat = a.flatten()
     high = (a_flat & 0xF0) >> 4  # Upper nibbles
-    low = a_flat & 0x0F          # Lower nibbles
-    
+    low = a_flat & 0x0F  # Lower nibbles
+
     # Combine nibbles for batch processing
     combined = torch.stack((low, high), dim=1).flatten()
-    
+
     # Vectorized sign and magnitude extraction
     signs = (combined & 0x08).to(torch.bool)  # Sign bits
-    abs_vals = (combined & 0x07).to(torch.long)                # Magnitude indices
-    
+    abs_vals = (combined & 0x07).to(torch.long)  # Magnitude indices
+
     # Device-aware lookup and sign application
     kE2M1 = kE2M1ToFloat.to(device=a.device)
     values = kE2M1[abs_vals] * torch.where(signs, -1.0, 1.0)
-    
+
     # Reshape to final form
     return values.reshape(m, n * 2).to(dtype=dtype)
