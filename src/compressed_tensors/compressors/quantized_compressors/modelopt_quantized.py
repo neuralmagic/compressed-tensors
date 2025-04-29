@@ -36,33 +36,22 @@ FLOAT_TO_E2M1 = [
     3.0,
     4.0,
     6.0,
-    -0.0,
-    -0.5,
-    -1.0,
-    -1.5,
-    -2.0,
-    -3.0,
-    -4.0,
-    -6.0,
 ]
-conversion_dict = {
-    0.0: 0,
-    0.5: 1,
-    1.0: 2,
-    1.5: 3,
-    2.0: 4,
-    3.0: 5,
-    4.0: 6,
-    6.0: 7,
-    -0.0: 8,
-    -0.5: 9,
-    -1.0: 10,
-    -1.5: 11,
-    -2.0: 12,
-    -3.0: 13,
-    -4.0: 14,
-    -6.0: 15,
-}
+conversion_dict = {}
+
+# Dictionary between fp4 value and index
+for i in range(len(FLOAT_TO_E2M1)):
+    conversion_dict[FLOAT_TO_E2M1[i]] = i
+
+def fp4_to_index(value):
+    sign = torch.signbit(value)
+    x = torch.abs(value)
+    index = conversion_dict.get(x.item())
+
+    if not sign: # all positives 
+        return index
+    else: # all negatives
+        return index + 8
 
 
 @BaseCompressor.register(name=CompressionFormat.modelopt_quantized.value)
@@ -129,41 +118,54 @@ class ModelOptCompressor(BaseQuantizationCompressor):
 
 def pack_fp4_to_uint8(x: torch.Tensor):
     m, n = x.shape
+    x_flatten = x.flatten()
+    # convert to index value, unpack to bits
+    x_index = numpy.array([fp4_to_index(i) for i in x_flatten], dtype=numpy.uint8)
+    x_index_bits = torch.from_numpy(numpy.unpackbits(x_index)).to("cuda:0")
 
-    # convert to bits
-    x_array = x.cpu().to(torch.float32).numpy()
-    x_index = numpy.array(
-        [[conversion_dict[i] for i in row] for row in x_array], dtype=numpy.uint8
-    )
-    x_index_bits = numpy.unpackbits(x_index)
-
-    # unpack
-    packed_shape = numpy.zeros([x_index_bits.shape[0] // 2], numpy.uint8)
+    packed_shape = torch.zeros([x_index_bits.shape[0] // 2]).to(torch.uint8).to("cuda:0")
     start = 0
     end = 16
     i = 0
 
     # janky bit manipulation
-    while end < len(x_index_bits):
-        packed_shape[i + 4 : i + 8] = x_index_bits[start:end][4:8]
-        packed_shape[i : i + 4] = x_index_bits[start:end][12:16]
+    while end <= len(x_index_bits):
+        subset = x_index_bits[start:end]
+        
+        subset_a = subset[4:8]
+        subset_b = subset[12:16]
+        packed_shape[i + 4 : i + 8] = subset_a
+        packed_shape[i : i + 4] = subset_b
         start = end
         end = start + 16
         i += 8
 
     # pack
-    packed = numpy.packbits(packed_shape)
-    packed = torch.from_numpy(packed).to(torch.uint8)
-    # reshape
+    packed = numpy.packbits(packed_shape.cpu().numpy())
+    packed = torch.Tensor(packed).to(torch.uint8)
     packed = packed.reshape(m, n // 2)
     return packed
 
 
-# from vLLM
-def unpack_fp4_from_uint8(x: torch.Tensor, m: int, n: int):
-    v_2nd = x & 0xF
-    v_1st = (x >> 4) & 0xF
-    c = torch.stack((v_2nd, v_1st), dim=-1)
-    out = torch.tensor([FLOAT_TO_E2M1[x] for x in c.flatten()])
-    out = out.reshape(m, n).to(torch.float32)
-    return out
+# reference: : https://github.com/vllm-project/vllm/pull/16362
+def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.float32):
+    assert a.dtype == torch.uint8
+    
+    # Vectorized nibble processing
+    a_flat = a.flatten()
+    high = (a_flat & 0xF0) >> 4  # Upper nibbles
+    low = a_flat & 0x0F          # Lower nibbles
+    
+    # Combine nibbles for batch processing
+    combined = torch.stack((low, high), dim=1).flatten()
+    
+    # Vectorized sign and magnitude extraction
+    signs = (combined & 0x08).to(torch.bool)  # Sign bits
+    abs_vals = (combined & 0x07).to(torch.long)                # Magnitude indices
+    
+    # Device-aware lookup and sign application
+    kE2M1 = kE2M1ToFloat.to(device=a.device)
+    values = kE2M1[abs_vals] * torch.where(signs, -1.0, 1.0)
+    
+    # Reshape to final form
+    return values.reshape(m, n * 2).to(dtype=dtype)
