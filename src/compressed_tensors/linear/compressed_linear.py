@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import warnings
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
-from compressed_tensors.compressors.base import BaseCompressor
+from compressed_tensors.compressors import BaseCompressor
+from compressed_tensors.config import SparsityCompressionConfig
 from compressed_tensors.quantization import (
     QuantizationScheme,
     QuantizationStatus,
@@ -50,8 +51,9 @@ class CompressedLinear(Linear):
     def from_linear(
         cls,
         module: Linear,
-        quantization_scheme: QuantizationScheme,
+        quantization_scheme: Optional[QuantizationScheme],
         quantization_format: str,
+        sparsity_config: SparsityCompressionConfig,
     ):
         """
         :param module: dense linear module to replace
@@ -60,34 +62,41 @@ class CompressedLinear(Linear):
         :return: CompressedLinear module wrapping the input module
         """
         module.__class__ = CompressedLinear
-        module.compressor = BaseCompressor.load_from_registry(quantization_format)
-        init_device = get_execution_device(module)
-
-        # this will initialize all the scales and zero points
-        initialize_module_for_quantization(
-            module, quantization_scheme, force_zero_point=False
+        module.compressor = BaseCompressor.load_from_registry(
+            quantization_format, config=sparsity_config
         )
 
-        # get the shape and dtype of compressed parameters
-        compression_params: Dict[str, Tuple] = module.compressor.compression_param_info(
-            module.weight.shape, quantization_scheme.weights
-        )
-
-        # no need for this once quantization is initialized, will be replaced
-        # with the compressed parameter
-        delattr(module, "weight")
-
-        # populate compressed weights and quantization parameters
-        for name, (shape, dtype) in compression_params.items():
-            param = Parameter(
-                torch.empty(shape, device=init_device, dtype=dtype), requires_grad=False
+        # decompress (may be empty meta tensors)
+        if module.weight.device != torch.device("meta"):
+            init_device = get_execution_device(module)
+            state_dict = module.compressor.compress(
+                module.state_dict(), {"": quantization_scheme}
             )
+            state_dict = {
+                name: value.to(init_device) for name, value in state_dict.items()
+            }
+        else:
+            params: Dict[str, Tuple] = module.compressor.compression_param_info(
+                module.weight.shape, quantization_scheme.weights
+            )
+            state_dict = {
+                name: torch.empty(shape, device=torch.device("meta"), dtype=dtype)
+                for name, (shape, dtype) in params
+            }
+
+        # populate with compressed weights
+        for name, value in state_dict.items():
+            param = Parameter(value.to(init_device), requires_grad=False)
             register_offload_parameter(module, name, param)
+
+        # use weight as a cache for decompressed forward
+        delattr(module, "weight")
 
         # mark module as compressed
         module.quantization_status = QuantizationStatus.COMPRESSED
 
         # handles case where forward is wrapped in new_forward by accelerate hooks
+        # TODO: use disable_hf_hook
         if hasattr(module, "_old_forward"):
             module._old_forward = CompressedLinear.forward.__get__(
                 module, CompressedLinear
@@ -99,11 +108,9 @@ class CompressedLinear(Linear):
         """
         Decompresses the weight, then runs the wrapped forward pass
         """
-        if self.quantization_status == QuantizationStatus.COMPRESSED:
+        if not hasattr(self, "weight"):
             weight_data = self.compressor.decompress_module(self)
             param = Parameter(weight_data, requires_grad=False)
             register_offload_parameter(self, "weight", param)
-
-            self.quantization_status = QuantizationStatus.FROZEN
 
         return linear(input, self.weight, self.bias)

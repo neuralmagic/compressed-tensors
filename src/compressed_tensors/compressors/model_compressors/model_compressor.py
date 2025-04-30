@@ -370,32 +370,36 @@ class ModelCompressor:
         return list(unexpected_keys)
 
     def apply_compression_status(self, model: Module):
-        if self.quantization_config is None:
-            for module in model.modules():
-                module.quantization_status = QuantizationStatus.COMPRESSED
-            return
+        """
+        Replace model structure with a compressed model
 
-        quantization_format = self.quantization_config.format
+        """
+        # infer format
+        if self.quantization_config is not None:
+            format = self.quantization_config.format
+        elif self.sparsity_config is not None:
+            format = self.sparsity_config.format
+        else:
+            format = "dense"
+
+        # infer sparsity_config
 
         def replace_with_compressed(module: Module) -> Module:
-            scheme = getattr(module, "quantization_scheme", None)
-            if isinstance(module, torch.nn.Linear) and scheme is not None:
+            # only linears are compressed
+            if isinstance(module, torch.nn.Linear):
                 # TODO: after refactored into hook, just remove hook
                 if hasattr(module, "quantization_status"):
                     with disable_hf_hook(module):
                         unwrap_module_forward_quantized(module)
 
+                scheme = getattr(module, "quantization_scheme", None)
+
                 module = CompressedLinear.from_linear(
                     module,
-                    quantization_scheme=scheme,
-                    quantization_format=quantization_format,
+                    quantization_scheme=scheme,  # module
+                    quantization_format=format,  # global
+                    sparsity_config=self.sparsity_config,  # global
                 )
-                state_dict = module.compressor.compress(
-                    module.state_dict(), {"": scheme}
-                )  # added by compressed linear
-
-                for name, value in state_dict.items():
-                    update_offload_parameter(module, name, value)
 
             return module
 
