@@ -111,7 +111,7 @@ class ModelOptCompressor(BaseQuantizationCompressor):
         m, n = weight.shape
         unpacked = unpack_fp4_from_uint8(weight, m, n * 2)
         decompressed_weight = dequantize(
-            x_q=unpacked, scale=scale, global_scale=global_scale
+            x_q=unpacked, scale=scale, global_scale=global_scale, dtype=unpacked.dtype
         )
 
         return decompressed_weight
@@ -145,10 +145,13 @@ def pack_fp4_to_uint8(x: torch.Tensor):
 
     # pack
     packed = numpy.packbits(packed_shape.cpu().numpy())
-    packed = torch.Tensor(packed).to(torch.uint8)
+    packed = torch.Tensor(packed).to(torch.uint8).to("cuda:0")
     packed = packed.reshape(m, n // 2)
     return packed
 
+kE2M1ToFloat = torch.tensor(
+    [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0], dtype=torch.float32
+)
 
 # reference: : https://github.com/vllm-project/vllm/pull/16362
 def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.float32):
@@ -171,4 +174,4 @@ def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.float32):
     values = kE2M1[abs_vals] * torch.where(signs, -1.0, 1.0)
 
     # Reshape to final form
-    return values.reshape(m, n * 2).to(dtype=dtype)
+    return values.reshape(m, n).to(dtype=dtype)
