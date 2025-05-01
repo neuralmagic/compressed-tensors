@@ -109,6 +109,8 @@ class ModelOptCompressor(BaseQuantizationCompressor):
         scale = compressed_data["weight_scale"]
         global_scale = compressed_data["weight_global_scale"]
         m, n = weight.shape
+        # TODO: need a way to pass in the output_dtype - can't be assumed based on the scales
+        # for nvfp4 (maybe the global scale can be not fp32?)
         unpacked = unpack_fp4_from_uint8(weight, m, n * 2)
         decompressed_weight = dequantize(
             x_q=unpacked, scale=scale, global_scale=global_scale, dtype=unpacked.dtype
@@ -149,12 +151,13 @@ def pack_fp4_to_uint8(x: torch.Tensor):
     packed = packed.reshape(m, n // 2)
     return packed
 
+
 kE2M1ToFloat = torch.tensor(
     [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0], dtype=torch.float32
 )
 
 # reference: : https://github.com/vllm-project/vllm/pull/16362
-def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.float32):
+def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.float16):
     assert a.dtype == torch.uint8
 
     # Vectorized nibble processing
