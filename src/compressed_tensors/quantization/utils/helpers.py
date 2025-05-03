@@ -26,24 +26,26 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
 from tqdm import tqdm
+from transformers import AutoConfig
 
 
 __all__ = [
-    "infer_quantization_status",
-    "is_module_quantized",
-    "is_model_quantized",
-    "module_type",
-    "calculate_compression_ratio",
-    "get_torch_bit_depth",
-    "can_quantize",
-    "parse_out_kv_cache_args",
     "KV_CACHE_TARGETS",
+    "calculate_compression_ratio",
+    "calculate_qparams",
+    "calculate_range",
+    "can_quantize",
+    "compute_dynamic_scales_and_zp",
+    "get_torch_bit_depth",
+    "infer_quantization_status",
     "is_kv_cache_quant_scheme",
+    "is_model_quantized",
+    "is_model_quantized_from_path",
+    "is_module_quantized",
     "iter_named_leaf_modules",
     "iter_named_quantizable_modules",
-    "compute_dynamic_scales_and_zp",
-    "calculate_range",
-    "calculate_qparams",
+    "module_type",
+    "parse_out_kv_cache_args",
 ]
 
 # target the self_attn layer
@@ -176,22 +178,17 @@ def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]: 
 def is_module_quantized(module: Module) -> bool:
     """
     Check if a module is quantized, based on the existence of a non-empty quantization
-    scheme
+    scheme.
 
-    :param module: pytorch module to check
+    :param module: PyTorch module to check
     :return: True if module is quantized, False otherwise
     """
     if not hasattr(module, "quantization_scheme"):
         return False
 
-    if module.quantization_scheme.weights is not None:
-        return True
-
-    if module.quantization_scheme.input_activations is not None:
-        return True
-
-    if module.quantization_scheme.output_activations is not None:
-        return True
+    for attr in ("weights", "input_activations", "output_activations"):
+        if getattr(module.quantization_scheme, attr, None) is not None:
+            return True
 
     return False
 
@@ -209,6 +206,25 @@ def is_model_quantized(model: Module) -> bool:
         if is_module_quantized(submodule):
             return True
 
+    return False
+
+
+def is_model_quantized_from_path(path: str) -> bool:
+    """
+    Determine if model stub or path is quantized based
+    on the config
+
+    :param path: path to the model or HF stub
+    :return: True if config contains quantization_config from the given path
+
+    """
+    config = AutoConfig.from_pretrained(path)
+    if config is not None:
+        if (
+            hasattr(config, "quantization_config")
+            and config.quantization_config["quant_method"] == "compressed-tensors"
+        ):
+            return True
     return False
 
 
