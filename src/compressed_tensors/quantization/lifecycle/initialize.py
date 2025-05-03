@@ -23,9 +23,12 @@ from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
 from compressed_tensors.quantization.quant_args import (
+    FP4_E2M1_DATA,
+    FP8_E4M3_DATA,
     ActivationOrdering,
     QuantizationArgs,
     QuantizationStrategy,
+    QuantizationType,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
@@ -167,10 +170,39 @@ def _initialize_scale_zero_point(
             expected_shape = (weight_shape[0], max(num_groups, 1))
 
     scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
+
+    # NVFP4 support; use FP8 scales
+    # For weight quant, attach global scales for NVFP4
+    if (
+        quantization_args.num_bits == 4
+        and quantization_args.type == QuantizationType.FLOAT
+    ):
+        if base_name == "weight":
+            scale_dtype = FP8_E4M3_DATA.dtype
+            # create and attach nvfp4 data
+            tensor_amax = torch.abs(module.weight.data).max().to(torch.float32)
+            # Setting data for now - could possibly be handled later in the pipeline
+            value = FP8_E4M3_DATA.max * FP4_E2M1_DATA.max / tensor_amax
+            # TODO: use model.weight.dtype after checking
+            value = value.to(torch.float32).to(device)
+            # Assuming the global scale can be torch.float16/bfloat16/module weight dtype and not only torch.float32?
+            init_global_scale = Parameter(value, requires_grad=False)
+            register_offload_parameter(
+                module, f"{base_name}_global_scale", init_global_scale
+            )
+        else:
+            # input scales should be float32
+            scale_dtype = torch.float32
+
     # TODO: consider erroring out in the future as if the dtype if not one fo these,
     # there is likely bug
 
-    if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
+    if scale_dtype not in [
+        torch.float16,
+        torch.bfloat16,
+        torch.float32,
+        FP8_E4M3_DATA.dtype,
+    ]:
         scale_dtype = torch.float16
 
     # initializes empty scale, zero point, and g_idx parameters for the module
@@ -181,7 +213,14 @@ def _initialize_scale_zero_point(
     register_offload_parameter(module, f"{base_name}_scale", init_scale)
 
     if force_zero_point or not quantization_args.symmetric:
-        zp_dtype = quantization_args.pytorch_dtype()
+        if (
+            quantization_args.num_bits == 4
+            and quantization_args.type == QuantizationType.FLOAT
+        ):
+            zp_dtype = FP8_E4M3_DATA.dtype
+        else:
+            zp_dtype = quantization_args.pytorch_dtype()
+
         init_zero_point = Parameter(
             torch.zeros(expected_shape, device=device, dtype=zp_dtype),
             requires_grad=False,
