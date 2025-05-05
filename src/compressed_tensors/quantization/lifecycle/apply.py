@@ -108,6 +108,9 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
     :param model: model to load pretrained quantization parameters to
     :param model_name_or_path: Hugging Face stub or local folder containing a quantized
     model, which is used to load quantization parameters
+
+    Note: this currently does not process/support shared transforms i.e transforms with 
+    identical permutation
     """
     model_path = get_safetensors_folder(model_name_or_path)
     state_dict = get_quantization_state_dict(model_path)
@@ -192,6 +195,7 @@ def process_transforms_config(
                         QuantizationStatus.COMPRESSED,
                         QuantizationStatus.FROZEN,
                     ]:
+                        # empty tensor to load the parameter from disk
                         transform = Transforms.load_from_registry(
                             transform_type,
                             dtype=dtype,
@@ -201,17 +205,18 @@ def process_transforms_config(
                             **transform_creation_args,
                         )
                     else:
+                        # should mean we have identical permuation matrices for all shared submodules
                         transform = Transforms.load_from_registry(
                             transform_type,
                             dtype=dtype,
-                            transform_name=transform_name,
-                            permutation_name=permutation_name,
                             device=next(submodule.parameters()).device,
                             **transform_creation_args,
-                        )
-
+                        )  
+                            
+                        transform.transform_name = transform_name
+                        transform.permutation_name = permutation_name
                         transform.register_to_module(module=submodule)
-
+                
                     # add relevant transform data to the submodule as well
                     data = {
                         transform_name: {
@@ -226,7 +231,7 @@ def process_transforms_config(
                     else:
                         transform_data = TransformData(data=OrderedDict(data))
                         submodule.transform_data = transform_data
-    # 10358 for now mib; 1/3 of memory if caching/sharing parameter data
+
     return model
 
 
@@ -234,7 +239,8 @@ def apply_quantization_config(
     model: Module,
     config: Union[QuantizationConfig, None],
     run_compressed: bool = False,
-    transforms_config=None,
+    transforms_config: Optional[TransformationConfig] = None,
+    delay_forward_quantize: Optional[bool] = False,
 ) -> OrderedDict:
     """
     Initializes the model for quantization in-place based on the given config.
@@ -320,7 +326,9 @@ def apply_quantization_config(
         )
 
     # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
+    apply_quantization_status(
+        model, config.quantization_status, delay_forward_quantize=delay_forward_quantize
+    )
     return names_to_scheme
 
 
@@ -360,7 +368,9 @@ def process_kv_cache_config(
     return config
 
 
-def apply_quantization_status(model: Module, status: QuantizationStatus):
+def apply_quantization_status(
+    model: Module, status: QuantizationStatus, delay_forward_quantize: bool
+):
     """
     Applies in place the quantization lifecycle up to the given status
 
@@ -374,7 +384,9 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init
+                module,
+                force_zero_point=force_zero_point_init,
+                delay_forward_quantize=delay_forward_quantize,
             )
         )
 
