@@ -122,35 +122,35 @@ class ModelOptCompressor(BaseQuantizationCompressor):
 
 def pack_fp4_to_uint8(x: torch.Tensor):
     m, n = x.shape
-    x_flatten = x.flatten()
-    # convert to index value, unpack to bits
-    x_index = numpy.array([fp4_to_index(i) for i in x_flatten], dtype=numpy.uint8)
-    x_index_bits = torch.from_numpy(numpy.unpackbits(x_index))
+    device = x.device
 
-    packed_shape = (
-        torch.zeros([x_index_bits.shape[0] // 2]).to(torch.uint8)
-    )
-    start = 0
-    end = 16
-    i = 0
+    # Create lookup table for FP4 values to indices
+    # Map the absolute values to 0-7 indices
+    kE2M1 = torch.tensor(FLOAT_TO_E2M1, device=device)
 
-    # janky bit manipulation
-    while end <= len(x_index_bits):
-        subset = x_index_bits[start:end]
+    # Find closest valid FP4 value index for each element
+    abs_x = torch.abs(x)
+    abs_indices = torch.zeros_like(abs_x, dtype=torch.long)
+    for i, val in enumerate(kE2M1):
+        abs_indices = torch.where(torch.isclose(abs_x, val), i, abs_indices)
 
-        subset_a = subset[4:8]
-        subset_b = subset[12:16]
-        packed_shape[i + 4 : i + 8] = subset_a
-        packed_shape[i : i + 4] = subset_b
-        start = end
-        end = start + 16
-        i += 8
+    # Apply sign bit (bit 3) to get final 4-bit representation
+    indices = abs_indices + (torch.signbit(x) * 8).to(torch.long)
 
-    # pack
-    packed = numpy.packbits(packed_shape.cpu().numpy())
-    packed = torch.Tensor(packed).to(torch.uint8)
-    packed = packed.reshape(m, n // 2)
-    return packed
+    # Reshape to prepare for packing pairs of values
+    indices = indices.reshape(-1)
+
+    # Handle odd length by padding if necessary
+    if indices.numel() % 2 != 0:
+        indices = torch.cat([indices, torch.zeros(1, dtype=torch.long, device=device)])
+
+    # Reshape to pair consecutive elements
+    indices = indices.reshape(-1, 2)
+
+    # Pack pairs of 4-bit values into 8-bit values
+    packed = (indices[:, 0] | (indices[:, 1] << 4)).to(torch.uint8)
+
+    return packed.reshape(m, n // 2)
 
 
 kE2M1ToFloat = torch.tensor(
