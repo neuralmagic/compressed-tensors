@@ -14,5 +14,6 @@
 # flake8: noqa
 
 from .base import *
+from .modelopt_quantized import *
 from .naive_quantized import *
 from .pack_quantized import *
