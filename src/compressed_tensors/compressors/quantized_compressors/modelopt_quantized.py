@@ -26,6 +26,7 @@ from compressed_tensors.quantization import QuantizationArgs
 from compressed_tensors.quantization.lifecycle.forward import dequantize, quantize
 from torch import Tensor
 
+__all__ = ["pack_fp4_to_uint8", "unpack_fp4_from_uint8"]
 
 FLOAT_TO_E2M1 = [
     0.0,
@@ -124,10 +125,10 @@ def pack_fp4_to_uint8(x: torch.Tensor):
     x_flatten = x.flatten()
     # convert to index value, unpack to bits
     x_index = numpy.array([fp4_to_index(i) for i in x_flatten], dtype=numpy.uint8)
-    x_index_bits = torch.from_numpy(numpy.unpackbits(x_index)).to("cuda:0")
+    x_index_bits = torch.from_numpy(numpy.unpackbits(x_index))
 
     packed_shape = (
-        torch.zeros([x_index_bits.shape[0] // 2]).to(torch.uint8).to("cuda:0")
+        torch.zeros([x_index_bits.shape[0] // 2]).to(torch.uint8)
     )
     start = 0
     end = 16
@@ -147,7 +148,7 @@ def pack_fp4_to_uint8(x: torch.Tensor):
 
     # pack
     packed = numpy.packbits(packed_shape.cpu().numpy())
-    packed = torch.Tensor(packed).to(torch.uint8).to("cuda:0")
+    packed = torch.Tensor(packed).to(torch.uint8)
     packed = packed.reshape(m, n // 2)
     return packed
 
