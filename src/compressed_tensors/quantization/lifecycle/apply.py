@@ -108,6 +108,9 @@ def load_pretrained_quantization(model: Module, model_name_or_path: str):
     :param model: model to load pretrained quantization parameters to
     :param model_name_or_path: Hugging Face stub or local folder containing a quantized
     model, which is used to load quantization parameters
+
+    Note: this currently does not process/support shared transforms i.e transforms with 
+    identical permutation
     """
     model_path = get_safetensors_folder(model_name_or_path)
     state_dict = get_quantization_state_dict(model_path)
@@ -150,8 +153,6 @@ def process_transforms_config(
         # Each group/scheme targets one type of transform
         transform_type = group.transform_type
         transform_creation_args = group.transform_creation_args
-        shared = group.shared
-        transform = None 
 
         # Need a better name - too many groups
         for transform_arg in group.groups:
@@ -194,6 +195,7 @@ def process_transforms_config(
                         QuantizationStatus.COMPRESSED,
                         QuantizationStatus.FROZEN,
                     ]:
+                        # empty tensor to load the parameter from disk
                         transform = Transforms.load_from_registry(
                             transform_type,
                             dtype=dtype,
@@ -204,13 +206,12 @@ def process_transforms_config(
                         )
                     else:
                         # should mean we have identical permuation matrices for all shared submodules
-                        if transform is None:
-                            transform = Transforms.load_from_registry(
-                                transform_type,
-                                dtype=dtype,
-                                device=next(submodule.parameters()).device,
-                                **transform_creation_args,
-                            )  
+                        transform = Transforms.load_from_registry(
+                            transform_type,
+                            dtype=dtype,
+                            device=next(submodule.parameters()).device,
+                            **transform_creation_args,
+                        )  
                             
                         transform.transform_name = transform_name
                         transform.permutation_name = permutation_name
@@ -231,11 +232,6 @@ def process_transforms_config(
                         transform_data = TransformData(data=OrderedDict(data))
                         submodule.transform_data = transform_data
 
-                if not shared:
-                    transform = None
-
-    # 10358 for now mib; 1/3 of memory if caching/sharing parameter data
-    breakpoint()  # memory should not go up with inputs, same transform
     return model
 
 
