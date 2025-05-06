@@ -26,6 +26,7 @@ from compressed_tensors.quantization import QuantizationArgs
 from compressed_tensors.quantization.lifecycle.forward import dequantize, quantize
 from torch import Tensor
 
+
 __all__ = ["pack_fp4_to_uint8", "unpack_fp4_from_uint8"]
 
 FLOAT_TO_E2M1 = [
@@ -38,22 +39,6 @@ FLOAT_TO_E2M1 = [
     4.0,
     6.0,
 ]
-conversion_dict = {}
-
-# Dictionary between fp4 value and index
-for i in range(len(FLOAT_TO_E2M1)):
-    conversion_dict[FLOAT_TO_E2M1[i]] = i
-
-
-def fp4_to_index(value):
-    sign = torch.signbit(value)
-    x = torch.abs(value)
-    index = conversion_dict.get(x.item())
-
-    if not sign:  # all positives
-        return index
-    else:  # all negatives
-        return index + 8
 
 
 @BaseCompressor.register(name=CompressionFormat.modelopt_quantized.value)
@@ -97,6 +82,8 @@ class ModelOptCompressor(BaseQuantizationCompressor):
         )
         compressed_dict = {}
         weight_packed = pack_fp4_to_uint8(quantized_weight)
+        if device is not None:
+            weight_packed = weight_packed.to(device)
         compressed_dict["weight_packed"] = weight_packed
         return compressed_dict
 
@@ -110,9 +97,9 @@ class ModelOptCompressor(BaseQuantizationCompressor):
         scale = compressed_data["weight_scale"]
         global_scale = compressed_data["weight_global_scale"]
         m, n = weight.shape
-        # TODO: need a way to pass in the output_dtype - can't be assumed based on the scales
-        # for nvfp4 (maybe the global scale can be not fp32?)
-        unpacked = unpack_fp4_from_uint8(weight, m, n * 2)
+        # TODO: we may not always use the global_scale dtype as the detype to dequant
+        # We need to pass in the pretrained model dtype to the compressors
+        unpacked = unpack_fp4_from_uint8(weight, m, n * 2, dtype=global_scale.dtype)
         decompressed_weight = dequantize(
             x_q=unpacked, scale=scale, global_scale=global_scale, dtype=unpacked.dtype
         )
@@ -126,7 +113,7 @@ def pack_fp4_to_uint8(x: torch.Tensor):
 
     # Create lookup table for FP4 values to indices
     # Map the absolute values to 0-7 indices
-    kE2M1 = torch.tensor(FLOAT_TO_E2M1, device=device)
+    kE2M1 = torch.tensor(FLOAT_TO_E2M1, device=device, dtype=x.dtype)
 
     # Find closest valid FP4 value index for each element
     abs_x = torch.abs(x)
@@ -158,7 +145,7 @@ kE2M1ToFloat = torch.tensor(
 )
 
 # reference: : https://github.com/vllm-project/vllm/pull/16362
-def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.float16):
+def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.bfloat16):
     assert a.dtype == torch.uint8
 
     # Vectorized nibble processing
