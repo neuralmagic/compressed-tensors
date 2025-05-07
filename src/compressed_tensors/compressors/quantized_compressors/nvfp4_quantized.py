@@ -97,8 +97,7 @@ class NVFP4Compressor(BaseQuantizationCompressor):
         scale = compressed_data["weight_scale"]
         global_scale = compressed_data["weight_global_scale"]
         m, n = weight.shape
-        # TODO: we may not always use the global_scale dtype as the detype to dequant
-        # We need to pass in the pretrained model dtype to the compressors
+        # TODO: use a user provided dequant dtype
         unpacked = unpack_fp4_from_uint8(weight, m, n * 2)
         decompressed_weight = dequantize(
             x_q=unpacked, scale=scale, global_scale=global_scale, dtype=unpacked.dtype
@@ -107,7 +106,19 @@ class NVFP4Compressor(BaseQuantizationCompressor):
         return decompressed_weight
 
 
-def pack_fp4_to_uint8(x: torch.Tensor):
+def pack_fp4_to_uint8(x: torch.Tensor) -> torch.Tensor:
+    """
+    Packs a tensor with values in the fp4 range into uint8.
+    As there are 16 valid fp4 values, two fp4 values can be
+    packed into one uint8. Each fp4 value is mapped to its
+    particular index (e.g. 0.5 is mapped to index 1, 6.0 is mapped
+    to index 7) which is then represented using 4 bits. Consecutive
+    pairs of 4 bits are then packed into an uint8.
+
+    :param x: tensor to pack
+    returns: a packed tensor in uint8
+    """
+
     m, n = x.shape
     device = x.device
 
@@ -145,7 +156,19 @@ kE2M1ToFloat = torch.tensor(
 )
 
 # reference: : https://github.com/vllm-project/vllm/pull/16362
-def unpack_fp4_from_uint8(a: torch.Tensor, m: int, n: int, dtype=torch.bfloat16):
+def unpack_fp4_from_uint8(
+    a: torch.Tensor, m: int, n: int, dtype: Optional[torch.dtype] = torch.bfloat16
+) -> torch.Tensor:
+    """
+    Unpacks uint8 values into fp4. Each uint8 consists of two fp4 values
+    (i.e. first four bits correspond to one fp4 value, last four corresond to a consecutive
+    fp4 value). The bits represent an index, which are mapped to an fp4 value.
+
+    :param a: tensor to unpack
+    :param m: original dim 0 size of the unpacked tensor
+    :param n: original dim 1 size of the unpacked tensor
+    :param dtype: dense dtype to cast the unpacked tensor to
+    """
     assert a.dtype == torch.uint8
 
     # Vectorized nibble processing
