@@ -44,9 +44,8 @@ FLOAT_TO_E2M1 = [
 @BaseCompressor.register(name=CompressionFormat.nvfp4_quantized.value)
 class NVFP4Compressor(BaseQuantizationCompressor):
     """
-    Implements naive compression for quantized models. Weight of each
-    quantized layer is converted from its original float type to the closest Pytorch
-    type to the type specified by the layer's QuantizationArgs.
+    Implements compression of FP4 values. Weights of each quantized layer
+    are packed into uint8. Only supports symmetric weight compression for now.
     """
 
     @property
