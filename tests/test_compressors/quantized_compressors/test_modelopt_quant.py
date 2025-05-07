@@ -34,8 +34,8 @@ def test_pack_unpack():
     m, n = x.shape
     packed = pack_fp4_to_uint8(x)
     assert packed.dtype == torch.uint8
-    unpacked = unpack_fp4_from_uint8(packed, m, n, dtype=torch.float16)
-    assert unpacked.dtype == torch.float16
+    unpacked = unpack_fp4_from_uint8(packed, m, n, dtype=dense_dtype)
+    assert unpacked.dtype == dense_dtype
 
     assert torch.equal(unpacked, x)  # misleading as -0 and 0 are considered equal
     sign_bitx = torch.signbit(x)

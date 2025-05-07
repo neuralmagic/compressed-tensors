@@ -99,7 +99,7 @@ class ModelOptCompressor(BaseQuantizationCompressor):
         m, n = weight.shape
         # TODO: we may not always use the global_scale dtype as the detype to dequant
         # We need to pass in the pretrained model dtype to the compressors
-        unpacked = unpack_fp4_from_uint8(weight, m, n * 2, dtype=global_scale.dtype)
+        unpacked = unpack_fp4_from_uint8(weight, m, n * 2)
         decompressed_weight = dequantize(
             x_q=unpacked, scale=scale, global_scale=global_scale, dtype=unpacked.dtype
         )
