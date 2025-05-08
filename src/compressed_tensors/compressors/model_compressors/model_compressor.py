@@ -47,6 +47,8 @@ from compressed_tensors.quantization.utils import (
     iter_named_leaf_modules,
 )
 from compressed_tensors.utils import (
+    align_module_device,
+    delete_offload_parameter,
     get_execution_device,
     get_safetensors_folder,
     has_offloaded_params,
@@ -386,7 +388,10 @@ class ModelCompressor:
 
         for prefix, module in tqdm(model.named_modules(), desc="Compressing model"):
             if prefix in module_to_scheme or prefix in sparse_compression_targets:
-                state_dict = module.state_dict(prefix=f"{prefix}.")
+                # in the future, support compression on same device
+                with align_module_device(module, execution_device="cpu"):
+                    state_dict = module.state_dict(prefix=f"{prefix}.")
+
                 # quantization first
                 if prefix in module_to_scheme:
                     state_dict = self.quantization_compressor.compress(
@@ -433,7 +438,10 @@ class ModelCompressor:
 
         for prefix, module in tqdm(model.named_modules(), desc="Decompressing model"):
             if prefix in module_to_scheme or prefix in sparse_compression_targets:
-                state_dict = module.state_dict(prefix=f"{prefix}.")
+                # in the future, support decompression on same device
+                with align_module_device(module, execution_device="cpu"):
+                    state_dict = module.state_dict(prefix=f"{prefix}.")
+
                 # sparsity first
                 if prefix in sparse_compression_targets:
                     # sparse_compression_targets are automatically inferred by this fn
@@ -461,7 +469,7 @@ class ModelCompressor:
                 # remove any existing parameters
                 device = get_execution_device(module)
                 for name, _ in list(module.named_parameters()):
-                    delattr(module, name)
+                    delete_offload_parameter(module, name)
 
                 # replace with decompressed parameters
                 for name, value in state_dict.items():
