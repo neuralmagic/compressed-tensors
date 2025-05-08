@@ -274,7 +274,10 @@ def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None
 
 
 def iter_named_quantizable_modules(
-    model: Module, include_children: bool = True, include_attn: bool = False
+    model: Module,
+    include_children: bool = True,
+    include_attn: bool = False,
+    include_mlp: bool = False,
 ) -> Generator[Tuple[str, Module], None, None]:
     """
     Yield name and submodule of
@@ -306,6 +309,9 @@ def iter_named_quantizable_modules(
                     yield name, submodule
         if include_attn:
             if name.endswith("self_attn"):
+                yield name, submodule
+        if include_mlp:
+            if name.endswith("mlp"):
                 yield name, submodule
 
 

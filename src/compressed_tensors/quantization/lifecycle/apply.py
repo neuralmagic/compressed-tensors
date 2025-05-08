@@ -28,7 +28,11 @@ from compressed_tensors.quantization.lifecycle.compressed import (
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
-from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_args import (
+    FP4_E2M1_DATA,
+    FP8_E4M3_DATA,
+    QuantizationArgs,
+)
 from compressed_tensors.quantization.quant_config import (
     QuantizationConfig,
     QuantizationStatus,
@@ -238,6 +242,55 @@ def process_kv_cache_config(
     return config
 
 
+def is_attention_module(module: Module):
+    return "attention" in module.__class__.__name__.lower() and (
+        hasattr(module, "k_proj")
+        or hasattr(module, "v_proj")
+        or hasattr(module, "qkv_proj")
+    )
+
+
+def is_mlp_module(module: Module):
+    return "mlp" in module.__class__.__name__.lower() and (
+        hasattr(module, "gate_proj") or hasattr(module, "up_porj")
+    )
+
+
+def update_fp4_global_scales(model):
+    for name, submodule in iter_named_quantizable_modules(
+        model,
+        include_attn=True,
+        include_mlp=True,
+    ):
+        if is_attention_module(submodule):
+            q_weight = submodule.q_proj.weight.data
+            v_weight = submodule.v_proj.weight.data
+            k_weight = submodule.k_proj.weight.data
+            all_data = torch.cat((q_weight, v_weight, k_weight), dim=0)
+
+            scale_dtype = FP8_E4M3_DATA.dtype
+            tensor_amax = torch.abs(all_data.data).max().to(torch.float32)
+            value = FP8_E4M3_DATA.max * FP4_E2M1_DATA.max / tensor_amax
+            value = value.to(torch.float32)
+
+            update_parameter_data(submodule.q_proj, value, "weight_global_scale")
+            update_parameter_data(submodule.k_proj, value, "weight_global_scale")
+            update_parameter_data(submodule.v_proj, value, "weight_global_scale")
+
+        if is_mlp_module(submodule):
+            gate_data = submodule.gate_proj.weight.data
+            up_data = submodule.up_proj.weight.data
+            all_data = torch.cat((gate_data, up_data), dim=0)
+
+            scale_dtype = FP8_E4M3_DATA.dtype
+            tensor_amax = torch.abs(all_data.data).max().to(torch.float32)
+            value = FP8_E4M3_DATA.max * FP4_E2M1_DATA.max / tensor_amax
+            value = value.to(torch.float32)
+
+            update_parameter_data(submodule.gate_proj, value, "weight_global_scale")
+            update_parameter_data(submodule.up_proj, value, "weight_global_scale")
+
+
 def apply_quantization_status(model: Module, status: QuantizationStatus):
     """
     Applies in place the quantization lifecycle up to the given status
@@ -265,6 +318,10 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
                 module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
             )
         )
+
+        # hacks
+        if status == QuantizationStatus.INITIALIZED:
+            update_fp4_global_scales(model)
 
     if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
         model.apply(compress_quantized_weights)
