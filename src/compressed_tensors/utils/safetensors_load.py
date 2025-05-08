@@ -250,7 +250,7 @@ def get_nested_weight_mappings(
 
 
 def get_nested_mappings_from_state_dict(
-    state_dict,
+    state_dict: Dict[str, Tensor],
     params_to_nest: Iterable[str],
     return_unmatched_params: bool = False,
 ) -> Union[NestedStateDictType, Tuple[NestedStateDictType, Dict[str, Tensor]]]:
