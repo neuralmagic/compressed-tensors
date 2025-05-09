@@ -41,8 +41,8 @@ FLOAT_TO_E2M1 = [
 ]
 
 
-@BaseCompressor.register(name=CompressionFormat.nvfp4_quantized.value)
-class NVFP4Compressor(BaseQuantizationCompressor):
+@BaseCompressor.register(name=CompressionFormat.nvfp4_pack_quantized.value)
+class NVFP4PackedCompressor(BaseQuantizationCompressor):
     """
     Implements compression of FP4 values. Weights of each quantized layer
     are packed into uint8. Only supports symmetric weight compression for now.
@@ -132,7 +132,7 @@ def pack_fp4_to_uint8(x: torch.Tensor) -> torch.Tensor:
         abs_indices = torch.where(torch.isclose(abs_x, val), i, abs_indices)
 
     # Apply sign bit (bit 3) to get final 4-bit representation
-    indices = abs_indices + (torch.signbit(x) * 8).to(torch.long)
+    indices = abs_indices + (torch.signbit(x) << 3).to(torch.long)
 
     # Reshape to prepare for packing pairs of values
     indices = indices.reshape(-1)
