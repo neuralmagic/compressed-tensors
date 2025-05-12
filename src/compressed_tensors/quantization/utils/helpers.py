@@ -66,7 +66,11 @@ def calculate_qparams(
     :param max_vals: tensor of max value(s) to calculate scale(s) and zero point(s)
         from
     :param quantization_args: settings to quantization
-    :return: tuple of the calculated scale(s) and zero point(s)
+    :param global_scale: additional global scale to scale the locally generated scale
+        currently only applied/supported for Fp4
+
+    :return: tuple of the calculated scale(s) and zero point(s). For FP4, the calculated
+        scale if of dtype FP8
     """
     # based on the implementations for consuming quantized values,
     # 0.0 must always be representable within the quantized range
@@ -94,6 +98,7 @@ def calculate_qparams(
             and quantization_args.type == QuantizationType.FLOAT
             and global_scale is not None
         ):
+            # Conditionally scale the generated local scale by a global_scale
             scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
             scales = scales.to(FP8_E4M3_DATA.dtype)
         else:
