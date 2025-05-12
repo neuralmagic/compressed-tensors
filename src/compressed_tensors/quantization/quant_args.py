@@ -61,8 +61,7 @@ class FloatArgsFP4E2M1(FloatArgs):
         return x * sign
 
 
-# TODO: Remove soon in favour of a more descriptive FloatArgs
-FP8_DTYPE = torch.float8_e4m3fn
+FP4_E2M1_DATA = FloatArgsFP4E2M1(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
 
 FP8_E4M3_DATA = FloatArgs(
     exponent=4,
@@ -73,7 +72,8 @@ FP8_E4M3_DATA = FloatArgs(
     dtype=torch.float8_e4m3fn,
 )
 
-FP4_E2M1_DATA = FloatArgsFP4E2M1(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
+# TODO: Remove soon in favour of a more descriptive FloatArgs
+FP8_DTYPE = torch.float8_e4m3fn
 
 
 class QuantizationType(str, Enum):
@@ -275,8 +275,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
-        # TODO: required for the compressor
-        # Add FP4_nvfp4 type when updating naive_compressor
         if self.type == QuantizationType.FLOAT:
             if self.num_bits == 8:
                 return FP8_E4M3_DATA.dtype
