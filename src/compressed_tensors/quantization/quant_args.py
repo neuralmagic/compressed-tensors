@@ -78,18 +78,6 @@ class FP8_E4M3_DATA(FloatArgs):
 # TODO: Remove soon in favour of a more descriptive FloatArgs
 FP8_DTYPE = torch.float8_e4m3fn
 
-FP8_E4M3_DATA = FloatArgs(
-    exponent=4,
-    mantissa=3,
-    bits=8,
-    max=torch.finfo(torch.float8_e4m3fn).max,
-    min=torch.finfo(torch.float8_e4m3fn).min,
-    dtype=torch.float8_e4m3fn,
-)
-
-# TODO: Remove soon in favour of a more descriptive FloatArgs
-FP8_DTYPE = torch.float8_e4m3fn
-
 
 class QuantizationType(str, Enum):
     """
