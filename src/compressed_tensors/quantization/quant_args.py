@@ -35,7 +35,6 @@ __all__ = [
 ]
 
 
-@dataclass
 class FloatArgs:
     exponent: int
     mantissa: int
@@ -45,9 +44,15 @@ class FloatArgs:
     dtype: Optional[torch.dtype] = None
 
 
-@dataclass
-class FloatArgsFP4E2M1(FloatArgs):
-    def cast_to_fp4(self, x):
+class FP4_E2M1_DATA(FloatArgs):
+    exponent = 2
+    mantissa = 1
+    bits = 4
+    max = 6.0
+    min = -6.0
+
+    @staticmethod
+    def cast_to_fp4(x):
         sign = torch.sign(x)
         x = torch.abs(x)
         x[(x >= 0.0) & (x <= 0.25)] = 0.0
@@ -61,16 +66,14 @@ class FloatArgsFP4E2M1(FloatArgs):
         return x * sign
 
 
-FP4_E2M1_DATA = FloatArgsFP4E2M1(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
+class FP8_E4M3_DATA(FloatArgs):
+    exponent = 4
+    mantissa = 3
+    bits = 8
+    max = torch.finfo(torch.float8_e4m3fn).max
+    min = torch.finfo(torch.float8_e4m3fn).min
+    dtype = torch.float8_e4m3fn
 
-FP8_E4M3_DATA = FloatArgs(
-    exponent=4,
-    mantissa=3,
-    bits=8,
-    max=torch.finfo(torch.float8_e4m3fn).max,
-    min=torch.finfo(torch.float8_e4m3fn).min,
-    dtype=torch.float8_e4m3fn,
-)
 
 # TODO: Remove soon in favour of a more descriptive FloatArgs
 FP8_DTYPE = torch.float8_e4m3fn
