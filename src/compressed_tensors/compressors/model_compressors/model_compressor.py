@@ -278,7 +278,6 @@ class ModelCompressor:
         This function determines which weight keys are missing based on the
         applied compression techniques.
 
-
         :param model: The PyTorch model to check for missing keys.
         :return: A list of missing keys expected in the compressed state_dict.
         """
@@ -459,7 +458,8 @@ class ModelCompressor:
                         names_to_scheme=module_to_scheme,
                     )
                     # generates (mod_path, {param_name, param_val})
-                    # of compressed params only (ignores unused params)
+                    # of compressed params and used params, but not unused params
+                    # some used params are removed by get_unexpected_file_keys
                     state_dict = {
                         merge_names(module_path, param_name): param_value
                         for module_path, compressed_data in generator

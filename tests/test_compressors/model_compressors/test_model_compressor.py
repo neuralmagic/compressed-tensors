@@ -21,9 +21,7 @@ import torch
 import torch.nn as nn
 from compressed_tensors.compressors import ModelCompressor
 from compressed_tensors.config import SparsityCompressionConfig
-from compressed_tensors.config.sparse_24_bitmask import Sparse24BitMaskConfig
-from compressed_tensors.linear.compressed_linear import CompressedLinear
-from compressed_tensors.quantization import QuantizationConfig, QuantizationStatus
+from compressed_tensors.quantization import QuantizationConfig
 from safetensors.torch import save_file
 from tests.testing_utils import induce_sparsity, requires_hf_quantizer
 from transformers import AutoModelForCausalLM
@@ -388,6 +386,11 @@ def _get_combined_config(s_config, q_config):
             "float-quantized",
             "sparse-24-bitmask",
         ),
+        (
+            "nm-testing/llama2.c-stories15M-ultrachat-mixed-uncompressed",
+            "pack-quantized",
+            None,
+        ),
     ],
 )
 def test_compress_model(model_stub, q_format, s_config, tmpdir):
@@ -405,6 +408,7 @@ def test_compress_model(model_stub, q_format, s_config, tmpdir):
     # equivalent to eagerly compressing state dict
     assert compressed.keys() == true_compressed.keys()
     for key in compressed.keys():
+        assert compressed[key].dtype == true_compressed[key].dtype
         assert torch.all(compressed[key] == true_compressed[key]), f"{key}"
 
 
@@ -422,6 +426,10 @@ def test_compress_model(model_stub, q_format, s_config, tmpdir):
         (
             "nm-testing/llama2.c-stories42M-gsm8k-stacked-uncompressed",
             "nm-testing/llama2.c-stories42M-gsm8k-stacked-compressed",
+        ),
+        (
+            "nm-testing/llama2.c-stories15M-ultrachat-mixed-uncompressed",
+            "nm-testing/llama2.c-stories15M-ultrachat-mixed-compressed",
         ),
     ],
 )
@@ -451,10 +459,17 @@ def test_decompress_model(model_stub, comp_stub):
     compressor.decompress_model(model)
     decompressed = dict(model.state_dict())
 
+    # remove keys not in model definition
+    # NOTE it would be better if compressors only returned keys to keep, rather than
+    # relying on the model structure + missing keys to catch and remove them later
+    model_keys = true_decompressed_model.state_dict().keys()
+    decompressed = {key: val for key, val in decompressed.items() if key in model_keys}
+
     # equivalent to decompressing from disk
     assert decompressed.keys() == true_decompressed.keys()
     for key in decompressed.keys():
-        assert torch.allclose(decompressed[key], true_decompressed[key])
+        assert decompressed[key].dtype == true_decompressed[key].dtype
+        assert torch.all(decompressed[key] == true_decompressed[key]), f"{key}"
 
 
 def remove_empty_weight_zero_points(state_dict):
