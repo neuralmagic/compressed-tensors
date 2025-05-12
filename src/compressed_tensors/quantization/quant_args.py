@@ -279,8 +279,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             if self.num_bits == 8:
                 return FP8_E4M3_DATA.dtype
             else:
-                assert self.num_bits == 4
-                raise NotImplementedError("Not supported for FP4")
+                raise NotImplementedError("Only num_bits in (8) are supported")
         elif self.type == QuantizationType.INT:
             if self.num_bits <= 8:
                 return torch.int8
@@ -311,9 +310,10 @@ def round_to_quantized_type(
     if args.type == QuantizationType.FLOAT:
         if args.num_bits == 8:
             rounded = tensor.to(FP8_E4M3_DATA.dtype)
-        else:
-            assert args.num_bits == 4
+        elif args.num_bits == 4:
             rounded = FP4_E2M1_DATA.cast_to_fp4(tensor)
+        else:
+            raise NotImplementedError("Only num_bits in (4, 8) are supported")
     elif args.type == QuantizationType.INT:
         rounded = torch.round(tensor)
     else:
