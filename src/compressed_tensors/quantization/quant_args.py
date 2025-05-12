@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import warnings
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Union
 
@@ -77,6 +78,17 @@ class FP8_E4M3_DATA(FloatArgs):
 
 # TODO: Remove soon in favour of a more descriptive FloatArgs
 FP8_DTYPE = torch.float8_e4m3fn
+
+FP8_E4M3_DATA = FloatArgs(
+    exponent=4,
+    mantissa=3,
+    bits=8,
+    max=torch.finfo(torch.float8_e4m3fn).max,
+    min=torch.finfo(torch.float8_e4m3fn).min,
+    dtype=torch.float8_e4m3fn,
+)
+
+FP4_E2M1_DATA = FloatArgsFP4E2M1(exponent=2, mantissa=1, bits=4, max=6.0, min=-6.0)
 
 
 class QuantizationType(str, Enum):
@@ -278,6 +290,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
+        # TODO: required for the compressor
+        # Add FP4_nvfp4 type when updating naive_compressor
         if self.type == QuantizationType.FLOAT:
             if self.num_bits == 8:
                 return FP8_E4M3_DATA.dtype
@@ -313,10 +327,16 @@ def round_to_quantized_type(
     if args.type == QuantizationType.FLOAT:
         if args.num_bits == 8:
             rounded = tensor.to(FP8_E4M3_DATA.dtype)
+<<<<<<< HEAD
         elif args.num_bits == 4:
             rounded = FP4_E2M1_DATA.cast_to_fp4(tensor)
         else:
             raise NotImplementedError("Only num_bits in (4, 8) are supported")
+=======
+        else:
+            assert args.num_bits == 4
+            rounded = FP4_E2M1_DATA.cast_to_fp4(tensor)
+>>>>>>> e02527c (add nvfp4 args)
     elif args.type == QuantizationType.INT:
         rounded = torch.round(tensor)
     else:
