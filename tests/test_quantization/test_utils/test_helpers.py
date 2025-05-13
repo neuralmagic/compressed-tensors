@@ -57,6 +57,7 @@ def test_calculate_qparams(keepdims, strategy, exp_shape):
         assert scale.shape == exp_shape
         assert zp.shape == exp_shape
 
+
 def test_global_scale():
     # add test for global scale calculation
-    pass 
+    pass

@@ -184,6 +184,7 @@ def _initialize_scale_zero_point(
         and quantization_args.type == QuantizationType.FLOAT
         and base_name == "weight"
     ):
+        scale_dtype = FP8_E4M3_DATA.dtype
         # When applying weight-only FP4 quantization, generate a global_scale
         # This scale is applied during runtime to ensure that the generated
         # local scale falls properly within the FP8 range (i.e max value is FP8_max)
