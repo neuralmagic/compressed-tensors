@@ -177,7 +177,8 @@ def _initialize_scale_zero_point(
     scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
     # TODO: consider erroring out in the future as if the dtype if not one fo these,
     # there is likely bug
-
+    # TODO: maybe add a short cutting utility so we don't have a ton of if/else
+    # everywhere
     if (
         quantization_args.num_bits == 4
         and quantization_args.type == QuantizationType.FLOAT
@@ -194,12 +195,10 @@ def _initialize_scale_zero_point(
             module, f"{base_name}_global_scale", init_global_scale
         )
 
-    if scale_dtype not in [
-        torch.float16,
-        torch.bfloat16,
-        torch.float32,
-        FP8_E4M3_DATA.dtype,
-    ]:
+    if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32,] and not (
+        quantization_args.num_bits == 4
+        and quantization_args.type == QuantizationType.FLOAT
+    ):
         scale_dtype = torch.float16
 
     # initializes empty scale, zero point, and g_idx parameters for the module
