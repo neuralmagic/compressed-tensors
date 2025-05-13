@@ -35,6 +35,7 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     generate_global_scale,
     is_kv_cache_quant_scheme,
+    iter_named_quantizable_modules,
 )
 from compressed_tensors.utils import (
     disable_hf_hook,
