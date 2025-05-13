@@ -155,6 +155,11 @@ def test_initialize_module_for_quantization_offloaded(
             QuantizationArgs(strategy="group", group_size=2, actorder="weight"),
             None,
         ),
+        # Ensure no global scale if not fp4
+        (
+            QuantizationArgs(strategy="group", group_size=16, type="float", num_bits=4),
+            None,
+        ),
         (
             QuantizationArgs(strategy="group", group_size=16, type="float", num_bits=4),
             None,
@@ -217,3 +222,6 @@ def test_initialize_quantization_parameters(weights, input_activations):
             assert getattr(layer, f"{q_param_name}_g_idx").shape == (
                 layer.weight.shape[1],
             )
+
+def test_fused_global_scales():
+    pass 
