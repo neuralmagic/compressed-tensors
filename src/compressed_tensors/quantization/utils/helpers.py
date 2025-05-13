@@ -453,8 +453,16 @@ def generate_global_scale(
     input_tensor: torch.Tensor,
     dtype=torch.float32,
 ):
+    """
+    Generate a global scale for an entire tensor (input_tensor).
+    Goal of the scale is to ensure that the quantization (local) scale
+    falls into the approproiate dtype range.
+
+    E.g. for NVFp4, group (local) scales are in dtype FP8. The global_scale
+    attempts to use the entire FP8 dtype range while mapping a per-group max
+    to the FP4 max.
+    """
     scale_dtype = scale_data.dtype
     tensor_amax = torch.abs(input_tensor.data).max().to(dtype)
-    value = scale_data.max * quant_data.max / tensor_amax
-    value = value.to(dtype)
-    return value
+    global_scale = scale_data.max * quant_data.max / tensor_amax
+    return global_scale.to(dtype)
