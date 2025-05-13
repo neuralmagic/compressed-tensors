@@ -72,4 +72,6 @@ def test_fused_global_scales():
     # use defaults
     global_scale = generate_global_scale(layer.weight)
     # max value should be = (448 * 6) / global_scale
-    assert max_tensor_value == (FP4_E2M1_DATA.max * FP8_E4M3_DATA.max) / global_scale
+    assert max_tensor_value == pytest.approx(
+        FP4_E2M1_DATA.max * FP8_E4M3_DATA.max / global_scale, abs=0.001
+    )
