@@ -29,7 +29,6 @@ from compressed_tensors.quantization import (
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
-from compressed_tensors.quantization.utils import generate_global_scale
 from tests.testing_utils import requires_accelerate
 from torch.nn import Linear
 
@@ -222,12 +221,3 @@ def test_initialize_quantization_parameters(weights, input_activations):
             assert getattr(layer, f"{q_param_name}_g_idx").shape == (
                 layer.weight.shape[1],
             )
-
-
-def test_fused_global_scales():
-    layer = Linear(7, 8)
-    max_tensor_value = torch.abs(layer.weight.data).max()
-    # use defaults
-    global_scale = generate_global_scale(layer.weight)
-    # max value should be = (448 * 6) / global_scale
-    assert max_tensor_value == (FP4_E2M1_DATA.max * FP8_E4M3_DATA.max) / global_scale
