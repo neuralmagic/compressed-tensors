@@ -16,7 +16,7 @@
 import logging
 import math
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
@@ -41,6 +41,7 @@ from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
     register_offload_parameter,
+    update_parameter_data,
 )
 from torch.nn import Module, Parameter
 
@@ -283,23 +284,38 @@ def update_fused_layer_weight_global_scales(model: torch.nn.Module):
             hasattr(module, "gate_proj") or hasattr(module, "up_porj")
         )
 
+    def _valid_fp4_quant(layer_list: List[torch.nn.Linear]):
+        """
+        Return True if all the linear layers in the layer_list are
+        NVFP4A16 quantized.
+        """
+        for layer in layer_list:
+            scheme = getattr(layer, "quantization_scheme", None)
+            if scheme is None:
+                return False
+
+            weight_quant_args = scheme.weights
+
+            if not (
+                weight_quant_args.num_bits == 4
+                and weight_quant_args.type == QuantizationType.FLOAT
+            ):
+                return False
+        return True
+
     for name, submodule in iter_named_quantizable_modules(
         model,
         include_attn=True,
         include_mlp=True,
     ):
-        scheme = getattr(submodule, "quantization_scheme", None)
-        if scheme is None:
-            continue
-
-        weight_quant_args = scheme.weights
-        if not (
-            weight_quant_args.num_bits == 4
-            and weight_quant_args.type == QuantizationType.FLOAT
-        ):
-            continue
 
         if _is_attention_module(submodule):
+
+            if not _valid_fp4_quant(
+                [submodule.q_proj, submodule.v_proj, submodule.k_proj]
+            ):
+                continue
+
             q_weight = submodule.q_proj.weight.data
             v_weight = submodule.v_proj.weight.data
             k_weight = submodule.k_proj.weight.data
@@ -313,6 +329,9 @@ def update_fused_layer_weight_global_scales(model: torch.nn.Module):
             update_parameter_data(submodule.v_proj, value, "weight_global_scale")
 
         if _is_mlp_module(submodule):
+            if not _valid_fp4_quant([submodule.gate_proj, submodule.up_proj]):
+                continue
+
             gate_data = submodule.gate_proj.weight.data
             up_data = submodule.up_proj.weight.data
 
