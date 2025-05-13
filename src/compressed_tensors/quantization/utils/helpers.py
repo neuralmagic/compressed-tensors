@@ -45,6 +45,7 @@ __all__ = [
     "compute_dynamic_scales_and_zp",
     "calculate_range",
     "calculate_qparams",
+    "generate_global_scale",
 ]
 
 # target the self_attn layer
@@ -291,7 +292,10 @@ def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None
 
 
 def iter_named_quantizable_modules(
-    model: Module, include_children: bool = True, include_attn: bool = False
+    model: Module,
+    include_children: bool = True,
+    include_attn: bool = False,
+    include_mlp: bool = False,
 ) -> Generator[Tuple[str, Module], None, None]:
     """
     Yield name and submodule of
@@ -323,6 +327,9 @@ def iter_named_quantizable_modules(
                     yield name, submodule
         if include_attn:
             if name.endswith("self_attn"):
+                yield name, submodule
+        if include_mlp:
+            if name.endswith("mlp"):
                 yield name, submodule
 
 
@@ -438,3 +445,16 @@ def parse_out_kv_cache_args(
         kv_cache_args = None
 
     return kv_cache_args, quant_scheme_to_layers
+
+
+def generate_global_scale(
+    scale_data: FP8_E4M3_DATA,
+    quant_data: FP4_E2M1_DATA,
+    input_tensor: torch.Tensor,
+    dtype=torch.float32,
+):
+    scale_dtype = scale_data.dtype
+    tensor_amax = torch.abs(input_tensor.data).max().to(dtype)
+    value = scale_data.max * quant_data.max / tensor_amax
+    value = value.to(dtype)
+    return value

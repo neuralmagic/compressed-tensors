@@ -32,7 +32,10 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
+from compressed_tensors.quantization.utils import (
+    generate_global_scale,
+    is_kv_cache_quant_scheme,
+)
 from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
@@ -45,6 +48,7 @@ __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
     "KVCacheScaleType",
+    "update_fused_layer_weight_global_scales",
 ]
 
 
@@ -182,10 +186,8 @@ def _initialize_scale_zero_point(
         # This scale is applied during runtime to ensure that the generated
         # local scale falls properly within the FP8 range (i.e max value is FP8_max)
         # which is the expected dtype of NVFP4A16 scales
-        scale_dtype = FP8_E4M3_DATA.dtype
-        tensor_amax = torch.abs(module.weight.data).max().to(torch.float32)
-        value = FP8_E4M3_DATA.max * FP4_E2M1_DATA.max / tensor_amax
-        value = value.to(torch.float32).to(device)
+        value = generate_global_scale(input_tensor=module.weight)
+        value = value.to(device)
         init_global_scale = Parameter(value, requires_grad=False)
         register_offload_parameter(
             module, f"{base_name}_global_scale", init_global_scale
@@ -252,3 +254,59 @@ def _initialize_attn_scales(module: Module) -> None:
         requires_grad=False,
     )
     register_offload_parameter(module, KVCacheScaleType.VALUE.value, init_scale)
+
+
+# TODO: Introduce an argument to turn this off
+# Only relevant for NVFP4 currently
+def update_fused_layer_weight_global_scales(model):
+    def _is_attention_module(module: Module):
+        return "attention" in module.__class__.__name__.lower() and (
+            hasattr(module, "k_proj")
+            or hasattr(module, "v_proj")
+            or hasattr(module, "qkv_proj")
+        )
+
+    def _is_mlp_module(module: Module):
+        return "mlp" in module.__class__.__name__.lower() and (
+            hasattr(module, "gate_proj") or hasattr(module, "up_porj")
+        )
+
+    for name, submodule in iter_named_quantizable_modules(
+        model,
+        include_attn=True,
+        include_mlp=True,
+    ):
+        scheme = getattr(submodule, "quantization_scheme", None)
+        if scheme is None:
+            continue
+
+        weight_quant_args = scheme.weights
+        if not (
+            weight_quant_args.num_bits == 4
+            and weight_quant_args.type == QuantizationType.FLOAT
+        ):
+            continue
+
+        if _is_attention_module(submodule):
+            q_weight = submodule.q_proj.weight.data
+            v_weight = submodule.v_proj.weight.data
+            k_weight = submodule.k_proj.weight.data
+
+            value = generate_global_scale(
+                input_tensor=torch.cat((q_weight, v_weight, k_weight), dim=0)
+            )
+
+            update_parameter_data(submodule.q_proj, value, "weight_global_scale")
+            update_parameter_data(submodule.k_proj, value, "weight_global_scale")
+            update_parameter_data(submodule.v_proj, value, "weight_global_scale")
+
+        if _is_mlp_module(submodule):
+            gate_data = submodule.gate_proj.weight.data
+            up_data = submodule.up_proj.weight.data
+
+            value = generate_global_scale(
+                input_tensor=torch.cat((gate_data, up_data), dim=0)
+            )
+
+            update_parameter_data(submodule.gate_proj, value, "weight_global_scale")
+            update_parameter_data(submodule.up_proj, value, "weight_global_scale")
