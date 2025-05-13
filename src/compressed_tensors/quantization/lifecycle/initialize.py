@@ -257,9 +257,20 @@ def _initialize_attn_scales(module: Module) -> None:
     register_offload_parameter(module, KVCacheScaleType.VALUE.value, init_scale)
 
 
-# TODO: Introduce an argument to turn this off
-# Only relevant for NVFP4 currently
-def update_fused_layer_weight_global_scales(model):
+# TODO: Potentially introduce an argument to turn this off
+# Only relevant for NVFP4A16 currently
+def update_fused_layer_weight_global_scales(model: torch.nn.Module):
+    """
+    When running NVFP4A16 quantization, update the global scale
+    such that q,k,v layers are treated as one tensor with the same
+    global_scale and gate_proj/up_proj layers are treated as one tensor
+    with the same global scale. This is requirement currently being set
+    by vLLM and may be removed in the future OR potentially make it
+    an optional step.
+
+    :param model: model to quantize
+    """
+
     def _is_attention_module(module: Module):
         return "attention" in module.__class__.__name__.lower() and (
             hasattr(module, "k_proj")
