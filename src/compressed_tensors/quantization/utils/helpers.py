@@ -19,6 +19,7 @@ import torch
 from compressed_tensors.quantization.quant_args import (
     FP4_E2M1_DATA,
     FP8_E4M3_DATA,
+    FloatArgs,
     QuantizationArgs,
     QuantizationStrategy,
     QuantizationType,
@@ -448,10 +449,10 @@ def parse_out_kv_cache_args(
 
 
 def generate_global_scale(
-    scale_data: FP8_E4M3_DATA,
-    quant_data: FP4_E2M1_DATA,
     input_tensor: torch.Tensor,
-    dtype=torch.float32,
+    scale_data: Optional[FloatArgs] = FP8_E4M3_DATA,
+    quant_data: Optional[FloatArgs] = FP4_E2M1_DATA,
+    dtype: Optional[torch.dtype] = torch.float32,
 ):
     """
     Generate a global scale for an entire tensor (input_tensor).
