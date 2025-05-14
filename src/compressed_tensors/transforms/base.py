@@ -23,12 +23,6 @@ from compressed_tensors.utils import register_offload_parameter, update_paramete
 __all__ = ["Transforms"]
 
 
-# TODO: We don't need to save all the __call__ args for serialization or even have
-# them defined by a recipe. Some of them, such as if the transformation should be the
-# first or second matirx in torch.matmul depending on dimensions, can be inferred
-# by the layer time likely.
-
-
 class Transforms(RegistryMixin):
     def __init__(
         self,
