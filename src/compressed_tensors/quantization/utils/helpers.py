@@ -110,7 +110,9 @@ def calculate_qparams(
             # torch.clamp not supported for FP8
             # use the next largest fp8 value from 0
             scales = torch.where(
-                scales == 0, torch.tensor(0.125, dtype=FP8_E4M3_DATA.dtype), scales
+                scales == 0,
+                torch.tensor(0.125, dtype=FP8_E4M3_DATA.dtype, device=device),
+                scales,
             )
         else:
             scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
