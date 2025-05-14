@@ -15,14 +15,16 @@ import pytest
 import torch
 from compressed_tensors.utils import (
     align_module_device,
+    align_modules,
     delete_offload_parameter,
     disable_hf_hook,
+    get_execution_device,
     has_offloaded_params,
     register_offload_parameter,
     update_offload_parameter,
 )
 from compressed_tensors.utils.offload import offload_to_weights_map
-from tests.testing_utils import requires_accelerate
+from tests.testing_utils import requires_accelerate, requires_gpu
 
 
 class ExampleModule(torch.nn.Module):
@@ -55,8 +57,46 @@ def test_has_offloaded_params():
     assert has_offloaded_params(module)
 
 
+@requires_gpu
+@requires_accelerate()
+def test_get_execution_device():
+    from accelerate import init_empty_weights
+    from accelerate.big_modeling import attach_align_device_hook
+
+    # no offloading
+    module = ExampleModule()
+    assert get_execution_device(module) == torch.device("cpu")
+
+    # with offloading
+    attach_align_device_hook(module, torch.device("cuda:0"))
+    assert get_execution_device(module) == torch.device("cuda:0")
+
+    # in meta context
+    with torch.device("meta"):
+        module = ExampleModule()
+        assert get_execution_device(module) == torch.device("meta")
+
+    # offloaded in meta context
+    module = ExampleModule()
+    attach_align_device_hook(module, torch.device("cuda:0"))
+    with torch.device("meta"):
+        assert get_execution_device(module) == torch.device("cuda:0")
+
+    # in empty weights context
+    with init_empty_weights():
+        module = ExampleModule()
+        assert get_execution_device(module) == torch.device("meta")
+
+    # offloaded in empty weights context
+    module = ExampleModule()
+    attach_align_device_hook(module, torch.device("cuda:0"))
+    with init_empty_weights():
+        assert get_execution_device(module) == torch.device("cuda:0")
+
+
 @requires_accelerate()
 def test_register_offload_parameter():
+    from accelerate import init_empty_weights
     from accelerate.hooks import attach_align_device_hook
 
     module = ExampleModule()
@@ -93,6 +133,12 @@ def test_register_offload_parameter():
     with align_module_device(module, execution_device="cpu"):
         assert module.f.device == torch.device("cpu")
     assert module._hf_hook.weights_map["f"].device == torch.device("cpu")
+
+    # parameters registered in the empty init context are still empty
+    with init_empty_weights():
+        module = ExampleModule()
+        register_offload_parameter(module, "c", parameter)
+    assert module.a.device == module.b.device == module.c.device == torch.device("meta")
 
 
 @requires_accelerate()
@@ -201,6 +247,35 @@ def test_disable_hf_hook_model_recurse():
     assert hasattr(module0, "_hf_hook")
     assert hasattr(module1, "_hf_hook")
     assert hasattr(module2, "_hf_hook")
+
+
+@requires_accelerate()
+def test_align_modules():
+    from accelerate.hooks import attach_align_device_hook
+
+    module0 = ExampleModule()
+    module1 = ExampleModule()
+    module2 = ExampleModule()
+    model = torch.nn.Sequential(module0, torch.nn.Sequential(module1, module2))
+    attach_align_device_hook(
+        model,
+        execution_device=torch.device("cpu"),
+        offload=True,
+        weights_map=model.state_dict(),
+    )
+
+    assert module0.a.device == torch.device("meta")
+    assert module1.a.device == torch.device("meta")
+    assert module2.a.device == torch.device("meta")
+
+    with align_modules((module0, module1)):
+        assert module0.a.device != torch.device("meta")
+        assert module1.a.device != torch.device("meta")
+        assert module2.a.device == torch.device("meta")
+
+    assert module0.a.device == torch.device("meta")
+    assert module1.a.device == torch.device("meta")
+    assert module2.a.device == torch.device("meta")
 
 
 @requires_accelerate()

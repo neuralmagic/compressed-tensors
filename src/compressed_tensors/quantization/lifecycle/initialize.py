@@ -14,6 +14,7 @@
 
 
 import logging
+import math
 from enum import Enum
 from typing import Optional
 
@@ -31,7 +32,7 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
     disable_hf_hook,
-    has_offloaded_params,
+    get_execution_device,
     register_offload_parameter,
 )
 from torch.nn import Module, Parameter
@@ -56,6 +57,7 @@ def initialize_module_for_quantization(
     module: Module,
     scheme: Optional[QuantizationScheme] = None,
     force_zero_point: bool = True,
+    scale_dtype: Optional[torch.dtype] = None,
 ):
     """
     attaches appropriate scales, zero points, and observers to a layer
@@ -69,7 +71,10 @@ def initialize_module_for_quantization(
         if not provided, the layer will be skipped
     :param force_zero_point: whether to force initialization of a zero point for
         symmetric quantization
+    :param scale_dtype: dtype to used for the scales, if overriding the
+        weight dtype as the scale dtype
     """
+    # TODO: don't initialize parameters when running decompression
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:
         # no scheme passed and layer not targeted for quantization - skip
@@ -87,7 +92,9 @@ def initialize_module_for_quantization(
                 "input",
                 scheme.input_activations,
                 force_zero_point=force_zero_point,
+                scale_dtype=scale_dtype,
             )
+
         if scheme.weights is not None:
             if hasattr(module, "weight"):
                 weight_shape = None
@@ -99,6 +106,7 @@ def initialize_module_for_quantization(
                     scheme.weights,
                     weight_shape=weight_shape,
                     force_zero_point=force_zero_point,
+                    scale_dtype=scale_dtype,
                 )
             else:
                 _LOGGER.warning(
@@ -110,7 +118,7 @@ def initialize_module_for_quantization(
         if scheme.output_activations is not None:
             if not is_kv_cache_quant_scheme(scheme):
                 _initialize_scale_zero_point(
-                    module, "output", scheme.output_activations
+                    module, "output", scheme.output_activations, scale_dtype=scale_dtype
                 )
 
         module.quantization_scheme = scheme
@@ -136,15 +144,13 @@ def _initialize_scale_zero_point(
     quantization_args: QuantizationArgs,
     weight_shape: Optional[torch.Size] = None,
     force_zero_point: bool = True,
+    scale_dtype: Optional[torch.dtype] = None,
 ):
     if quantization_args.dynamic:
         return
 
-    # begin on the same device as other parameters or cpu if offloaded.
-    # in the offloaded case, there's no point moving tensors to the execution device
-    # if they're going to be immediately offloaded by `register_offload_parameter`
-    params_device = next(module.parameters()).device
-    device = "cpu" if has_offloaded_params(module) else params_device
+    # initialize on execution device to avoid performing quantized ops on cpu
+    device = get_execution_device(module)
 
     # infer expected scale/zero point shape
     if quantization_args.strategy == QuantizationStrategy.TOKEN:
@@ -157,10 +163,13 @@ def _initialize_scale_zero_point(
             # (output_channels, 1)
             expected_shape = (weight_shape[0], 1)
         elif quantization_args.strategy == QuantizationStrategy.GROUP:
-            num_groups = weight_shape[1] // quantization_args.group_size
+            num_groups = math.ceil(weight_shape[1] / quantization_args.group_size)
             expected_shape = (weight_shape[0], max(num_groups, 1))
 
-    scale_dtype = module.weight.dtype
+    scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
+    # TODO: consider erroring out in the future as if the dtype if not one fo these,
+    # there is likely bug
+
     if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
         scale_dtype = torch.float16
 

@@ -11,9 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# flake8: noqa
 
-from .base import *
-from .naive_quantized import *
-from .nvfp4_quantized import *
-from .pack_quantized import *
+from dataclasses import dataclass
+from typing import Any, Callable, Dict
+
+
+__all__ = ["TransformData"]
+
+
+# TODO: adding for now but we may not need it during runtime depending on the
+# integration.
+@dataclass
+class TransformData:
+    """
+    Data that is required during runtime in order to apply the transform.
+
+    Example:
+        data={transform_name: {"apply": Callable, "call_args": Dict}})
+        transform_data = TransformData(data=data)
+    """
+
+    data: Dict
+    idx: int = 0

@@ -28,7 +28,7 @@ Utilities associated with offloading functionality provided by `accelerate`.
 import contextlib
 import warnings
 from functools import wraps
-from typing import Any, Callable, Dict, Literal, Optional, Union
+from typing import Any, Callable, Dict, Iterable, Literal, Optional, Union
 
 import torch
 
@@ -67,6 +67,8 @@ __all__ = [
     "delete_offload_parameter",
     "has_offloaded_params",
     "disable_hf_hook",
+    "disable_offload",
+    "align_modules",
     "align_module_device",
 ]
 
@@ -92,22 +94,6 @@ def check_accelerate(fallback: Any):
 @check_accelerate(fallback=False)
 def is_module_offloaded(module: torch.nn.Module) -> bool:
     return has_offloaded_params(module)
-
-
-def get_execution_device(module: torch.nn.Module) -> torch.device:
-    """
-    :param module: module to check
-    :return: device module is loaded onto during forward pass
-    """
-    if has_offloaded_params(module):
-        return module._hf_hook.execution_device
-    device = next(module.parameters()).device
-
-    # offload only gets set for leaf modules, fallback to checking for device type
-    if device.type == "meta":
-        return module._hf_hook.execution_device
-
-    return device
 
 
 def get_offloaded_device(module: torch.nn.Module) -> torch.device:
@@ -158,6 +144,26 @@ def update_parameter_data(
 """ Candidates for Upstreaming """
 
 
+def get_execution_device(module: torch.nn.Module) -> torch.device:
+    """
+    Get the device which inputs should be moved to before module execution
+
+    :param module: module to check, may be offloaded
+    :return: onload device of module
+    """
+    if has_offloaded_params(module):
+        return module._hf_hook.execution_device
+
+    first_param = next(module.parameters(), None)
+    if first_param is None:
+        warnings.warn(
+            f"Unable able to infer execution device of {module}, falling back to CPU"
+        )
+        return torch.device("cpu")
+
+    return first_param.device
+
+
 def register_offload_parameter(
     module: torch.nn.Module,
     name: str,
@@ -200,7 +206,6 @@ def update_offload_parameter(
         provided, then infer device from parameters on module
     """
     param = getattr(module, name)
-    data = data.to(param.dtype)
     if param.data.shape != data.shape:
         warnings.warn(
             f"Shape of parameter being updated {param.data.shape} does not match shape "
@@ -339,6 +344,43 @@ def delete_from_weights_map(
             "Updating offload data not implemented for weights_map of type "
             f"{type(weights_map)}"
         )
+
+
+@contextlib.contextmanager
+def disable_offload(module: torch.nn.Module):
+    """
+    Context manager to disable module onloading and offloading. Parameters will stay on
+    their current device
+
+    :param module: module to disable offloading for
+    """
+    if has_offloaded_params(module):
+        module._hf_hook.offload = False
+        yield
+        module._hf_hook.offload = True
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def align_modules(
+    modules: Union[torch.nn.Module, Iterable[torch.nn.Module]],
+    execution_device: Optional[torch.device] = None,
+):
+    """
+    Context manager for onloading modules to a device, and disabling onload and offload
+    attempts triggered by forward calls. Used for sequential onloading of layers
+
+    :param modules: `torch.nn.Module` or iterable of `torch.nn.Module`s to onload
+    :param execution_device: device to onload to
+    """
+    modules = (modules,) if isinstance(modules, torch.nn.Module) else modules
+
+    with contextlib.ExitStack() as stack:
+        for module in modules:
+            stack.enter_context(align_module_device(module, execution_device))
+            stack.enter_context(disable_offload(module))  # disable redundant onloading
+        yield
 
 
 """ Upstreamed Functions """
