@@ -157,16 +157,18 @@ class HadamardTransform(TransformBase):
         self.permutation = permutation
         self.args = args
 
-        forward_weight = self.weight if not self.args.inverse else self.weight.T
-        if permutation is not None:
-            forward_weight = apply_permutation(permutation)
-        self.register_buffer("forward_weight", forward_weight, persistent=False)
-        self.register_buffer("inverse_weight", forward_weight.T, persistent=False)
+    def forward(self, value: Parameter) -> Parameter:
+        weight = self.weight if not self.args.inverse else self.weight.T
+        if self.permutation is not None:
+            weight = apply_permutation(weight, self.permutation)
 
-    def forward(self, value):
-        return apply_matrix_transform(self.forward_weight, value, self.args.side)
+        return apply_matrix_transform(weight, value, self.args.side)
     
-    def right_inverse(self, value):
+    def right_inverse(self, value: Parameter) -> Parameter:
+        weight = self.weight.T if not self.args.inverse else self.weight
+        if self.permutation is not None:
+            weight = apply_permutation(weight, self.permutation)
+
         return apply_matrix_transform(self.inverse_weight, value, self.args.side)
 
 
@@ -220,16 +222,15 @@ class RandomMatrixTransform(TransformBase):
         self.args = args
 
         inverse = torch.linalg.inv(weight)
-        forward_weight = weight if not args.inverse else inverse
-        inverse_weight = inverse if not args.inverse else weight
-        self.register_buffer("forward_weight", forward_weight, persistent=False)
-        self.register_buffer("inverse_weight", inverse_weight, persistent=False)
+        self.register_buffer("inverse", inverse, persistent=False)  # extra memory
 
-    def forward(self, value):
-        return apply_matrix_transform(self.forward_weight, value, self.args.side)
+    def forward(self, value: Parameter) -> Parameter:
+        weight = self.weight if self.args.inverse else self.inverse
+        return apply_matrix_transform(weight, value, self.args.side)
     
-    def right_inverse(self, value):
-        return apply_matrix_transform(self.inverse_weight, value, self.args.side)
+    def right_inverse(self, value: Parameter) -> Parameter:
+        weight = self.inverse if self.args.inverse else self.weight
+        return apply_matrix_transform(weight, value, self.args.side)
 
 
 class RandomMatrixFactory(MatrixTransformFactory):
