@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from math import ceil
 from typing import Generator, List, Optional, Tuple
 
 import torch
@@ -103,7 +104,13 @@ def calculate_qparams(
         if is_fp4(quantization_args=quantization_args) and global_scale is not None:
             # Conditionally scale the generated local scale by a global_scale
             scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
+            scales = torch.clamp(scales, max=448, min=-448)
+            # if quantization_args.strategy == QuantizationStrategy.TENSOR_GROUP:
+            #    print("NaN")
+            #    print(torch.sum(torch.isnan(scales)))
+
             scales = scales.to(FP8_E4M3_DATA.dtype)
+
         else:
             scales = max_val_pos / (float(bit_range) / 2)
 
@@ -140,7 +147,7 @@ def calculate_qparams(
         scales = scales.reshape(1)
         zero_points = zero_points.reshape(1)
 
-    return scales, zero_points, global_scale
+    return scales, zero_points
 
 
 def compute_dynamic_scales_and_zp(
@@ -166,17 +173,20 @@ def compute_dynamic_scales_and_zp(
         reduce_dims = None
     elif args.strategy == QuantizationStrategy.TENSOR_GROUP:
         # per group dynamic quantization
-        global_scale = module.getattr("input_global_scale", None)
+        global_scale = getattr(module, "input_global_scale", None)
         group_size = args.group_size
+        value = value.squeeze(0)
 
         rows = value.shape[0]
         columns = value.shape[1]
+
         num_groups = int(ceil(columns / group_size))
         dtype = FP8_E4M3_DATA.dtype
+
         _scale = torch.empty((rows, num_groups), dtype=dtype, device=value.device)
         _zero_point = torch.empty((rows, num_groups), dtype=dtype, device=value.device)
-        group_sizes = torch.full((num_groups,), group_size, dtype=torch.int)
 
+        group_sizes = torch.full((num_groups,), group_size, dtype=torch.int)
         end = 0
         for group_index, group_count in enumerate(group_sizes):
             start = end
@@ -201,6 +211,7 @@ def compute_dynamic_scales_and_zp(
             scale, zero_point = calculate_qparams(
                 min_val, max_val, args, global_scale=global_scale
             )
+
             _scale[:, group_index] = scale.squeeze(1)
             _zero_point[:, group_index] = zero_point.squeeze(1)
 
