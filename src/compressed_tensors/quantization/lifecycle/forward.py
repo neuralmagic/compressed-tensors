@@ -186,6 +186,9 @@ def _process_quantization(
     q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
 
+    if args.strategy == QuantizationStrategy.TENSOR_GROUP:
+        x = x.squeeze(0)
+
     if args.strategy == QuantizationStrategy.GROUP:
         output_dtype = dtype if dtype is not None else x.dtype
         output = torch.zeros_like(x).to(output_dtype)
@@ -249,6 +252,8 @@ def _process_quantization(
             output = safe_permute(output, torch.argsort(perm), dim=1)
 
     else:  # covers channel, token and tensor strategies
+        if args.strategy == QuantizationStrategy.TENSOR_GROUP:
+            dtype = x.dtype
         if do_quantize:
             output = _quantize(
                 x=x,
@@ -266,7 +271,12 @@ def _process_quantization(
                 scale=scale,
                 zero_point=zero_point,
                 global_scale=global_scale,
+                dtype=dtype,
+                args=args,
             )
+
+    if args.strategy == QuantizationStrategy.TENSOR_GROUP:
+        output = output.unsqueeze(0)
 
     return output
 
@@ -349,9 +359,11 @@ def forward_quantize(
     g_idx = getattr(module, "weight_g_idx", None)
     global_scale = getattr(module, f"{base_name}_global_scale", None)
 
-    if args.dynamic:
+    if args.dynamic or args.strategy == QuantizationStrategy.TENSOR_GROUP:
         # dynamic quantization - determine the scale/zp on the fly
-        scale, zero_point = compute_dynamic_scales_and_zp(value=value, args=args)
+        scale, zero_point = compute_dynamic_scales_and_zp(
+            value=value, args=args, module=module
+        )
     else:
         # static quantization - get scale and zero point from layer
         scale = getattr(module, f"{base_name}_scale")
@@ -384,10 +396,16 @@ def _quantize(
     if global_scale:
         scale = scale.to(global_scale.dtype) / global_scale
 
+    if args.strategy == QuantizationStrategy.TENSOR_GROUP:
+        group_size = args.group_size
+        x = torch.reshape(x, (x.shape[0], x.shape[1] // group_size, group_size))
+        scale = scale.unsqueeze(-1)
+
     scaled = x / scale
+    """
     if zero_point is not None:
         scaled += zero_point.to(x.dtype)
-
+    """
     # clamp first because cast isn't guaranteed to be saturated (ie for fp8)
     clamped_value = torch.clamp(
         scaled,
@@ -395,6 +413,7 @@ def _quantize(
         q_max,
     )
     quantized_value = round_to_quantized_type(clamped_value, args)
+
     if dtype is not None:
         quantized_value = quantized_value.to(dtype)
 
@@ -407,6 +426,7 @@ def _dequantize(
     scale: torch.Tensor,
     zero_point: torch.Tensor = None,
     dtype: Optional[torch.dtype] = None,
+    args: QuantizationArgs = None,
     global_scale: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
 
@@ -417,11 +437,21 @@ def _dequantize(
 
     dequant_value = x_q.to(scale.dtype)
 
+    if args and args.strategy == QuantizationStrategy.TENSOR_GROUP:
+        scale = scale.unsqueeze(-1)
+
+    """
     if zero_point is not None:
         dequant_value = dequant_value - zero_point.to(scale.dtype)
+    """
     dequant_value = dequant_value * scale
 
     if dtype is not None:
         dequant_value = dequant_value.to(dtype)
 
+    if args and args.strategy == QuantizationStrategy.TENSOR_GROUP:
+        # last dimension should be the group_size
+        dequant_value = dequant_value.reshape(
+            x_q.shape[0], x_q.shape[1] * arg.group_size
+        )
     return dequant_value

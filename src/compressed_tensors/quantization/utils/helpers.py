@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from math import ceil
 from typing import Generator, List, Optional, Tuple
 
 import torch
@@ -102,7 +103,13 @@ def calculate_qparams(
         ):
             # Conditionally scale the generated local scale by a global_scale
             scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
+            scales = torch.clamp(scales, max=448, min=-448)
+            # if quantization_args.strategy == QuantizationStrategy.TENSOR_GROUP:
+            #    print("NaN")
+            #    print(torch.sum(torch.isnan(scales)))
+
             scales = scales.to(FP8_E4M3_DATA.dtype)
+
         else:
             scales = max_val_pos / (float(bit_range) / 2)
 
@@ -143,7 +150,9 @@ def calculate_qparams(
     return scales, zero_points
 
 
-def compute_dynamic_scales_and_zp(value: Tensor, args: QuantizationArgs):
+def compute_dynamic_scales_and_zp(
+    value: Tensor, args: QuantizationArgs, module: torch.nn.Module
+):
     """
     Returns the computed scales and zero points for dynamic activation
     quantization.
@@ -155,11 +164,58 @@ def compute_dynamic_scales_and_zp(value: Tensor, args: QuantizationArgs):
         reduced dimensions
     :return: tuple of scale and zero point derived from the observed tensor
     """
+    global_scale = None
+
     if args.strategy == QuantizationStrategy.TOKEN:
         dim = {1, 2}
         reduce_dims = tuple(idx for idx in range(value.ndim) if idx not in dim)
     elif args.strategy == QuantizationStrategy.TENSOR:
         reduce_dims = None
+    elif args.strategy == QuantizationStrategy.TENSOR_GROUP:
+        # per group dynamic quantization
+        global_scale = getattr(module, "input_global_scale", None)
+        group_size = args.group_size
+        value = value.squeeze(0)
+
+        rows = value.shape[0]
+        columns = value.shape[1]
+
+        num_groups = int(ceil(columns / group_size))
+        dtype = FP8_E4M3_DATA.dtype
+
+        _scale = torch.empty((rows, num_groups), dtype=dtype, device=value.device)
+        _zero_point = torch.empty((rows, num_groups), dtype=dtype, device=value.device)
+
+        group_sizes = torch.full((num_groups,), group_size, dtype=torch.int)
+        end = 0
+        for group_index, group_count in enumerate(group_sizes):
+            start = end
+            end = start + group_count
+
+            dim = 0
+            if isinstance(dim, int):
+                dim = [dim]
+            dim = set(dim)
+            reduce_dims = tuple(idx for idx in range(value.ndim) if idx not in dim)
+
+            if not reduce_dims:
+                min_val, max_val = torch.aminmax(value[:, start:end])
+            else:
+                min_val = torch.amin(
+                    value[:, start:end], dim=reduce_dims, keepdims=True
+                )
+                max_val = torch.amax(
+                    value[:, start:end], dim=reduce_dims, keepdims=True
+                )
+
+            scale, zero_point = calculate_qparams(
+                min_val, max_val, args, global_scale=global_scale
+            )
+
+            _scale[:, group_index] = scale.squeeze(1)
+            _zero_point[:, group_index] = zero_point.squeeze(1)
+
+        return _scale, _zero_point
     else:
         raise ValueError(
             f"One of {QuantizationStrategy.TOKEN} or {QuantizationStrategy.TENSOR} ",

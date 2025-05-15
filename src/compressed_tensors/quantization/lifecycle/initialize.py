@@ -204,11 +204,18 @@ def _initialize_scale_zero_point(
         scale_dtype = torch.float16
 
     # initializes empty scale, zero point, and g_idx parameters for the module
+    if base_name == "input":
+        scale_dtype = torch.float32
+
     init_scale = Parameter(
         torch.empty(expected_shape, dtype=scale_dtype, device=device),
         requires_grad=False,
     )
-    register_offload_parameter(module, f"{base_name}_scale", init_scale)
+
+    if quantization_args.strategy == QuantizationStrategy.TENSOR_GROUP:
+        register_offload_parameter(module, f"{base_name}_global_scale", init_scale)
+    else:
+        register_offload_parameter(module, f"{base_name}_scale", init_scale)
 
     if force_zero_point or not quantization_args.symmetric:
         if (
