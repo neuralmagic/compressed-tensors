@@ -29,6 +29,14 @@ from pttp import TensorProfiler
 
 # buffer caching has a tradeoff, where you get better runtime but more memory usage (disk usage is the same)
 
+"""
+# need to key by config_group + apply_index
+q_proj.weights_u0.weight
+q_proj.weights_u0.permutation
+q_proj.weights_u1.weight
+q_proj.weights_u1.permutation
+"""
+
 # -- config -- #
 
 class TransformArgs:
@@ -37,7 +45,7 @@ class TransformArgs:
     side: Optional[Literal["left", "right"]]
     inverse: bool
 
-class TransformScheme:
+class TransformsScheme:
     type: str
     apply: List[TransformArgs]
     randomize_modules: bool
@@ -91,7 +99,7 @@ class TransformBase(Module, ABC):
 
 
 class MatrixTransformFactory(ABC):
-    def __init__(self, name: str, scheme: TransformScheme, seed: int):
+    def __init__(self, name: str, scheme: TransformsScheme, seed: int):
         self.name = name
         self.scheme = scheme
         self.seed = seed
@@ -163,7 +171,7 @@ class HadamardTransform(TransformBase):
 
 
 class HadamardFactory(MatrixTransformFactory):
-    def __init__(self, name: str, scheme: TransformScheme, seed: int):
+    def __init__(self, name: str, scheme: TransformsScheme, seed: int):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
         self.perms = ParameterizedDefaultDict(self._create_permutation)
@@ -225,7 +233,7 @@ class RandomMatrixTransform(TransformBase):
 
 
 class RandomMatrixFactory(MatrixTransformFactory):
-    def __init__(self, name: str, scheme: TransformScheme, seed: int):
+    def __init__(self, name: str, scheme: TransformsScheme, seed: int):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
 
