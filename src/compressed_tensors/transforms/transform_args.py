@@ -14,55 +14,16 @@
 
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
 
-__all__ = ["TransformationArgs", "ModuleTarget"]
-
-# TODO: we eventually want to target generic parameters but for now, this
-# is sufficient
-class ModuleTarget(str, Enum):
-    """
-    Enum storing parameter or activation types being targeted by transforms
-    in a particuilar module.
-    """
-
-    WEIGHT = "weight"
-    INPUT_ACTIVATIONS = "input_activations"
-    OUTPUT_ACTIVATIONS = "output_activations"
-
-    @classmethod
-    def has_value(cls, value):
-        return value in cls._value2member_map_
+__all__ = ["TransformArgs", "ModuleTarget"]
 
 
-class TransformationArgs(BaseModel):
-    """
-    User-facing arguments used to define which modules and their specific
-    parameters and/or activations should be targeted by a particular transform.
-
-    :param targets: list of layers to target
-    :param module_targets: list of layer parameters and/or activations onto which the
-        transform should be applied. The same transform will be applied for all
-        module targets in the list.
-    :param call_args: dictionary of args needed for the transform during runtime,
-        beyond the input_tensor or transform
-    :param ignore: any submodule which should be ignored from the targets list
-
-    """
-
+class TransformArgs(BaseModel):
     targets: List[str]
-    module_targets: List[Union[ModuleTarget, str]]
-    call_args: Optional[Dict[str, Any]] = defaultdict()
-    ignore: Optional[List[str]] = Field(default_factory=list)
-
-    @field_validator("module_targets", mode="before")
-    def validate_module_target(cls, value) -> List[ModuleTarget]:
-        module_targets_list = []
-        for v in value:
-            assert ModuleTarget.has_value(v.lower())
-            module_targets_list.append(v)
-
-        return module_targets_list
+    location: Literal["input", "weight", "output", "k_cache", "q_attn"]
+    side: Optional[Literal["left", "right"]] = Field(default=None)
+    inverse: bool = Field(default=False)

@@ -15,82 +15,72 @@
 from typing import Optional, Union
 
 import torch
-from compressed_tensors.transforms import Transforms
+from compressed_tensors.transforms.base import (
+    MatrixTransformBase,
+    MatrixTransformFactory,
+)
 from compressed_tensors.transforms.hadamard_utils import deterministic_hadamard_matrix
-from compressed_tensors.transforms.utils import apply_matrix_transform
+from compressed_tensors.transforms.helpers import (
+    ParameterizedDefaultDict,
+    get_matrix_size,
+    get_offload_device,
+)
+from compressed_tensors.transforms.transform_args import TransformArgs
+from compressed_tensors.transforms.transform_scheme import TransformsScheme
+from compressed_tensors.transforms.utils import (
+    apply_matrix_transform,
+    apply_permutation,
+)
+from torch import Tensor, device, dtype
+from torch.nn import Linear, Module, Parameter
 
 
-@Transforms.register("hadamard")
-class Hadamard(Transforms):
+class HadamardTransform(MatrixTransformBase):
     def __init__(
-        self,
-        size: int,
-        empty: Optional[bool] = False,
-        device: Optional[Union[str, torch.device]] = "cuda",
-        dtype: Optional[torch.dtype] = torch.bfloat16,
-        *args,
-        **kwargs,
+        self, weight: Tensor, permutation: Optional[Tensor], args: TransformArgs
     ):
-        """
-        Produces a hadamard matrix with dims (size, size), with values
-        -1 and 1, and the property HH.T == nI i.e the transformation
-        matrix when multiplied by its transpose is a multiple of the identity.
-        All rows and columns are orthonormal. The matrix returned
-        is not normalized and will be deterministic.
+        super().__init__()
+        self.weight = weight
+        self.permutation = permutation
+        self.args = args
 
-        :param size: size of the matrix, if generating a new Hadamard matrix.
-            The generated matrix will have dimensions (size, size)
-        :param transform: if loading in a previously generated matrix, will
-            use that through this transformation, as opposed to creating a new
-            one
-        :param dtype: type to cast the rotation matrix to
+    def forward(self, value: Parameter) -> Parameter:
+        weight = self.weight if not self.args.inverse else self.weight.T
+        if self.permutation is not None:
+            weight = apply_permutation(weight, self.permutation)
 
-        """
-        if not empty:
-            # TODO: this is deterministic; we should just serialize the size
-            transform = torch.Tensor(deterministic_hadamard_matrix(size=size))
-        else:
-            transform = torch.empty((size, size))
+        return apply_matrix_transform(weight, value, self.args.side)
 
-        super().__init__(transform=transform, dtype=dtype, device=device)
+    def right_inverse(self, value: Parameter) -> Parameter:
+        weight = self.weight.T if not self.args.inverse else self.weight
+        if self.permutation is not None:
+            weight = apply_permutation(weight, self.permutation)
 
-    def apply(
-        self,
-        input_tensor: torch.Tensor,
-        transpose: bool = False,
-        first: bool = True,
-    ) -> torch.Tensor:
-        return apply_matrix_transform(
-            transform=self.transform,
-            input_tensor=input_tensor,
-            transpose=transpose,
-            first=first,
-        )
+        return apply_matrix_transform(weight, value, self.args.side)
 
-    def inverse_apply(
-        self,
-        input_tensor: torch.Tensor,
-        transpose: bool = False,
-        first: bool = True,
-    ) -> torch.Tensor:
-        """
-        Apply the inverse operation of `apply`
 
-        :param transform: hadamard tensor
-        :param input_tensor: tensor to which the transform matrix is applied
-        :param transpose: whether or not the transform matrix is transposed before
-            being applied.
-        :param first: if the transform matrix will be the first or second matrix to be
-            multiplied
-        """
-        transpose = not transpose
-        # need to normalize before sending back
-        return (
-            apply_matrix_transform(
-                transform=self.transform,
-                input_tensor=input_tensor,
-                transpose=transpose,
-                first=first,
-            )
-            / self.transform.shape[0]
-        )
+@MatrixTransformFactory.register("hadamard")
+class HadamardFactory(MatrixTransformFactory):
+    def __init__(self, name: str, scheme: TransformsScheme, seed: int):
+        super().__init__(name, scheme, seed)
+        self.weights = ParameterizedDefaultDict(self._create_weight)
+        self.perms = ParameterizedDefaultDict(self._create_permutation)
+
+    def create_transform(self, module: Module, args: TransformArgs):
+        assert isinstance(module, Linear)
+        size = get_matrix_size(module, args)
+        dtype = module.weight.dtype
+        device = get_offload_device(module)
+
+        weight = self.weights[size, dtype, device]
+        perm = self.perms[module, size] if self.scheme.randomize_modules else None
+        return HadamardTransform(weight, perm, args)
+
+    def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
+        data = torch.tensor(deterministic_hadamard_matrix(size))  # seed=self.seed
+        data = data.to(dtype=dtype, device=device)
+        return Parameter(data, requires_grad=self.scheme.requires_grad)
+
+    def _create_permutation(self, module: Module, size: int) -> Parameter:
+        data = torch.randperm(size)
+        return Parameter(data, requires_grad=self.scheme.requires_grad)

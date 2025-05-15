@@ -13,47 +13,54 @@
 # limitations under the License.
 
 import torch
-from compressed_tensors.transforms import Transforms
+from compressed_tensors.transforms.base import (
+    MatrixTransformBase,
+    MatrixTransformFactory,
+)
+from compressed_tensors.transforms.helpers import (
+    ParameterizedDefaultDict,
+    get_matrix_size,
+    get_offload_device,
+)
+from compressed_tensors.transforms.transform_args import TransformArgs
+from compressed_tensors.transforms.transform_scheme import TransformsScheme
 from compressed_tensors.transforms.utils import apply_matrix_transform
+from torch import Tensor, device, dtype
+from torch.nn import Linear, Module, Parameter
 
 
-# TODO: fix loading
-@Transforms.register("matrix-mul")
-class MatrixMultiply(Transforms):
-    def apply(
-        self,
-        input_tensor: torch.Tensor,
-        transpose: bool = False,
-        first: bool = True,
-    ) -> torch.Tensor:
-        return apply_matrix_transform(
-            transform=self.transform,
-            input_tensor=input_tensor,
-            transpose=transpose,
-            first=first,
-        )
+class RandomMatrixTransform(MatrixTransformBase):
+    def __init__(self, weight: Tensor, args: TransformArgs):
+        super().__init__()
+        self.weight = weight
+        self.args = args
 
-    def inverse_apply(
-        self,
-        input_tensor: torch.Tensor,
-        transpose: bool = False,
-        first: bool = True,
-    ) -> torch.Tensor:
-        """
-        Apply the inverse operation of `apply`
+        inverse = torch.linalg.inv(weight)
+        self.register_buffer("inverse", inverse, persistent=False)  # extra memory
 
-        :param transform: matrix tensor
-        :param input_tensor: tensor to which the transform matrix is applied
-        :param transpose: whether or not the transform matrix is transposed before
-            being applied.
-        :param first: if the transform matrix will be the first or second matrix to be
-            multiplied
-        """
+    def forward(self, value: Parameter) -> Parameter:
+        weight = self.weight if self.args.inverse else self.inverse
+        return apply_matrix_transform(weight, value, self.args.side)
 
-        # Note: not implemented for lower precision than float32
-        return apply_matrix_transform(
-            transform=torch.linalg.inv(self.transform),
-            input_tensor=input_tensor,
-            transpose=transpose,
-            first=first,
-        )
+    def right_inverse(self, value: Parameter) -> Parameter:
+        weight = self.inverse if self.args.inverse else self.weight
+        return apply_matrix_transform(weight, value, self.args.side)
+
+
+@MatrixTransformFactory.register("matrix-mul")
+class RandomMatrixFactory(MatrixTransformFactory):
+    def __init__(self, name: str, scheme: TransformsScheme, seed: int):
+        super().__init__(name, scheme, seed)
+        self.weights = ParameterizedDefaultDict(self._create_weight)
+
+    def create_transform(self, module: Module, args: TransformArgs):
+        assert isinstance(module, Linear)
+        size = get_matrix_size(module, args)
+        dtype = module.weight.dtype
+        device = get_offload_device(module)
+
+        weight = self.weights[size, dtype, device]
+        return RandomMatrixTransform(weight, args)
+
+    def _create_weight(self, size: int, dtype: dtype, device: device):
+        return torch.random((size, size), dtype=dtype, device=device)

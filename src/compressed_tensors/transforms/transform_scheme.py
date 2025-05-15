@@ -14,35 +14,15 @@
 
 from typing import Any, Dict, List, Optional
 
-from compressed_tensors.transforms import Transforms
-from compressed_tensors.transforms.transform_args import TransformationArgs
-from pydantic import BaseModel, field_validator
+from compressed_tensors.transforms.transform_args import TransformArgs
+from pydantic import BaseModel, Field
 
 
-__all__ = ["TransformationScheme"]
+__all__ = ["TransformsScheme"]
 
 
-class TransformationScheme(BaseModel):
-    """
-    :param transform_type: string indicating the particular transform that
-        should be created and applied. This should be one of the registered transforms
-        i.e be in Transforms.registered_names()
-    :param groups: includes TransformationArgs containing the information about the
-        layers that should be targeted by the specified transform. By providing a list,
-        users have the ability to apply the same transform type (with the same set
-        of arguments) to different layers.
-    :param transform_creation_args: arguments needed to initialize the transform, if
-        any
-    :param global_transform: whether an identical transform is applied to all the
-        TransformationArgs in the groups list
-    """
-
-    transform_type: str
-    groups: List[TransformationArgs]
-    global_transform: bool = False
-    transform_creation_args: Optional[Dict[str, Any]] = None
-
-    @field_validator("transform_type", mode="before")
-    def validate_transform_type(cls, value) -> str:
-        assert value in Transforms.registered_names()
-        return value
+class TransformsScheme(BaseModel):
+    type: str
+    apply: List[TransformArgs]
+    randomize_modules: bool = Field(default=False)
+    requires_grad: bool = Field(default=False)

@@ -49,3 +49,10 @@ def apply_matrix_transform(
         if first
         else torch.matmul(input_tensor, transform)
     )
+
+
+def apply_permutation(weight: torch.Tensor, perm: torch.Tensor) -> torch.Tensor:
+    weight = weight.clone()
+    diag_indices = torch.arange(weight.size(0))
+    weight[diag_indices, diag_indices] = weight[perm, perm]
+    return weight

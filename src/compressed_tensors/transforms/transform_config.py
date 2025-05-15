@@ -14,24 +14,116 @@
 
 from typing import Dict
 
-from compressed_tensors.transforms.transform_scheme import TransformationScheme
+from compressed_tensors.transforms.transform_args import TransformArgs
+from compressed_tensors.transforms.transform_scheme import TransformsScheme
 from pydantic import BaseModel
 
 
 __all__ = ["TransformationConfig"]
 
 
-class TransformationConfig(BaseModel):
-    """
-    Configuration of transforms to be added within a model's config.json.
+class TransformsConfig(BaseModel):
+    transform_groups: Dict[str, TransformsScheme]
 
-    :param transform_groups: A dictionary of the different TransformationSchemes
-        that should be applied to a particular model. The keys can be any
-        arbitrary string and a TransformationScheme should be provided
-        for each new transform type.
-    """
 
-    transform_groups: Dict[str, TransformationScheme]
+quipsharp = TransformsConfig(
+    transform_groups={
+        "u": TransformsScheme(
+            type="hadamard",
+            apply=[
+                TransformArgs(
+                    targets=["Linear"], location="input", inverse=True  # non-mergable
+                ),
+                TransformArgs(
+                    targets=["Linear"],
+                    location="weight",
+                    side="left",
+                ),
+            ],
+            randomize_modules=True,
+        ),
+        "v": TransformsScheme(
+            type="hadamard",
+            apply=[
+                TransformArgs(
+                    targets=["Linear"],
+                    location="weight",
+                    side="right",
+                    inverse=True,
+                ),
+                TransformArgs(
+                    targets=["Linear"],
+                    location="output",  # non-mergable
+                ),
+            ],
+            randomize_modules=True,
+        ),
+    }
+)
 
-    def to_dict(self):
-        return self.model_dump()
+# spinquant
+llama_spinquant = TransformsConfig(
+    transform_groups={
+        "R1": TransformsScheme(
+            type="hadamard",
+            apply=[
+                TransformArgs(
+                    targets=["embed_tokens", "o_proj", "down_proj"],
+                    location="weight",
+                    side="right",
+                ),
+                TransformArgs(
+                    targets=[
+                        "q_proj",
+                        "k_proj",
+                        "v_proj",
+                        "up_proj",
+                        "gate_proj",
+                        "lm_head",
+                    ],
+                    location="weight",
+                    side="left",
+                    inverse=True,
+                ),
+            ],
+        ),
+        "R2": TransformsScheme(
+            type="hadamard",
+            apply=[
+                TransformArgs(
+                    targets=["v_proj"],
+                    location="weight",
+                    side="right",
+                ),
+                TransformArgs(
+                    targets=["o_proj"], location="weight", side="left", inverse=True
+                ),
+            ],
+        ),
+        "R3": TransformsScheme(
+            type="hadamard",
+            apply=[
+                TransformArgs(
+                    targets=["self_attn"],
+                    location="k_cache",
+                ),
+                TransformArgs(
+                    targets=["self_attn"],
+                    location="q_attn",
+                ),
+            ],
+        ),
+        "R4": TransformsScheme(
+            type="hadamard",
+            apply=[
+                TransformArgs(
+                    targets=["down_proj"],
+                    location="input",
+                ),
+                TransformArgs(
+                    targets=["down_proj"], location="weight", side="left", inverse=True
+                ),
+            ],
+        ),
+    }
+)
