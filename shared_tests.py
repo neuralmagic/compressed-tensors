@@ -169,7 +169,7 @@ class HadamardTransform(TransformBase):
         if self.permutation is not None:
             weight = apply_permutation(weight, self.permutation)
 
-        return apply_matrix_transform(self.inverse_weight, value, self.args.side)
+        return apply_matrix_transform(weight, value, self.args.side)
 
 
 class HadamardFactory(MatrixTransformFactory):
