@@ -12,6 +12,7 @@
 
 from typing import Dict, List, Literal, Optional
 from abc import abstractmethod, ABC
+from functools import partial
 
 import torch
 import torch.nn.utils.parametrize as P
@@ -36,6 +37,7 @@ class TransformScheme:
     type: str
     apply: List[TransformArgs]
     randomize_modules: bool
+    requires_grad: bool
 
 # -- helpers -- #
 
@@ -45,6 +47,11 @@ def match_targets():
 def apply_matrix_transform():
     pass
 
+def register_offload_parameterization(module: torch.nn.Module, tensor_name: str, paramterization: torch.nn.Module):
+    # register_offload_param("weight_original")
+    # remove_offload_param("weight")
+    P.register_parametrization(module, tensor_name, paramterization)
+    
 def get_matrix_size(module: torch.nn.Module, args: TransformArgs) -> int:
     assert isinstance(module, torch.nn.Linear)
     if args.location == "input" or (args.location == "weight" and args.side == "left"):
@@ -54,12 +61,13 @@ def get_matrix_size(module: torch.nn.Module, args: TransformArgs) -> int:
     
 class ParameterizedDefaultDict(dict):
     def __init__(self, default_factory):
-        if not callable(default_factory):
-            raise TypeError("default_factory must be callable")
         self.default_factory = default_factory
 
     def __missing__(self, key):
-        value = self.default_factory(key)
+        if isinstance(key, tuple):
+            value = self.default_factory(*key)
+        else:
+            value = self.default_factory(key)
         self[key] = value
         return value
         
@@ -69,32 +77,40 @@ class TransformBase(torch.nn.Module, ABC):
     @abstractmethod
     def forward(self, value: torch.nn.Parameter) -> torch.nn.Parameter:
         raise NotImplementedError()
+    
+    @abstractmethod
+    def right_inverse(self, value: torch.nn.Parameter) -> torch.nn.Parameter:
+        raise NotImplementedError()
 
 
 class MatrixTransformFactory(ABC):
-    def __init__(self, name: str, scheme: TransformScheme):
+    def __init__(self, name: str, scheme: TransformScheme, seed: int):
         self.name = name
         self.scheme = scheme
+        self.seed = seed
+        self.transforms = []
 
-    def register_model(self, model: torch.nn.Module):
+    def apply_model(self, model: torch.nn.Module):
         for path, module in model.named_modules():
             for arg in self.scheme.apply:
                 if match_targets(path, arg.targets):
-                    self.register_module(module, arg)
+                    self.apply_module(module, arg)
 
-    def register_module(self, module: torch.nn.Module, args: TransformArgs):
+    def apply_module(self, module: torch.nn.Module, args: TransformArgs):
         transform = self.create_transform(module, args)
         name = f"{self.name}{self.scheme.apply.index(args)}"
         module.register_module(name, transform)
 
         if args.location == "input":
-            module.register_forward_pre_hook(lambda module, args: transform.forward(args[0]))
+            module.register_forward_pre_hook(lambda _, args: transform.forward(args[0]))
 
         if args.location == "weight":
-            P.register_parametrization(module, "weight", args)
+            register_offload_parameterization(module, "weight", transform)
 
         if args.location == "input":
-            module.register_forward_hook(lambda module, args, output: transform.forward(output))
+            module.register_forward_hook(lambda _, __, output: transform.forward(output))
+
+        self.transforms.append(transform)
 
     @abstractmethod
     def create_transform(self, module: torch.nn.Module, args: TransformArgs) -> TransformBase:
@@ -105,8 +121,10 @@ class MatrixTransformFactory(ABC):
 def deterministic_hadamard_matrix(size: int):
     pass
 
-def hadamard_permutation(module: torch.nn.Module, size: int):
-    return torch.permute(torch.arange(size))
+def apply_permutation(weight: torch.Tensor, perm: torch.Tensor):
+    weight = weight.clone()
+    weight[torch.eye(weight.size(0), dtype=torch.bool)] = weight[perm]
+    return weight
     
 
 class HadamardTransform(TransformBase):
@@ -116,29 +134,81 @@ class HadamardTransform(TransformBase):
         permutation: Optional[torch.Tensor],
         args: TransformArgs
     ):
+        super().__init__()
         self.weight = weight
-        self.inverse = weight.T
         self.permutation = permutation
         self.args = args
 
     def forward(self, value):
-        weight = self.weight + self.permutation
-        return apply_matrix_transform(weight, value, self.args)
+        weight = self.weight if not self.args.inverse else self.weight.T
+        if self.permutation is not None:
+            apply_permutation(weight, self.permutation)
+
+        return apply_matrix_transform(weight, value, self.args.side)
     
     def right_inverse(self, value):
-        weight = self.inverse + self.permutation
-        return apply_matrix_transform(weight, value, self.args)
+        weight = self.weight.T if not self.args.inverse else self.weight
+        if self.permutation is not None:
+            apply_permutation(weight, self.permutation)
+
+        return apply_matrix_transform(weight, value, self.args.side)
 
 
 class HadamardFactory(MatrixTransformFactory):
-    def __init__(self, name: str, scheme: TransformScheme):
-        super().__init__(name, scheme)
-        self.weights: Dict[int, torch.nn.Parameter] = ParameterizedDefaultDict(deterministic_hadamard_matrix)
-        self.permutations: Dict[torch.nn.Module, torch.nn.Parameter] = ParameterizedDefaultDict(hadamard_permutation)
+    def __init__(self, name: str, scheme: TransformScheme, seed: int):
+        super().__init__(name, scheme, seed)
+        self.weights = ParameterizedDefaultDict(self._create_weight)
+        self.perms = ParameterizedDefaultDict(self._create_permutation)
 
     def create_transform(self, module: torch.nn.Module, args: TransformArgs):
         size = get_matrix_size(module, args)
         weight = self.weights[size]
-        permutation = self.permutations[module, size]
+        perm = self.perms[module, size] if self.scheme.randomize_modules else None
 
-        return HadamardTransform(weight, permutation, args)
+        return HadamardTransform(weight, perm, args)
+    
+    def _create_weight(self, size: int):
+        data = deterministic_hadamard_matrix(size, seed=self.seed)
+        return torch.nn.Parameter(data, requires_grad=self.scheme.requires_grad)
+    
+    def _create_permutation(self, module: torch.nn.Module, size: int):
+        data = torch.randperm(size)
+        return torch.nn.Parameter(data, requires_grad=self.scheme.requires_grad)
+
+
+# -- matrix multiply -- #
+    
+
+class RandomMatrixTransform(TransformBase):
+    def __init__(
+        self,
+        weight: torch.Tensor,
+        args: TransformArgs
+    ):
+        super().__init__()
+        self.weight = weight
+        self.args = args
+        self.register_buffer("inv", torch.linalg.inv(self.weight), persistent=False)
+
+    def forward(self, value):
+        weight = self.weight if not self.args.inverse else self.inv
+        return apply_matrix_transform(weight, value, self.args.side)
+    
+    def right_inverse(self, value):
+        inverse = self.inv if not self.args.inverse else self.weight
+        return apply_matrix_transform(inverse, value, self.args.side)
+
+
+class RandomMatrixFactory(MatrixTransformFactory):
+    def __init__(self, name: str, scheme: TransformScheme, seed: int):
+        super().__init__(name, scheme, seed)
+        self.weights = ParameterizedDefaultDict(self._create_weight)
+
+    def create_transform(self, module: torch.nn.Module, args: TransformArgs):
+        size = get_matrix_size(module, args)
+        weight = self.weights[size]
+
+        return RandomMatrixTransform(weight, args)
+    
+    def _create_weight(self, size: int):
+        return torch.random((size, size))
