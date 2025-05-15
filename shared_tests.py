@@ -27,6 +27,8 @@ from pttp import TensorProfiler
 
 # updating all shared tensors could be quite complicated w.r.t. offloading. Let's not support transform updating + offloading for now (it's not really recommended anyways)
 
+# buffer caching has a tradeoff, where you get better runtime but more memory usage (disk usage is the same)
+
 # -- config -- #
 
 class TransformArgs:
@@ -113,7 +115,7 @@ class MatrixTransformFactory(ABC):
             register_offload_parameterization(module, "weight", transform)
 
         if args.location == "input":
-            module.register_forward_hook(lambda _, __, output: transform.forward(output))
+            module.register_forward_hook(lambda _, __, out: transform.forward(out))
 
         self.transforms.append(transform)
 
