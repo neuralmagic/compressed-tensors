@@ -140,10 +140,12 @@ def calculate_qparams(
         scales = scales.reshape(1)
         zero_points = zero_points.reshape(1)
 
-    return scales, zero_points
+    return scales, zero_points, global_scale
 
 
-def compute_dynamic_scales_and_zp(value: Tensor, args: QuantizationArgs):
+def compute_dynamic_scales_and_zp(
+    value: Tensor, args: QuantizationArgs, module: torch.nn.Module
+):
     """
     Returns the computed scales and zero points for dynamic activation
     quantization.
@@ -155,11 +157,54 @@ def compute_dynamic_scales_and_zp(value: Tensor, args: QuantizationArgs):
         reduced dimensions
     :return: tuple of scale and zero point derived from the observed tensor
     """
+    global_scale = None
+
     if args.strategy == QuantizationStrategy.TOKEN:
         dim = {1, 2}
         reduce_dims = tuple(idx for idx in range(value.ndim) if idx not in dim)
     elif args.strategy == QuantizationStrategy.TENSOR:
         reduce_dims = None
+    elif args.strategy == QuantizationStrategy.TENSOR_GROUP:
+        # per group dynamic quantization
+        global_scale = module.getattr("input_global_scale", None)
+        group_size = args.group_size
+
+        rows = value.shape[0]
+        columns = value.shape[1]
+        num_groups = int(ceil(columns / group_size))
+        dtype = FP8_E4M3_DATA.dtype
+        _scale = torch.empty((rows, num_groups), dtype=dtype, device=value.device)
+        _zero_point = torch.empty((rows, num_groups), dtype=dtype, device=value.device)
+        group_sizes = torch.full((num_groups,), group_size, dtype=torch.int)
+
+        end = 0
+        for group_index, group_count in enumerate(group_sizes):
+            start = end
+            end = start + group_count
+
+            dim = 0
+            if isinstance(dim, int):
+                dim = [dim]
+            dim = set(dim)
+            reduce_dims = tuple(idx for idx in range(value.ndim) if idx not in dim)
+
+            if not reduce_dims:
+                min_val, max_val = torch.aminmax(value[:, start:end])
+            else:
+                min_val = torch.amin(
+                    value[:, start:end], dim=reduce_dims, keepdims=True
+                )
+                max_val = torch.amax(
+                    value[:, start:end], dim=reduce_dims, keepdims=True
+                )
+
+            scale, zero_point = calculate_qparams(
+                min_val, max_val, args, global_scale=global_scale
+            )
+            _scale[:, group_index] = scale.squeeze(1)
+            _zero_point[:, group_index] = zero_point.squeeze(1)
+
+        return _scale, _zero_point
     else:
         raise ValueError(
             f"One of {QuantizationStrategy.TOKEN} or {QuantizationStrategy.TENSOR} ",

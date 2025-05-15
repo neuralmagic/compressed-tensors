@@ -98,6 +98,7 @@ class QuantizationStrategy(str, Enum):
     GROUP = "group"
     BLOCK = "block"
     TOKEN = "token"
+    TENSOR_GROUP = "tensor_group"
 
 
 class ActivationOrdering(Aliasable, str, Enum):
