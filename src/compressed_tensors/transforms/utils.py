@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Literal
+
 import torch
 
 
@@ -19,40 +21,17 @@ __all__ = ["apply_matrix_transform"]
 
 
 def apply_matrix_transform(
-    transform: torch.Tensor,
-    input_tensor: torch.Tensor,
-    transpose: bool = False,
-    first: bool = True,
+    weight: torch.Tensor, value: torch.Tensor, side: Literal["left", "right"]
 ) -> torch.Tensor:
-    """
-    Apply a matrix-type transform
+    if side == "left":
+        return weight @ value
 
-    :param transform: transform tensor
-    :param input_tensor: tensor to which the transform matrix is applied
-    :param transpose: whether or not the transform matrix is transposed before
-        being applied.
-    :param first: if the transform matrix will be the first or second matrix to be
-        multiplied
-
-    returns a transformed input_tensor
-    """
-
-    if transpose:
-        return (
-            torch.matmul(transform.T, input_tensor)
-            if first
-            else torch.matmul(input_tensor, transform.T)
-        )
-
-    return (
-        torch.matmul(transform, input_tensor)
-        if first
-        else torch.matmul(input_tensor, transform)
-    )
+    else:
+        return value @ weight
 
 
 def apply_permutation(weight: torch.Tensor, perm: torch.Tensor) -> torch.Tensor:
     weight = weight.clone()
     diag_indices = torch.arange(weight.size(0))
-    weight[diag_indices, diag_indices] = weight[perm, perm]
+    weight[diag_indices, diag_indices] = weight.diagonal()[perm]
     return weight

@@ -36,11 +36,7 @@ class MatrixTransformBase(Module, ABC):
         raise NotImplementedError()
 
     def __repr__(self):
-        weight = getattr(self, "weight", None)
-        if isinstance(weight, torch.Tensor):
-            return f"{self.__class__.__name__}({weight.size(0)})"
-        else:
-            return f"{self.__class__.__name__}()"
+        return f"{self.__class__.__name__}(inverse={self.args.inverse})"
 
 
 class MatrixTransformFactory(RegistryMixin, ABC):
@@ -65,15 +61,25 @@ class MatrixTransformFactory(RegistryMixin, ABC):
         module.register_module(name, transform)
 
         if args.location == "input":
+            # TODO: need to specify side
             module.register_forward_pre_hook(lambda _, args: transform(args[0]))
 
         elif args.location == "weight":
             with torch.no_grad():
+                print(module.weight)
                 update_offload_parameter(module, "weight", transform(module.weight))
                 # register_offload_parameterization(module, "weight", transform)
                 P.register_parametrization(module, "weight", transform)
+                print(module.parametrizations["weight"].original)
+                # TODO: I don't like how creating a parametrizations list creates an
+                # extra step for serialization. It'd be nicer if we had our own
+                # parametrization implementation that still overloaded the get/setattr,
+                # but simply checked an attached list of parametrizations, rather than
+                # creating a separate ModuleList. Simliar to module._forward_hooks
 
-        elif args.location == "input":
+                # we can also just disable the state_dict of module.parametrizations
+
+        elif args.location == "output":
             module.register_forward_hook(lambda _, __, output: transform(output))
 
         else:

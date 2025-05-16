@@ -45,16 +45,24 @@ class HadamardTransform(MatrixTransformBase):
         self.args = args
 
     def forward(self, value: Parameter) -> Parameter:
-        weight = self.weight if not self.args.inverse else self.weight.T
-        if self.permutation is not None:
-            weight = apply_permutation(weight, self.permutation)
+        weight = (
+            self.weight
+            if not self.args.inverse
+            else self.weight.T / self.weight.size(0)
+        )
+        # if self.permutation is not None:
+        #    weight = apply_permutation(weight, self.permutation)
 
         return apply_matrix_transform(weight, value, self.args.side)
 
     def right_inverse(self, value: Parameter) -> Parameter:
-        weight = self.weight.T if not self.args.inverse else self.weight
-        if self.permutation is not None:
-            weight = apply_permutation(weight, self.permutation)
+        weight = (
+            self.weight.T / self.weight.size(0)
+            if not self.args.inverse
+            else self.weight
+        )
+        # if self.permutation is not None:
+        #    weight = apply_permutation(weight, self.permutation)
 
         return apply_matrix_transform(weight, value, self.args.side)
 
