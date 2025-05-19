@@ -281,7 +281,7 @@ def update_fused_layer_weight_global_scales(model: torch.nn.Module):
 
     def _is_mlp_module(module: Module):
         return "mlp" in module.__class__.__name__.lower() and (
-            hasattr(module, "gate_proj") or hasattr(module, "up_porj")
+            hasattr(module, "gate_proj") or hasattr(module, "up_proj")
         )
 
     def _valid_fp4_quant(layer_list: List[torch.nn.Linear]):

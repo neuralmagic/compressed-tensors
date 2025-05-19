@@ -123,7 +123,9 @@ def calculate_qparams(
             quantization_args.num_bits == 4
             and quantization_args.type == QuantizationType.FLOAT
         ):
-            raise NotImplementedError("Asymmetric Quantization is not support for FP4")
+            raise NotImplementedError(
+                "Asymmetric Quantization is not supported for FP4"
+            )
 
         scales = (max_vals - min_vals) / float(bit_range)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
@@ -461,7 +463,7 @@ def generate_global_scale(
     Goal of the scale is to ensure that the quantization (local) scale
     falls into the approproiate dtype range.
 
-    E.g. for NVFp4, group (local) scales are in dtype FP8. The global_scale
+    E.g. for NVFP4, group (local) scales are in dtype FP8. The global_scale
     attempts to use the entire FP8 dtype range while mapping a per-group max
     to the FP4 max.
     """

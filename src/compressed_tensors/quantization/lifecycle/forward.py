@@ -65,6 +65,7 @@ def quantize(
     :param args: quantization args dictating how to quantize x
     :param dtype: optional dtype to cast the quantized output to
     :param g_idx: optional mapping from column index to group index
+    :param global_scale: optional constant to scale the quantization scale during QDQ
     :return: fake quantized tensor
     """
 
@@ -101,6 +102,7 @@ def dequantize(
     :param args: quantization args used to quantize x_q
     :param dtype: optional dtype to cast the dequantized output to
     :param g_idx: optional mapping from column index to group index
+    :param global_scale: optional constant to scale the quantization scale during QDQ
     :return: dequantized float tensor
     """
     if args is None:
@@ -157,6 +159,7 @@ def fake_quantize(
     :param zero_point: zero point tensor
     :param args: quantization args dictating how to quantize x
     :param g_idx: optional mapping from column index to group index
+    :param global_scale: optional constant to scale the quantization scale during QDQ
     :return: fake quantized tensor
     """
     return _process_quantization(
