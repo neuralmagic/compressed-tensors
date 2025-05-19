@@ -47,6 +47,7 @@ __all__ = [
     "calculate_range",
     "calculate_qparams",
     "generate_global_scale",
+    "is_fp4",
 ]
 
 # target the self_attn layer
@@ -54,6 +55,13 @@ __all__ = [
 KV_CACHE_TARGETS = ["re:.*self_attn$"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+def is_fp4(quantization_args: QuantizationArgs):
+    return (
+        quantization_args.num_bits == 4
+        and quantization_args.type == QuantizationType.FLOAT
+    )
 
 
 def calculate_qparams(
@@ -84,10 +92,7 @@ def calculate_qparams(
     bit_min, bit_max = calculate_range(quantization_args, device)
     bit_range = bit_max - bit_min
 
-    if (
-        quantization_args.num_bits == 4
-        and quantization_args.type == QuantizationType.FLOAT
-    ):
+    if is_fp4(quantization_args=quantization_args):
         zp_dtype = FP8_E4M3_DATA.dtype
     else:
         zp_dtype = quantization_args.pytorch_dtype()
@@ -95,11 +100,7 @@ def calculate_qparams(
     if quantization_args.symmetric:
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
 
-        if (
-            quantization_args.num_bits == 4
-            and quantization_args.type == QuantizationType.FLOAT
-            and global_scale is not None
-        ):
+        if is_fp4(quantization_args=quantization_args) and global_scale is not None:
             # Conditionally scale the generated local scale by a global_scale
             scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
             scales = scales.to(FP8_E4M3_DATA.dtype)
@@ -119,10 +120,7 @@ def calculate_qparams(
 
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
-        if (
-            quantization_args.num_bits == 4
-            and quantization_args.type == QuantizationType.FLOAT
-        ):
+        if is_fp4(quantization_args=quantization_args):
             raise NotImplementedError(
                 "Asymmetric Quantization is not supported for FP4"
             )

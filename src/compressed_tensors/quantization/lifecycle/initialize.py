@@ -34,6 +34,7 @@ from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     generate_global_scale,
+    is_fp4,
     is_kv_cache_quant_scheme,
     iter_named_quantizable_modules,
 )
@@ -180,11 +181,7 @@ def _initialize_scale_zero_point(
     # there is likely bug
     # TODO: maybe add a short cutting utility so we don't have a ton of if/else
     # everywhere
-    if (
-        quantization_args.num_bits == 4
-        and quantization_args.type == QuantizationType.FLOAT
-        and base_name == "weight"
-    ):
+    if is_fp4(quantization_args=quantization_args) and base_name == "weight":
         scale_dtype = FP8_E4M3_DATA.dtype
         # When applying weight-only FP4 quantization, generate a global_scale
         # This scale is applied during runtime to ensure that the generated
@@ -197,10 +194,11 @@ def _initialize_scale_zero_point(
             module, f"{base_name}_global_scale", init_global_scale
         )
 
-    if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32,] and not (
-        quantization_args.num_bits == 4
-        and quantization_args.type == QuantizationType.FLOAT
-    ):
+    if scale_dtype not in [
+        torch.float16,
+        torch.bfloat16,
+        torch.float32,
+    ] and not is_fp4(quantization_args=quantization_args):
         scale_dtype = torch.float16
 
     # initializes empty scale, zero point, and g_idx parameters for the module
@@ -211,10 +209,7 @@ def _initialize_scale_zero_point(
     register_offload_parameter(module, f"{base_name}_scale", init_scale)
 
     if force_zero_point or not quantization_args.symmetric:
-        if (
-            quantization_args.num_bits == 4
-            and quantization_args.type == QuantizationType.FLOAT
-        ):
+        if is_fp4(quantization_args=quantization_args):
             zp_dtype = FP8_E4M3_DATA.dtype
         else:
             zp_dtype = quantization_args.pytorch_dtype()
@@ -296,10 +291,7 @@ def update_fused_layer_weight_global_scales(model: torch.nn.Module):
 
             weight_quant_args = scheme.weights
 
-            if not (
-                weight_quant_args.num_bits == 4
-                and weight_quant_args.type == QuantizationType.FLOAT
-            ):
+            if not is_fp4(quantization_args=weight_quant_args):
                 return False
         return True
 
