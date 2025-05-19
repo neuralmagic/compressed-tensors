@@ -179,8 +179,7 @@ def _initialize_scale_zero_point(
     scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
     # TODO: consider erroring out in the future as if the dtype if not one fo these,
     # there is likely bug
-    # TODO: maybe add a short cutting utility so we don't have a ton of if/else
-    # everywhere
+
     if is_fp4(quantization_args=quantization_args) and base_name == "weight":
         scale_dtype = FP8_E4M3_DATA.dtype
         # When applying weight-only FP4 quantization, generate a global_scale
