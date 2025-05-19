@@ -291,6 +291,9 @@ def update_fused_layer_weight_global_scales(model: torch.nn.Module):
 
             weight_quant_args = scheme.weights
 
+            if weight_quant_args is None:
+                return False
+
             if not is_fp4(quantization_args=weight_quant_args):
                 return False
         return True
