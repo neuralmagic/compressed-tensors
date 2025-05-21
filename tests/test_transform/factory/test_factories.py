@@ -31,9 +31,8 @@ class TransformableModel(torch.nn.Module):
         super().__init__()
         self.fcs = torch.nn.ModuleList([])
         self.fcs.append(torch.nn.Linear(sizes[0], sizes[1], bias=False))
-        for index in range(1, len(sizes) - 2):
+        for index in range(1, len(sizes) - 1):
             self.fcs.append(torch.nn.Linear(sizes[index], sizes[index + 1], bias=False))
-        self.fcs.append(torch.nn.Linear(sizes[-2], sizes[-1], bias=False))
 
     def forward(self, x):
         for layer in self.fcs:
@@ -63,7 +62,7 @@ def test_correctness(scheme):
         module, TransformArgs(targets="Linear", location="output", inverse=True)
     )
 
-    input = torch.rand((1, size[0]))
+    input = torch.rand((17, size[0]))
     true_output = module.weight @ input.T
     output = output_tfm(left_tfm(right_tfm(module.weight)) @ input_tfm(input).T)
 
@@ -75,14 +74,15 @@ def test_correctness(scheme):
     [TransformScheme(type=name) for name in TransformFactory.registered_names()],
 )
 def test_correctness_model(scheme):
-    model = TransformableModel(2, 4, 2)
+    model = TransformableModel(2, 2)
     scheme.apply = [
         TransformArgs(targets="fcs.0", location="input"),
-        TransformArgs(targets="fcs.1", location="output", inverse=True),
+        TransformArgs(targets="fcs.0", location="output", inverse=True),
+        # TransformArgs(targets="fcs.1", location="output", inverse=True),
     ]
     factory = TransformFactory.from_scheme(scheme, name="")
 
-    input = torch.rand((1, model.fcs[0].in_features))
+    input = torch.rand((17, model.fcs[0].in_features))
     true_output = model(input)
 
     factory.apply_to_model(model)

@@ -15,18 +15,57 @@
 from typing import Literal
 
 import torch
+from compressed_tensors.transform import TransformArgs
 
 
 __all__ = ["apply_matrix_transform"]
 
 
-def apply_matrix_transform(
-    weight: torch.Tensor, value: torch.Tensor, side: Literal["left", "right"]
-) -> torch.Tensor:
-    if side == "left":
-        return weight @ value
-
+def get_matrix_size(module: torch.nn.Module, args: TransformArgs) -> int:
+    assert isinstance(module, torch.nn.Linear)
+    if args.location == "input" or (args.location == "weight" and args.side == "input"):
+        return module.in_features
     else:
+        return module.out_features
+
+
+def apply_matrix_transform(
+    weight: torch.Tensor, value: torch.Tensor, args: TransformArgs
+) -> torch.Tensor:
+    # let x          be input activation
+    #     W          be weight,
+    #     yh, xh, Wh be transformed output, input, weight
+    #
+    # note that
+    #     y  = (x W.T)        // torch.nn.Linear
+    #     yh = (xh) (Wh).T    // transformed
+    #
+    # show that the following values for yh, xh, and Wh are consistent
+    #
+    # let V, Vi      be transform matrices on input side
+    #     U, Ui      be transform matrices on output side
+    #
+    # pik xh = (x V)
+    #     Wh = (U.T W Vi.T)
+    #     yh = (y U)
+    #
+    # (xh) (Wh).T = (x V) (U.T W Vi.T).T
+    #             = (x V) (Vi W.T U)        // transpose matrix product identity
+    #             = (x W.T) U
+    #             = y U
+    #             = yh
+
+    if args.location == "input":
+        return value @ weight
+
+    elif args.location == "weight":
+        if args.side == "input":
+            return value @ weight.T
+
+        elif args.side == "output":
+            return weight @ value
+
+    elif args.location == "output":
         return value @ weight
 
 

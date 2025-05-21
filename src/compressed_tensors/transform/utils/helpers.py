@@ -27,11 +27,3 @@ class ParameterizedDefaultDict(dict):
             value = self.default_factory(key)
         self[key] = value
         return value
-
-
-def get_matrix_size(module: torch.nn.Module, args: TransformArgs) -> int:
-    assert isinstance(module, torch.nn.Linear)
-    if args.location == "input" or args.location == "weight" and args.side == "right":
-        return module.in_features
-    else:
-        return module.out_features
