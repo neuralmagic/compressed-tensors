@@ -12,14 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
-
 import torch
-from compressed_tensors.utils import has_offloaded_params
-
-
-if TYPE_CHECKING:
-    from compressed_tensors.transforms.transform_args import TransformArgs
+from compressed_tensors.transform import TransformArgs
 
 
 class ParameterizedDefaultDict(dict):
@@ -35,16 +29,9 @@ class ParameterizedDefaultDict(dict):
         return value
 
 
-def get_matrix_size(module: torch.nn.Module, args: "TransformArgs") -> int:
+def get_matrix_size(module: torch.nn.Module, args: TransformArgs) -> int:
     assert isinstance(module, torch.nn.Linear)
     if args.location == "input" or args.location == "weight" and args.side == "right":
         return module.in_features
     else:
         return module.out_features
-
-
-def get_offload_device(module: torch.nn.Module) -> torch.device:
-    if has_offloaded_params(module):
-        return module._hf_hook.weights_map.values().device
-    else:
-        next(module.parameters()).device

@@ -23,12 +23,12 @@ from compressed_tensors.transform.utils.hadamard_utils import (
 from compressed_tensors.transform.utils.helpers import (
     ParameterizedDefaultDict,
     get_matrix_size,
-    get_offload_device,
 )
 from compressed_tensors.transform.utils.utils import (
     apply_matrix_transform,
     apply_permutation,
 )
+from compressed_tensors.utils import get_offloaded_device
 from torch import device, dtype
 from torch.nn import Linear, Module, Parameter
 
@@ -44,7 +44,7 @@ class HadamardFactory(TransformFactory):
         assert isinstance(module, Linear)
         size = get_matrix_size(module, args)
         dtype = module.weight.dtype
-        device = get_offload_device(module)
+        device = get_offloaded_device(module)
 
         weight = self.weights[size, dtype, device]
         perm = self.perms[module, size] if self.scheme.randomize_modules else None

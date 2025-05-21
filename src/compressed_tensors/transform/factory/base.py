@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 
 import torch
 import torch.nn.utils.parametrize as P
+from compressed_tensors.quantization.lifecycle import is_target  # TODO: move to utils
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.utils import (
@@ -60,10 +61,9 @@ class TransformFactory(RegistryMixin, ABC):
         raise NotImplementedError()
 
     def apply_to_model(self, model: Module):
-        for path, module in model.named_modules():
+        for path, module in list(model.named_modules()):
             for arg in self.scheme.apply:
-                # if match_targets(path, arg.targets):
-                if isinstance(module, Linear):
+                if is_target(path, module, arg.targets, arg.ignore):
                     self._apply_to_module(module, arg)
 
     def _apply_to_module(self, module: Module, args: TransformArgs):

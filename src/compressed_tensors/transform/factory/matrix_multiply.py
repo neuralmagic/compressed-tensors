@@ -20,9 +20,9 @@ from compressed_tensors.transform.factory.base import TransformBase, TransformFa
 from compressed_tensors.transform.utils.helpers import (
     ParameterizedDefaultDict,
     get_matrix_size,
-    get_offload_device,
 )
 from compressed_tensors.transform.utils.utils import apply_matrix_transform
+from compressed_tensors.utils import get_offloaded_device
 from torch import Tensor, device, dtype
 from torch.nn import Linear, Module, Parameter
 
@@ -46,7 +46,7 @@ class RandomMatrixFactory(TransformFactory):
         assert isinstance(module, Linear)
         size = get_matrix_size(module, args)
         dtype = module.weight.dtype
-        device = get_offload_device(module)
+        device = get_offloaded_device(module)
 
         weight = self.weights[size, dtype, device]
         inverse = self.inverses[size, dtype, device]
