@@ -22,7 +22,7 @@ __all__ = ["TransformArgs"]
 
 class TransformArgs(BaseModel):
     """
-    Arguments which define *how* and where a transform should be applied to a model
+    Arguments which define how and where a transform should be applied to a model
 
     :param targets: list of modules to apply transforms to
     :param location: where to apply transform on module, one of (`input`, `weight`,
