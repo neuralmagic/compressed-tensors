@@ -37,6 +37,7 @@ try:
     from accelerate.hooks import (
         AlignDevicesHook,
         add_hook_to_module,
+        named_module_tensors,
         remove_hook_from_module,
     )
     from accelerate.utils import (
@@ -54,6 +55,7 @@ except ImportError:
     OffloadedWeightsLoader = None
     PrefixedDataset = None
     set_module_tensor_to_device = None
+    named_module_tensors = None
 
 
 __all__ = [
@@ -70,6 +72,7 @@ __all__ = [
     "disable_offload",
     "align_modules",
     "align_module_device",
+    "register_offload_module",
 ]
 
 
@@ -381,6 +384,23 @@ def align_modules(
             stack.enter_context(align_module_device(module, execution_device))
             stack.enter_context(disable_offload(module))  # disable redundant onloading
         yield
+
+
+def register_offload_module(
+    module: torch.nn.Module, name: str, to_register: torch.nn.Module
+):
+    if has_offloaded_params(module):
+        offload_device = get_offloaded_device(module)
+        hook: AlignDevicesHook = module._hf_hook
+
+        hook.place_submodules = True
+        for param_name, param in named_module_tensors(
+            to_register, include_buffers=True, recurse=True
+        ):
+            offloaded = param.to(offload_device)
+            offload_to_weights_map(hook.weights_map, f"{name}{param_name}", offloaded)
+
+    module.register_module(name, to_register)
 
 
 """ Upstreamed Functions """

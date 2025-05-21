@@ -12,14 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# flake8: noqa
-# isort: skip_file
+import torch
+from compressed_tensors.transform import TransformArgs
 
-from .transform_args import *
-from .transform_scheme import *
-from .transform_config import *
 
-from .factory.base import *
-from .factory.hadamard import *
-from .factory.matrix_multiply import *
-from .factory.random_hadamard import *
+class ParameterizedDefaultDict(dict):
+    def __init__(self, default_factory):
+        self.default_factory = default_factory
+
+    def __missing__(self, key):
+        if isinstance(key, tuple):
+            value = self.default_factory(*key)
+        else:
+            value = self.default_factory(key)
+        self[key] = value
+        return value
