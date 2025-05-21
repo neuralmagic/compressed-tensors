@@ -52,10 +52,10 @@ def test_correctness(scheme):
     input_tfm = factory.create_transform(
         module, TransformArgs(targets="Linear", location="input", inverse=True)
     )
-    right_tfm = factory.create_transform(
+    w_in_tfm = factory.create_transform(
         module, TransformArgs(targets="Linear", location="weight", side="input")
     )
-    left_tfm = factory.create_transform(
+    w_out_tfm = factory.create_transform(
         module, TransformArgs(targets="Linear", location="weight", side="output")
     )
     output_tfm = factory.create_transform(
@@ -63,8 +63,10 @@ def test_correctness(scheme):
     )
 
     input = torch.rand((17, size[0]))
-    true_output = module.weight @ input.T
-    output = output_tfm(left_tfm(right_tfm(module.weight)) @ input_tfm(input).T)
+    true_output = input @ module.weight.T
+    input_transformed = input_tfm(input)
+    weight_transformed = w_out_tfm(w_in_tfm(module.weight))
+    output = output_tfm(input_transformed @ weight_transformed.T)
 
     torch.allclose(true_output, output, atol=1e-7, rtol=0.0)
 
@@ -74,11 +76,10 @@ def test_correctness(scheme):
     [TransformScheme(type=name) for name in TransformFactory.registered_names()],
 )
 def test_correctness_model(scheme):
-    model = TransformableModel(2, 2)
+    model = TransformableModel(2, 4, 8, 16)
     scheme.apply = [
         TransformArgs(targets="fcs.0", location="input"),
-        TransformArgs(targets="fcs.0", location="output", inverse=True),
-        # TransformArgs(targets="fcs.1", location="output", inverse=True),
+        TransformArgs(targets="fcs.2", location="output", inverse=True),
     ]
     factory = TransformFactory.from_scheme(scheme, name="")
 
@@ -86,7 +87,6 @@ def test_correctness_model(scheme):
     true_output = model(input)
 
     factory.apply_to_model(model)
-    breakpoint()
     output = model(input)
 
     torch.allclose(true_output, output, atol=1e-7, rtol=0.0)
@@ -140,8 +140,6 @@ def test_memory_sharing_offload(scheme):
     # offload model
     model = TransformableModel(2, 2, 4, 4, 8, 8).cuda()
     model = cpu_offload(model, execution_device=torch.device("cuda"))
-
-    breakpoint()
 
     #
     factory.apply_to_model(model)

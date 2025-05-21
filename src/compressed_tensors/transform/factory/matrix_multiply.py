@@ -81,7 +81,7 @@ class RandomMatrixTransform(TransformBase):
         else:
             weight = high_precision_invert(self.weight)
 
-        return apply_matrix_transform(weight, value, self.args.side)
+        return apply_matrix_transform(weight, value, self.args)
 
 
 def high_precision_invert(weight: Tensor) -> Tensor:
