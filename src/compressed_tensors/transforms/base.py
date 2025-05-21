@@ -20,6 +20,7 @@ from compressed_tensors.registry.registry import RegistryMixin
 from compressed_tensors.transforms.transform_args import TransformArgs
 from compressed_tensors.transforms.transform_scheme import TransformsScheme
 from compressed_tensors.utils import (
+    get_execution_device,
     has_offloaded_params,
     patch_attr,
     register_offload_module,
@@ -32,11 +33,23 @@ __all__ = ["TransformFactory", "TransformBase"]
 
 
 class TransformFactory(RegistryMixin, ABC):
-    def __init__(self, name: str, scheme: TransformsScheme, seed: int = 42):
+    def __init__(
+        self,
+        name: str,
+        scheme: TransformsScheme,
+        seed: int = 42,
+        keep_onloaded: bool = False,
+    ):
         self.name = name
         self.scheme = scheme
         self.seed = seed
-        self.transforms = []
+
+        self.keep_onloaded = keep_onloaded
+        self.params_map = None
+
+        if self.keep_onloaded and self.scheme.randomize_modules:
+            # warning
+            pass
 
     @classmethod
     def from_scheme(cls, scheme: TransformsScheme, **kwargs):
@@ -63,6 +76,10 @@ class TransformFactory(RegistryMixin, ABC):
         transform = self.create_transform(module, args)
         assert all(pm.device == torch.device("cpu") for pm in transform.parameters())
         register_offload_module(module, name, transform)
+
+        # because transform weights are often shared between weights,
+        if self.keep_onloaded and has_offloaded_params(transform):
+            self._manually_onload(transform)
 
         # register input transformation hook
         if args.location == "input":
@@ -98,7 +115,21 @@ class TransformFactory(RegistryMixin, ABC):
         else:
             raise NotImplementedError()
 
-        self.transforms.append(transform)  # for updating
+    def _manually_onload(self, module: Module):
+        assert not self.scheme.requires_grad
+        exec_device = get_execution_device(module)
+
+        # parameters are onloaded to self.params_map which is shared across hooks
+        if self.params_map is None:
+            self.params_map = module._hf_hook.tied_params_map
+        elif module._hf_hook.tied_params_map is not self.params_map:
+            raise ValueError()
+
+        # onload all parameters associated withe the transform
+        for param in module.parameters():
+            if param.data_ptr() not in self.params_map:
+                self.params_map[param.data_ptr()] = {}
+            self.params_map[param.data_ptr()][exec_device] = param.to(exec_device)
 
     def _get_transform_name(self, args: TransformArgs) -> str:
         components = [self.name, args.location]
