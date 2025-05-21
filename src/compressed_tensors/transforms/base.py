@@ -19,48 +19,32 @@ import torch.nn.utils.parametrize as P
 from compressed_tensors.registry.registry import RegistryMixin
 from compressed_tensors.transforms.transform_args import TransformArgs
 from compressed_tensors.transforms.transform_scheme import TransformsScheme
-from compressed_tensors.utils.offload import (
+from compressed_tensors.utils import (
     has_offloaded_params,
+    patch_attr,
     register_offload_module,
-    register_offload_parameter,
     update_offload_parameter,
 )
 from torch.nn import Linear, Module, Parameter
 
 
-__all__ = ["Transforms"]
+__all__ = ["TransformFactory", "TransformBase"]
 
 
-class MatrixTransformBase(Module, ABC):
-    args: TransformArgs
-
-    @abstractmethod
-    def forward(self, value: Parameter) -> Parameter:
-        raise NotImplementedError()
-
-    def right_inverse(self, value: Parameter) -> Parameter:
-        original = self.args.inverse
-        self.args.inverse = not original
-        ret = self.forward(value)
-        self.args.inverse = original
-
-        return ret
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(inverse={self.args.inverse})"
-
-
-class MatrixTransformFactory(RegistryMixin, ABC):
-    def __init__(self, name: str, scheme: TransformsScheme, seed: int):
+class TransformFactory(RegistryMixin, ABC):
+    def __init__(self, name: str, scheme: TransformsScheme, seed: int = 42):
         self.name = name
         self.scheme = scheme
         self.seed = seed
         self.transforms = []
 
+    @classmethod
+    def load_from_scheme(cls, name: str, scheme: TransformsScheme, **kwargs):
+        constructor = cls.get_value_from_registry(name=scheme.type)
+        return constructor(name=name, scheme=scheme, **kwargs)
+
     @abstractmethod
-    def create_transform(
-        self, module: Module, args: TransformArgs
-    ) -> MatrixTransformBase:
+    def create_transform(self, module: Module, args: TransformArgs) -> "TransformBase":
         raise NotImplementedError()
 
     def apply_to_model(self, model: Module):
@@ -121,6 +105,21 @@ class MatrixTransformFactory(RegistryMixin, ABC):
             components.append(args.side)
 
         return "_".join(components)
+
+
+class TransformBase(Module, ABC):
+    args: TransformArgs
+
+    @abstractmethod
+    def forward(self, value: Parameter) -> Parameter:
+        raise NotImplementedError()
+
+    def right_inverse(self, value: Parameter) -> Parameter:
+        with patch_attr(self.args, "inverse", not self.args.inverse):
+            return self.forward(value)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(inverse={self.args.inverse})"
 
 
 # def compress_module_transforms(module: Module):

@@ -15,10 +15,7 @@
 from typing import Optional
 
 import torch
-from compressed_tensors.transforms.base import (
-    MatrixTransformBase,
-    MatrixTransformFactory,
-)
+from compressed_tensors.transforms.base import TransformBase, TransformFactory
 from compressed_tensors.transforms.helpers import (
     ParameterizedDefaultDict,
     get_matrix_size,
@@ -31,32 +28,13 @@ from torch import Tensor, device, dtype
 from torch.nn import Linear, Module, Parameter
 
 
-class RandomMatrixTransform(MatrixTransformBase):
-    def __init__(self, weight: Tensor, inverse: Optional[Tensor], args: TransformArgs):
-        super().__init__()
-        self.weight = weight
-        self.args = args
-
-        self.register_buffer("inverse", inverse, persistent=False)  # extra memory
-
-    def forward(self, value: Parameter) -> Parameter:
-        if self.args.inverse:
-            weight = self.weight
-        elif self.inverse is not None:
-            weight = self.inverse
-        else:
-            weight = torch.linalg.inv(self.weight)
-
-        return apply_matrix_transform(weight, value, self.args.side)
-
-
-@MatrixTransformFactory.register("matrix-mul")
-class RandomMatrixFactory(MatrixTransformFactory):
+@TransformFactory.register("matrix-mul")
+class RandomMatrixFactory(TransformFactory):
     def __init__(
         self,
         name: str,
         scheme: TransformsScheme,
-        seed: int,
+        seed: int = 42,
         cache_inverses: bool = True,
     ):
         super().__init__(name, scheme, seed)
@@ -76,13 +54,36 @@ class RandomMatrixFactory(MatrixTransformFactory):
         return RandomMatrixTransform(weight, inverse, args)
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> torch.Tensor:
-        return torch.random((size, size), dtype=dtype, device=device)
+        return torch.rand((size, size), dtype=dtype, device=device)
 
     def _create_inverse(
         self, size: int, dtype: dtype, device: device
     ) -> Optional[torch.Tensor]:
         if self.cache_inverses:
             weight = self.weights[size, dtype, device]
-            return torch.linalg.inv(weight)
+            return high_precision_invert(weight)
         else:
             return None
+
+
+class RandomMatrixTransform(TransformBase):
+    def __init__(self, weight: Tensor, inverse: Optional[Tensor], args: TransformArgs):
+        super().__init__()
+        self.weight = weight
+        self.args = args
+
+        self.register_buffer("inverse", inverse, persistent=False)  # extra memory
+
+    def forward(self, value: Parameter) -> Parameter:
+        if self.args.inverse:
+            weight = self.weight
+        elif self.inverse is not None:
+            weight = self.inverse
+        else:
+            weight = high_precision_invert(self.weight)
+
+        return apply_matrix_transform(weight, value, self.args.side)
+
+
+def high_precision_invert(weight: Tensor) -> Tensor:
+    return torch.linalg.inv(weight.to(torch.float32)).to(weight.dtype)

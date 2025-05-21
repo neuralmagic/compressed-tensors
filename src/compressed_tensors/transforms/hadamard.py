@@ -12,13 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union
+from typing import Optional
 
 import torch
-from compressed_tensors.transforms.base import (
-    MatrixTransformBase,
-    MatrixTransformFactory,
-)
+from compressed_tensors.transforms.base import TransformBase, TransformFactory
 from compressed_tensors.transforms.hadamard_utils import deterministic_hadamard_matrix
 from compressed_tensors.transforms.helpers import (
     ParameterizedDefaultDict,
@@ -31,34 +28,13 @@ from compressed_tensors.transforms.utils import (
     apply_matrix_transform,
     apply_permutation,
 )
-from torch import Tensor, device, dtype
+from torch import device, dtype
 from torch.nn import Linear, Module, Parameter
 
 
-class HadamardTransform(MatrixTransformBase):
-    def __init__(
-        self, weight: Parameter, permutation: Optional[Parameter], args: TransformArgs
-    ):
-        super().__init__()
-        self.weight = weight
-        self.permutation = permutation
-        self.args = args
-
-    def forward(self, value: Parameter) -> Parameter:
-        if not self.args.inverse:
-            weight = self.weight
-        else:
-            weight = self.weight.T / self.weight.size(0)
-
-        # if self.permutation is not None:
-        #    weight = apply_permutation(weight, self.permutation)
-
-        return apply_matrix_transform(weight, value, self.args.side)
-
-
-@MatrixTransformFactory.register("hadamard")
-class HadamardFactory(MatrixTransformFactory):
-    def __init__(self, name: str, scheme: TransformsScheme, seed: int):
+@TransformFactory.register("hadamard")
+class HadamardFactory(TransformFactory):
+    def __init__(self, name: str, scheme: TransformsScheme, seed: int = 42):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
         self.perms = ParameterizedDefaultDict(self._create_permutation)
@@ -81,3 +57,24 @@ class HadamardFactory(MatrixTransformFactory):
     def _create_permutation(self, module: Module, size: int) -> Parameter:
         data = torch.randperm(size)
         return Parameter(data, requires_grad=False)
+
+
+class HadamardTransform(TransformBase):
+    def __init__(
+        self, weight: Parameter, permutation: Optional[Parameter], args: TransformArgs
+    ):
+        super().__init__()
+        self.weight = weight
+        self.permutation = permutation
+        self.args = args
+
+    def forward(self, value: Parameter) -> Parameter:
+        if not self.args.inverse:
+            weight = self.weight
+        else:
+            weight = self.weight.T / self.weight.size(0)
+
+        # if self.permutation is not None:
+        #    weight = apply_permutation(weight, self.permutation)
+
+        return apply_matrix_transform(weight, value, self.args.side)

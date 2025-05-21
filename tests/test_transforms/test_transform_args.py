@@ -12,41 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from collections import defaultdict
-
-from compressed_tensors.transforms.transform_args import (
-    ModuleTarget,
-    TransformationArgs,
-)
+from compressed_tensors.transforms.transform_args import TransformArgs
 
 
 def test_transform_args_basic():
     targets = ["Embedding"]
-    module_targets = [ModuleTarget.INPUT_ACTIVATIONS]
-    basic_args = TransformationArgs(targets=targets, module_targets=module_targets)
+    location = "input"
+    basic_args = TransformArgs(targets=targets, location=location)
 
-    assert basic_args.targets[0] == "Embedding"
-    assert basic_args.module_targets[0] == ModuleTarget.INPUT_ACTIVATIONS
-    assert isinstance(type(basic_args.call_args), type(defaultdict))
+    assert basic_args.targets == ["Embedding"]
+    assert basic_args.location == "input"
     assert len(basic_args.ignore) == 0
 
 
 def test_transform_args_full():
     targets = ["Linear"]
-    module_targets = ["weight", "input_activations"]
+    location = "weight"
+    side = "left"
+    inverse = True
     ignore = ["model.layers.2"]
-    call_args = {"transpose": True}
 
-    full_args = TransformationArgs(
+    full_args = TransformArgs(
         targets=targets,
-        module_targets=module_targets,
-        call_args=call_args,
+        location=location,
+        side=side,
+        inverse=inverse,
         ignore=ignore,
     )
 
     full_args.targets = targets
+    full_args.location == location
+    full_args.side == side
+    full_args.inverse == inverse
     full_args.ignore == ignore
-    full_args.module_targets[0] == ModuleTarget.WEIGHT.value
-    full_args.module_targets[1] == ModuleTarget.INPUT_ACTIVATIONS.value
-    assert full_args.call_args.get("transpose")

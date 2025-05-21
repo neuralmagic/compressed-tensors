@@ -23,6 +23,6 @@ __all__ = ["TransformsScheme"]
 
 class TransformsScheme(BaseModel):
     type: str
-    apply: List[TransformArgs]
+    apply: List[TransformArgs] = Field(default_factory=list)
     randomize_modules: bool = Field(default=False)
     requires_grad: bool = Field(default=False)

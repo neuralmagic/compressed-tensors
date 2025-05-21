@@ -14,67 +14,61 @@
 
 
 import pytest
-from compressed_tensors.transforms.transform_args import (
-    ModuleTarget,
-    TransformationArgs,
-)
-from compressed_tensors.transforms.transform_config import TransformationConfig
-from compressed_tensors.transforms.transform_scheme import TransformationScheme
+from compressed_tensors.transforms.transform_args import TransformArgs
+from compressed_tensors.transforms.transform_config import TransformsConfig
+from compressed_tensors.transforms.transform_scheme import TransformsScheme
 
 
 @pytest.fixture
 def basic_transform_scheme():
     targets = ["Embedding"]
-    module_targets = [ModuleTarget.INPUT_ACTIVATIONS]
-    basic_args = TransformationArgs(targets=targets, module_targets=module_targets)
+    location = "input"
+    basic_args = TransformArgs(targets=targets, location=location)
 
-    scheme = TransformationScheme(
-        transform_type="hadamard",
-        groups=[basic_args],
-        transform_creation_args={"size": 1024},
+    return TransformsScheme(
+        type="hadamard",
+        apply=[basic_args],
     )
-    return scheme
 
 
 def test_basic(basic_transform_scheme):
-    config = TransformationConfig(
+    config = TransformsConfig(
         transform_groups={
             "transform_0": basic_transform_scheme,
         }
     )
-    assert isinstance(config.transform_groups.get("transform_0"), TransformationScheme)
+    assert isinstance(config.transform_groups.get("transform_0"), TransformsScheme)
 
 
 def test_to_dict(basic_transform_scheme):
-    config = TransformationConfig(
+    config = TransformsConfig(
         transform_groups={
             "transform_0": basic_transform_scheme,
         }
     )
-    config_dict = config.to_dict()
+    config_dict = config.model_dump()
     assert "transform_groups" in config_dict.keys()
 
 
 def test_multiple_groups():
-    module_targets = [ModuleTarget.WEIGHT]
+    location = "weight"
+    side = "left"
 
     targets_1 = ["model.layers.0.attn.v_proj"]
-    linear_args_1 = TransformationArgs(targets=targets_1, module_targets=module_targets)
+    linear_args_1 = TransformArgs(targets=targets_1, location=location, side=side)
 
     targets_2 = ["model.layers.0.attn.q_proj"]
-    linear_args_2 = TransformationArgs(targets=targets_2, module_targets=module_targets)
+    linear_args_2 = TransformArgs(targets=targets_2, location=location, side=side)
 
-    scheme_1 = TransformationScheme(
-        transform_type="hadamard",
-        groups=[linear_args_1],
-        transform_creation_args={"size": 1024},
+    scheme_1 = TransformsScheme(
+        type="hadamard",
+        apply=[linear_args_1],
     )
 
-    scheme_2 = TransformationScheme(
-        transform_type="hadamard",
-        groups=[linear_args_2],
-        transform_creation_args={"size": 256},
+    scheme_2 = TransformsScheme(
+        type="hadamard",
+        apply=[linear_args_2],
     )
-    config = TransformationConfig(
+    config = TransformsConfig(
         transform_groups={"transform_0": scheme_1, "transform_1": scheme_2}
     )

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import warnings
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
@@ -38,6 +39,7 @@ __all__ = [
     "shard_tensor",
     "pack_bitmasks",
     "unpack_bitmasks",
+    "patch_attr",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -328,3 +330,32 @@ def unpack_bitmasks(
     )
 
     return unpacked_bitmasks_torch
+
+
+@contextlib.contextmanager
+def patch_attr(base: object, attr: str, value: Any):
+    """
+    Patch the value of an object attribute. Original value is restored upon exit
+
+    :param base: object which has the attribute to patch
+    :param attr: name of the the attribute to patch
+    :param value: used to replace original value
+
+    Usage:
+    >>> from types import SimpleNamespace
+    >>> obj = SimpleNamespace()
+    >>> with patch_attr(obj, "attribute", "value"):
+    ...     assert obj.attribute == "value"
+    >>> assert not hasattr(obj, "attribute")
+    """
+    _sentinel = object()
+    original_value = getattr(base, attr, _sentinel)
+
+    setattr(base, attr, value)
+    try:
+        yield
+    finally:
+        if original_value is not _sentinel:
+            setattr(base, attr, original_value)
+        else:
+            delattr(base, attr)

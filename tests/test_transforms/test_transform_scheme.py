@@ -12,73 +12,66 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from compressed_tensors.transforms.transform_args import (
-    ModuleTarget,
-    TransformationArgs,
-)
-from compressed_tensors.transforms.transform_scheme import TransformationScheme
+from compressed_tensors.transforms.transform_args import TransformArgs
+from compressed_tensors.transforms.transform_scheme import TransformsScheme
 
 
 def test_basic_scheme():
     targets = ["Linear"]
-    module_targets = [ModuleTarget.INPUT_ACTIVATIONS]
-    basic_args = TransformationArgs(targets=targets, module_targets=module_targets)
+    location = "input"
+    basic_args = TransformArgs(targets=targets, location=location)
 
-    scheme = TransformationScheme(
-        transform_type="hadamard",
-        groups=[basic_args],
-        transform_creation_args={"size": 1024},
+    scheme = TransformsScheme(
+        type="hadamard",
+        apply=[basic_args],
     )
-    assert not scheme.global_transform
-    assert scheme.transform_type == "hadamard"
-    assert scheme.transform_creation_args.get("size") == 1024
-    assert len(scheme.groups) == 1
-    assert isinstance(scheme.groups[0], TransformationArgs)
+    assert not scheme.randomize_modules
+    assert scheme.type == "hadamard"
+    assert len(scheme.apply) == 1
+    assert isinstance(scheme.apply[0], TransformArgs)
 
 
 def test_multiple_groups_global():
     targets = ["Embedding"]
-    module_targets = [ModuleTarget.INPUT_ACTIVATIONS]
-    embedding_args = TransformationArgs(targets=targets, module_targets=module_targets)
+    location = "input"
+    embedding_args = TransformArgs(targets=targets, location=location)
 
     targets = ["Linear"]
-    module_targets = [ModuleTarget.WEIGHT]
-    linear_args = TransformationArgs(targets=targets, module_targets=module_targets)
+    location = "weight"
+    side = "left"
+    linear_args = TransformArgs(targets=targets, location=location, side=side)
 
     # same transform applied to multiple groups
-    scheme = TransformationScheme(
-        transform_type="hadamard",
-        global_transform=True,
-        groups=[embedding_args, linear_args],
-        transform_creation_args={"size": 1024},
+    scheme = TransformsScheme(
+        type="hadamard",
+        apply=[embedding_args, linear_args],
+        randomize_modules=True,
     )
 
-    assert scheme.global_transform
-    assert scheme.transform_type == "hadamard"
-    assert scheme.transform_creation_args.get("size") == 1024
-    assert len(scheme.groups) == 2
-    assert isinstance(scheme.groups[0], TransformationArgs)
-    assert isinstance(scheme.groups[1], TransformationArgs)
+    assert scheme.randomize_modules
+    assert scheme.type == "hadamard"
+    assert len(scheme.apply) == 2
+    assert isinstance(scheme.apply[0], TransformArgs)
+    assert isinstance(scheme.apply[1], TransformArgs)
 
 
 def test_multiple_groups():
-    groups = []
-    module_targets = [ModuleTarget.WEIGHT]
+    apply = []
+    location = "weight"
+    side = "left"
 
     for i in range(20):
         targets = [f"model.layers.{i}.attn.v_proj", f"model.layers.{i}.attn.o_proj"]
-        args = TransformationArgs(targets=targets, module_targets=module_targets)
-        groups.append(args)
+        args = TransformArgs(targets=targets, location=location, side=side)
+        apply.append(args)
 
     # global is False, different hadamard transform applied to each group
     # same dimension/hidden dim
-    scheme = TransformationScheme(
-        transform_type="hadamard",
-        groups=groups,
-        transform_creation_args={"size": 1024},
+    scheme = TransformsScheme(
+        type="hadamard",
+        apply=apply,
     )
 
-    assert not scheme.global_transform
-    assert scheme.transform_type == "hadamard"
-    assert scheme.transform_creation_args.get("size") == 1024
-    assert len(scheme.groups) == 20
+    assert not scheme.randomize_modules
+    assert scheme.type == "hadamard"
+    assert len(scheme.apply) == 20

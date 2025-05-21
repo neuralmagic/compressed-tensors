@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from compressed_tensors.transforms.hadamard import HadamardFactory
+from compressed_tensors.transforms import HadamardFactory, TransformFactory
 from compressed_tensors.transforms.hadamard_utils import random_hadamard_matrix
 from torch import device, dtype
 from torch.nn import Parameter
 
 
-@HadamardFactory.register("random-hadamard")
+@TransformFactory.register("random-hadamard")
 class RandomHadamardFactory(HadamardFactory):
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         for key in self.weights.keys():
