@@ -25,6 +25,6 @@ class RandomHadamardFactory(HadamardFactory):
             if key[0] == size:
                 return self.weights[key].to(dtype=dtype, device=device)
 
-        data = random_hadamard_matrix(size, seed=self.seed)
+        data = random_hadamard_matrix(size)  # seed
         data = data.to(dtype=dtype, device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)

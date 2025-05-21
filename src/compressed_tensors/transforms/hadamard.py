@@ -37,7 +37,7 @@ from torch.nn import Linear, Module, Parameter
 
 class HadamardTransform(MatrixTransformBase):
     def __init__(
-        self, weight: Tensor, permutation: Optional[Tensor], args: TransformArgs
+        self, weight: Parameter, permutation: Optional[Parameter], args: TransformArgs
     ):
         super().__init__()
         self.weight = weight
@@ -45,22 +45,11 @@ class HadamardTransform(MatrixTransformBase):
         self.args = args
 
     def forward(self, value: Parameter) -> Parameter:
-        weight = (
-            self.weight
-            if not self.args.inverse
-            else self.weight.T / self.weight.size(0)
-        )
-        # if self.permutation is not None:
-        #    weight = apply_permutation(weight, self.permutation)
+        if not self.args.inverse:
+            weight = self.weight
+        else:
+            weight = self.weight.T / self.weight.size(0)
 
-        return apply_matrix_transform(weight, value, self.args.side)
-
-    def right_inverse(self, value: Parameter) -> Parameter:
-        weight = (
-            self.weight.T / self.weight.size(0)
-            if not self.args.inverse
-            else self.weight
-        )
         # if self.permutation is not None:
         #    weight = apply_permutation(weight, self.permutation)
 
@@ -91,4 +80,4 @@ class HadamardFactory(MatrixTransformFactory):
 
     def _create_permutation(self, module: Module, size: int) -> Parameter:
         data = torch.randperm(size)
-        return Parameter(data, requires_grad=self.scheme.requires_grad)
+        return Parameter(data, requires_grad=False)

@@ -19,7 +19,12 @@ import torch.nn.utils.parametrize as P
 from compressed_tensors.registry.registry import RegistryMixin
 from compressed_tensors.transforms.transform_args import TransformArgs
 from compressed_tensors.transforms.transform_scheme import TransformsScheme
-from compressed_tensors.utils.offload import update_offload_parameter
+from compressed_tensors.utils.offload import (
+    has_offloaded_params,
+    register_offload_module,
+    register_offload_parameter,
+    update_offload_parameter,
+)
 from torch.nn import Linear, Module, Parameter
 
 
@@ -27,13 +32,19 @@ __all__ = ["Transforms"]
 
 
 class MatrixTransformBase(Module, ABC):
+    args: TransformArgs
+
     @abstractmethod
     def forward(self, value: Parameter) -> Parameter:
         raise NotImplementedError()
 
-    @abstractmethod
     def right_inverse(self, value: Parameter) -> Parameter:
-        raise NotImplementedError()
+        original = self.args.inverse
+        self.args.inverse = not original
+        ret = self.forward(value)
+        self.args.inverse = original
+
+        return ret
 
     def __repr__(self):
         return f"{self.__class__.__name__}(inverse={self.args.inverse})"
@@ -46,6 +57,12 @@ class MatrixTransformFactory(RegistryMixin, ABC):
         self.seed = seed
         self.transforms = []
 
+    @abstractmethod
+    def create_transform(
+        self, module: Module, args: TransformArgs
+    ) -> MatrixTransformBase:
+        raise NotImplementedError()
+
     def apply_to_model(self, model: Module):
         for path, module in model.named_modules():
             for arg in self.scheme.apply:
@@ -57,35 +74,46 @@ class MatrixTransformFactory(RegistryMixin, ABC):
         name = self._get_transform_name(args)
         assert isinstance(module, torch.nn.Linear)
         assert not hasattr(module, name)
+
+        # register transform as submodule
         transform = self.create_transform(module, args)
-        module.register_module(name, transform)
+        assert all(pm.device == torch.device("cpu") for pm in transform.parameters())
+        register_offload_module(module, name, transform)
 
+        # register input transformation hook
         if args.location == "input":
-            # TODO: need to specify side
-            module.register_forward_pre_hook(lambda _, args: transform(args[0]))
 
+            def input_hook(_, args):
+                input = args[0]
+                transform(input)
+
+            module.register_forward_pre_hook(input_hook)
+
+        # eagerly apply transformation to weight
         elif args.location == "weight":
             with torch.no_grad():
-                print(module.weight)
-                update_offload_parameter(module, "weight", transform(module.weight))
-                # register_offload_parameterization(module, "weight", transform)
+                transformed_weight = transform(module.weight)
+                update_offload_parameter(module, "weight", transformed_weight)
+
+            if self.scheme.requires_grad:
+                # for training, the weight changes with every forward pass
+                # so we can leverage parametrization to propagate gradient
+                assert not has_offloaded_params(module), "offloaded training"
                 P.register_parametrization(module, "weight", transform)
-                print(module.parametrizations["weight"].original)
-                # TODO: I don't like how creating a parametrizations list creates an
-                # extra step for serialization. It'd be nicer if we had our own
-                # parametrization implementation that still overloaded the get/setattr,
-                # but simply checked an attached list of parametrizations, rather than
-                # creating a separate ModuleList. Simliar to module._forward_hooks
 
-                # we can also just disable the state_dict of module.parametrizations
-
+        # register output transformation hook
         elif args.location == "output":
-            module.register_forward_hook(lambda _, __, output: transform(output))
 
+            def output_hook(_, _input, output):
+                return transform(output)
+
+            module.register_forward_hook(output_hook)
+
+        # other locations such as q_attn and k_attn  has not been implemented
         else:
             raise NotImplementedError()
 
-        self.transforms.append(transform)
+        self.transforms.append(transform)  # for updating
 
     def _get_transform_name(self, args: TransformArgs) -> str:
         components = [self.name, args.location]
@@ -94,8 +122,13 @@ class MatrixTransformFactory(RegistryMixin, ABC):
 
         return "_".join(components)
 
-    @abstractmethod
-    def create_transform(
-        self, module: Module, args: TransformArgs
-    ) -> MatrixTransformBase:
-        raise NotImplementedError()
+
+# def compress_module_transforms(module: Module):
+#     for submodule in module.children():
+#         if isinstance(submodule, MatrixTransformBase):
+#             if submodule.args.location == "input":
+
+
+#             for submodule.named_parameters()
+#                 register_offload_parameter()
+#                 submodule
