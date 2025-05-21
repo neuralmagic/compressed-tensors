@@ -16,9 +16,8 @@ from abc import ABC, abstractmethod
 
 import torch
 import torch.nn.utils.parametrize as P
-from compressed_tensors.registry.registry import RegistryMixin
-from compressed_tensors.transforms.transform_args import TransformArgs
-from compressed_tensors.transforms.transform_scheme import TransformsScheme
+from compressed_tensors.registry.registry import RegistryMixin, T
+from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.utils import (
     get_execution_device,
     has_offloaded_params,
@@ -36,7 +35,7 @@ class TransformFactory(RegistryMixin, ABC):
     def __init__(
         self,
         name: str,
-        scheme: TransformsScheme,
+        scheme: TransformScheme,
         seed: int = 42,
         keep_onloaded: bool = False,
     ):
@@ -52,7 +51,7 @@ class TransformFactory(RegistryMixin, ABC):
             pass
 
     @classmethod
-    def from_scheme(cls, scheme: TransformsScheme, **kwargs):
+    def from_scheme(cls: type[T], scheme: TransformScheme, **kwargs) -> T:
         constructor = cls.get_value_from_registry(name=scheme.type)
         return constructor(scheme=scheme, **kwargs)
 
@@ -91,6 +90,7 @@ class TransformFactory(RegistryMixin, ABC):
         # eagerly apply transformation to weight
         elif args.location == "weight":
             assert isinstance(module, torch.nn.Linear)
+            assert module.bias is None
             with torch.no_grad():
                 transformed_weight = transform(module.weight)
                 update_offload_parameter(module, "weight", transformed_weight)
