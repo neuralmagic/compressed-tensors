@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, List, Literal
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -22,7 +22,7 @@ __all__ = ["TransformArgs"]
 
 class TransformArgs(BaseModel):
     """
-    Arguments which define how and where a transform should be applied to a model
+    Arguments which define *how* and where a transform should be applied to a model
 
     :param targets: list of modules to apply transforms to
     :param location: where to apply transform on module, one of (`input`, `weight`,
@@ -34,7 +34,7 @@ class TransformArgs(BaseModel):
 
     targets: List[str]
     location: Literal["input", "weight", "output", "k_cache", "q_attn"]
-    side: Literal["left", "right"] = Field(default=None)
+    side: Optional[Literal["input", "output"]] = Field(default=None)
     inverse: bool = Field(default=False)
     ignore: List[str] = Field(default_factory=list)
 
@@ -48,12 +48,12 @@ class TransformArgs(BaseModel):
     @model_validator(mode="after")
     def determine_side(self):
         if self.location == "input":
-            self._check_and_assign("side", "right")
+            self._check_and_assign("side", None)
         elif self.location == "weight":
-            if self.side not in ("left", "right"):
+            if self.side not in ("input", "output"):
                 raise ValueError("`side` must be provided for `weight` location")
         elif self.location == "output":
-            self._check_and_assign("side", "left")
+            self._check_and_assign("side", None)
         elif self.location in ("k_cache", "q_attn"):
             pass
         else:

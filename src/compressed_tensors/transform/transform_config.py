@@ -18,10 +18,10 @@ from compressed_tensors.transform import TransformArgs, TransformScheme
 from pydantic import BaseModel
 
 
-__all__ = ["TransformsConfig"]
+__all__ = ["TransformConfig"]
 
 
-class TransformsConfig(BaseModel):
+class TransformConfig(BaseModel):
     """
     Configuration of transforms to be applied to a model. This config is to be
     serialized within a model's `config.json` file
@@ -34,34 +34,34 @@ class TransformsConfig(BaseModel):
 
 
 # quip / quip sharp
-QUIP = TransformsConfig(
+QUIP = TransformConfig(
     transform_groups={
-        "u": TransformScheme(
-            type="hadamard",
-            apply=[
-                TransformArgs(
-                    targets=["Linear"], location="output", inverse=True  # non-mergable
-                ),
-                TransformArgs(
-                    targets=["Linear"],
-                    location="weight",
-                    side="left",
-                ),
-            ],
-            randomize_modules=True,
-        ),
         "v": TransformScheme(
             type="hadamard",
             apply=[
                 TransformArgs(
                     targets=["Linear"],
-                    location="weight",
-                    side="right",
-                    inverse=True,
+                    location="input",  # non-mergable
                 ),
                 TransformArgs(
                     targets=["Linear"],
-                    location="input",  # non-mergable
+                    location="weight",
+                    side="input",
+                    inverse=True,
+                ),
+            ],
+            randomize_modules=True,
+        ),
+        "u": TransformScheme(
+            type="hadamard",
+            apply=[
+                TransformArgs(
+                    targets=["Linear"],
+                    location="weight",
+                    side="output",
+                ),
+                TransformArgs(
+                    targets=["Linear"], location="output", inverse=True  # non-mergable
                 ),
             ],
             randomize_modules=True,
@@ -70,7 +70,7 @@ QUIP = TransformsConfig(
 )
 
 # spinquant
-LLAMA_SPINQUANT = TransformsConfig(
+LLAMA_SPINQUANT = TransformConfig(
     transform_groups={
         "R1": TransformScheme(
             type="hadamard",
@@ -78,7 +78,7 @@ LLAMA_SPINQUANT = TransformsConfig(
                 TransformArgs(
                     targets=["embed_tokens", "o_proj", "down_proj"],
                     location="weight",
-                    side="right",
+                    side="output",
                 ),
                 TransformArgs(
                     targets=[
@@ -90,7 +90,7 @@ LLAMA_SPINQUANT = TransformsConfig(
                         "lm_head",
                     ],
                     location="weight",
-                    side="left",
+                    side="input",
                     inverse=True,
                 ),
             ],
@@ -101,10 +101,10 @@ LLAMA_SPINQUANT = TransformsConfig(
                 TransformArgs(
                     targets=["v_proj"],
                     location="weight",
-                    side="right",
+                    side="output",
                 ),
                 TransformArgs(
-                    targets=["o_proj"], location="weight", side="left", inverse=True
+                    targets=["o_proj"], location="weight", side="input", inverse=True
                 ),
             ],
         ),
@@ -129,7 +129,7 @@ LLAMA_SPINQUANT = TransformsConfig(
                     location="input",
                 ),
                 TransformArgs(
-                    targets=["down_proj"], location="weight", side="left", inverse=True
+                    targets=["down_proj"], location="weight", side="input", inverse=True
                 ),
             ],
         ),
