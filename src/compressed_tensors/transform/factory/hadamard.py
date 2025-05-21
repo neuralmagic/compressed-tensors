@@ -15,16 +15,17 @@
 from typing import Optional
 
 import torch
-from compressed_tensors.transforms.base import TransformBase, TransformFactory
-from compressed_tensors.transforms.hadamard_utils import deterministic_hadamard_matrix
-from compressed_tensors.transforms.helpers import (
+from compressed_tensors.transform import TransformArgs, TransformScheme
+from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
+from compressed_tensors.transform.utils.hadamard_utils import (
+    deterministic_hadamard_matrix,
+)
+from compressed_tensors.transform.utils.helpers import (
     ParameterizedDefaultDict,
     get_matrix_size,
     get_offload_device,
 )
-from compressed_tensors.transforms.transform_args import TransformArgs
-from compressed_tensors.transforms.transform_scheme import TransformsScheme
-from compressed_tensors.transforms.utils import (
+from compressed_tensors.transform.utils.utils import (
     apply_matrix_transform,
     apply_permutation,
 )
@@ -34,7 +35,7 @@ from torch.nn import Linear, Module, Parameter
 
 @TransformFactory.register("hadamard")
 class HadamardFactory(TransformFactory):
-    def __init__(self, name: str, scheme: TransformsScheme, seed: int = 42):
+    def __init__(self, name: str, scheme: TransformScheme, seed: int = 42):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
         self.perms = ParameterizedDefaultDict(self._create_permutation)

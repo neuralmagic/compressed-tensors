@@ -4,10 +4,10 @@ import torch
 
 from transformers import AutoModelForCausalLM
 
-from compressed_tensors.transforms.transform_config import quipsharp
-from compressed_tensors.transforms.hadamard import HadamardFactory
-from compressed_tensors.transforms.random_hadamard import RandomHadamardFactory
-from compressed_tensors.transforms.base import TransformFactory
+from compressed_tensors.transform import QUIP
+from compressed_tensors.transform.factory.hadamard import HadamardFactory
+from compressed_tensors.transform.factory.random_hadamard import RandomHadamardFactory
+from compressed_tensors.transform.factory.base import TransformFactory
 
 
 class Model(torch.nn.Module):
@@ -43,7 +43,7 @@ def test_apply():
     model = Model(16, 32, 8)
     true_output = model(input)
 
-    factories = apply_transforms(quipsharp, model)
+    factories = apply_transforms(QUIP, model)
     breakpoint()
 
     output = model(input)

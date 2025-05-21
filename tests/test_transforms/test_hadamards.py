@@ -16,7 +16,7 @@
 import numpy
 import pytest
 import torch
-from compressed_tensors.transforms.hadamard_utils import (
+from compressed_tensors.transform.utils.hadamard_utils import (
     _get_had12,
     _get_had20,
     deterministic_hadamard_matrix,
