@@ -12,19 +12,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import Counter
+
 import pytest
 import torch
 from compressed_tensors.transform import (
     TransformArgs,
+    TransformBase,
     TransformFactory,
     TransformScheme,
 )
 
 
+class TransformableModel(torch.nn.Module):
+    def __init__(self, *sizes):
+        super().__init__()
+        self.fcs = torch.nn.ModuleList([])
+        self.fcs.append(torch.nn.Linear(sizes[0], sizes[1], bias=False))
+        for index in range(1, len(sizes) - 2):
+            self.fcs.append(torch.nn.Linear(sizes[index], sizes[index + 1], bias=False))
+        self.fcs.append(torch.nn.Linear(sizes[-2], sizes[-1], bias=False))
+
+    def forward(self, x):
+        for layer in self.fcs:
+            x = layer(x)
+        return x
+
+
 @pytest.mark.parametrize(
     "scheme,size",
     [
-        (TransformScheme(type="hadamard"), (4, 8)),
+        (TransformScheme(type=name), (4, 8))
+        for name in TransformFactory.registered_names()
     ],
 )
 def test_correctness(scheme, size):
@@ -49,3 +68,26 @@ def test_correctness(scheme, size):
     output = output_tfm(left_tfm(right_tfm(module.weight)) @ input_tfm(input))
 
     torch.allclose(true_output, output, atol=1e-7, rtol=0.0)
+
+
+def test_memory_sharing():
+    scheme = TransformScheme(
+        type="hadamard",
+        apply=[
+            TransformArgs(targets="Linear", location="input"),
+            TransformArgs(targets="Linear", location="output"),
+        ],
+    )
+    factory = TransformFactory.from_scheme(scheme, name="")
+
+    model = TransformableModel(2, 2, 4, 4, 8, 8)
+    factory.apply_to_model(model)
+
+    weights = [mod.weight for mod in model.modules() if isinstance(mod, TransformBase)]
+    weight_to_count = Counter(weights)
+    assert len(weight_to_count) == 3
+
+    size_to_weight = {weight.size(0): weight for weight in weight_to_count}
+    assert weight_to_count[size_to_weight[2]] == 3
+    assert weight_to_count[size_to_weight[4]] == 4
+    assert weight_to_count[size_to_weight[8]] == 3
