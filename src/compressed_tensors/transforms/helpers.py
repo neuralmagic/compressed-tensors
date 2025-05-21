@@ -37,10 +37,10 @@ class ParameterizedDefaultDict(dict):
 
 def get_matrix_size(module: torch.nn.Module, args: "TransformArgs") -> int:
     assert isinstance(module, torch.nn.Linear)
-    if args.location == "input" or (args.location == "weight" and args.side == "left"):
-        return module.weight.shape[0]  # output channels
+    if args.location == "input" or args.location == "weight" and args.side == "right":
+        return module.in_features
     else:
-        return module.weight.shape[1]  # input channels
+        return module.out_features
 
 
 def get_offload_device(module: torch.nn.Module) -> torch.device:

@@ -16,7 +16,7 @@ from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 __all__ = ["TransformArgs", "ModuleTarget"]
@@ -25,23 +25,21 @@ __all__ = ["TransformArgs", "ModuleTarget"]
 class TransformArgs(BaseModel):
     targets: List[str]
     location: Literal["input", "weight", "output", "k_cache", "q_attn"]
-    side: Optional[Literal["left", "right"]] = Field(default=None)
+    side: Literal["left", "right"] = Field(default=None)
     inverse: bool = Field(default=False)
     ignore: List[str] = Field(default_factory=list)
 
-    @model_validator(mode="after")
-    def check_location_side(self) -> "TransformArgs":
-        if self.location == "weight":
-            if self.side is None:
-                raise ValueError(
-                    "Must specify `side` when applying transformation to module weight"
-                )
-
+    @field_validator("side", mode="before")
+    @classmethod
+    def determine_side(cls, value, info):
+        location = info.data.get("location")
+        if location == "input":
+            return "right"
+        elif location == "output":
+            return "left"
+        elif location in {"k_cache", "q_attn"}:
+            return "right"
+        elif location == "weight":
+            return value
         else:
-            if self.side is not None:
-                raise ValueError(
-                    "Cannot specify `side` when applying transformation to module "
-                    f"{self.location}"
-                )
-
-        return self
+            raise ValueError(f"Unknown location {location}")

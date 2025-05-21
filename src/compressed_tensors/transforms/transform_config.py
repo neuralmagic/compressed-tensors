@@ -32,7 +32,7 @@ quipsharp = TransformsConfig(
             type="hadamard",
             apply=[
                 TransformArgs(
-                    targets=["Linear"], location="input", inverse=True  # non-mergable
+                    targets=["Linear"], location="output", inverse=True  # non-mergable
                 ),
                 TransformArgs(
                     targets=["Linear"],
@@ -53,7 +53,7 @@ quipsharp = TransformsConfig(
                 ),
                 TransformArgs(
                     targets=["Linear"],
-                    location="output",  # non-mergable
+                    location="input",  # non-mergable
                 ),
             ],
             randomize_modules=True,

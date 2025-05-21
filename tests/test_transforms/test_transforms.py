@@ -34,7 +34,7 @@ from compressed_tensors.transforms.transform_scheme import TransformsScheme
 )
 def test_random_hadamard_transform(size: int, dtype: torch.dtype):
     scheme = TransformsScheme(type="random-hadamard")
-    factory = TransformFactory.load_from_scheme("", scheme)
+    factory = TransformFactory.from_scheme(scheme, name="")
 
     # create transform
     module = torch.nn.Linear(size, 1, dtype=dtype, device="cpu")
@@ -67,7 +67,7 @@ def test_random_hadamard_transform(size: int, dtype: torch.dtype):
 )
 def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
     scheme = TransformsScheme(type="hadamard")
-    factory = TransformFactory.load_from_scheme("", scheme)
+    factory = TransformFactory.from_scheme(scheme, name="")
 
     # create transform
     module = torch.nn.Linear(size, 1, dtype=dtype, device="cpu")
@@ -99,7 +99,7 @@ def test_deterministic_hadamard_transform(size: int, dtype: torch.dtype):
 )
 def test_multiplier_transform(size: int, dtype: torch.dtype):
     scheme = TransformsScheme(type="matrix-mul")
-    factory = TransformFactory.load_from_scheme("", scheme)
+    factory = TransformFactory.from_scheme(scheme, name="")
 
     # create transform
     module = torch.nn.Linear(size, 1, dtype=dtype, device="cpu")

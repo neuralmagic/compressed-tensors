@@ -39,9 +39,9 @@ class TransformFactory(RegistryMixin, ABC):
         self.transforms = []
 
     @classmethod
-    def load_from_scheme(cls, name: str, scheme: TransformsScheme, **kwargs):
+    def from_scheme(cls, scheme: TransformsScheme, **kwargs):
         constructor = cls.get_value_from_registry(name=scheme.type)
-        return constructor(name=name, scheme=scheme, **kwargs)
+        return constructor(scheme=scheme, **kwargs)
 
     @abstractmethod
     def create_transform(self, module: Module, args: TransformArgs) -> "TransformBase":
@@ -69,7 +69,7 @@ class TransformFactory(RegistryMixin, ABC):
 
             def input_hook(_, args):
                 input = args[0]
-                transform(input)
+                return transform(input)
 
             module.register_forward_pre_hook(input_hook)
 
