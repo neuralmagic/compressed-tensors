@@ -29,7 +29,7 @@ def test_basic():
 def test_args_full():
     targets = ["Linear"]
     location = "weight"
-    side = "left"
+    side = "input"
     inverse = True
     ignore = ["model.layers.2"]
 
@@ -63,23 +63,23 @@ def test_side():
     tar = ["Linear"]
 
     # input
-    assert TransformArgs(targets=tar, location="input").side == "right"
+    assert TransformArgs(targets=tar, location="input").side is None
     with pytest.raises(ValueError):
-        TransformArgs(targets=tar, location="input", side="left")
+        TransformArgs(targets=tar, location="input", side="output")
     with pytest.raises(ValueError):
         TransformArgs(targets=tar, location="input", side="invalid")
 
     # output
-    assert TransformArgs(targets=tar, location="output").side == "left"
+    assert TransformArgs(targets=tar, location="output").side is None
     with pytest.raises(ValueError):
-        TransformArgs(targets=tar, location="output", side="right")
+        TransformArgs(targets=tar, location="output", side="input")
     with pytest.raises(ValueError):
         TransformArgs(targets=tar, location="output", side="invalid")
 
     # weight
     with pytest.raises(ValueError):
         TransformArgs(targets=tar, location="weight")
-    assert TransformArgs(targets=tar, location="weight", side="left").side == "left"
-    assert TransformArgs(targets=tar, location="weight", side="right").side == "right"
+    assert TransformArgs(targets=tar, location="weight", side="input").side == "input"
+    assert TransformArgs(targets=tar, location="weight", side="output").side == "output"
     with pytest.raises(ValueError):
         TransformArgs(targets=tar, location="weight", side="invalid")

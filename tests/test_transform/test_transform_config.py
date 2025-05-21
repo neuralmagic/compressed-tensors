@@ -14,11 +14,7 @@
 
 
 import pytest
-from compressed_tensors.transform import (
-    TransformArgs,
-    TransformScheme,
-    TransformsConfig,
-)
+from compressed_tensors.transform import TransformArgs, TransformConfig, TransformScheme
 
 
 @pytest.fixture
@@ -34,7 +30,7 @@ def basic_transform_scheme():
 
 
 def test_basic(basic_transform_scheme):
-    config = TransformsConfig(
+    config = TransformConfig(
         transform_groups={
             "transform_0": basic_transform_scheme,
         }
@@ -43,7 +39,7 @@ def test_basic(basic_transform_scheme):
 
 
 def test_to_dict(basic_transform_scheme):
-    config = TransformsConfig(
+    config = TransformConfig(
         transform_groups={
             "transform_0": basic_transform_scheme,
         }
@@ -54,7 +50,7 @@ def test_to_dict(basic_transform_scheme):
 
 def test_multiple_groups():
     location = "weight"
-    side = "left"
+    side = "input"
 
     targets_1 = ["model.layers.0.attn.v_proj"]
     linear_args_1 = TransformArgs(targets=targets_1, location=location, side=side)
@@ -71,6 +67,6 @@ def test_multiple_groups():
         type="hadamard",
         apply=[linear_args_2],
     )
-    config = TransformsConfig(
+    config = TransformConfig(
         transform_groups={"transform_0": scheme_1, "transform_1": scheme_2}
     )

@@ -90,7 +90,7 @@ LLAMA_SPINQUANT = TransformConfig(
                         "lm_head",
                     ],
                     location="weight",
-                    side="left",
+                    side="input",
                     inverse=True,
                 ),
             ],
@@ -101,10 +101,10 @@ LLAMA_SPINQUANT = TransformConfig(
                 TransformArgs(
                     targets=["v_proj"],
                     location="weight",
-                    side="right",
+                    side="output",
                 ),
                 TransformArgs(
-                    targets=["o_proj"], location="weight", side="left", inverse=True
+                    targets=["o_proj"], location="weight", side="input", inverse=True
                 ),
             ],
         ),
@@ -129,7 +129,7 @@ LLAMA_SPINQUANT = TransformConfig(
                     location="input",
                 ),
                 TransformArgs(
-                    targets=["down_proj"], location="weight", side="left", inverse=True
+                    targets=["down_proj"], location="weight", side="input", inverse=True
                 ),
             ],
         ),

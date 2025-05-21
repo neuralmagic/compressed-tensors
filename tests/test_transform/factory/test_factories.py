@@ -53,10 +53,10 @@ def test_correctness(scheme):
         module, TransformArgs(targets="Linear", location="input", inverse=True)
     )
     right_tfm = factory.create_transform(
-        module, TransformArgs(targets="Linear", location="weight", side="right")
+        module, TransformArgs(targets="Linear", location="weight", side="input")
     )
     left_tfm = factory.create_transform(
-        module, TransformArgs(targets="Linear", location="weight", side="left")
+        module, TransformArgs(targets="Linear", location="weight", side="output")
     )
     output_tfm = factory.create_transform(
         module, TransformArgs(targets="Linear", location="output", inverse=True)

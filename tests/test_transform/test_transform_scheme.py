@@ -37,7 +37,7 @@ def test_multiple_groups_global():
 
     targets = ["Linear"]
     location = "weight"
-    side = "left"
+    side = "input"
     linear_args = TransformArgs(targets=targets, location=location, side=side)
 
     # same transform applied to multiple groups
@@ -57,7 +57,7 @@ def test_multiple_groups_global():
 def test_multiple_groups():
     apply = []
     location = "weight"
-    side = "left"
+    side = "output"
 
     for i in range(20):
         targets = [f"model.layers.{i}.attn.v_proj", f"model.layers.{i}.attn.o_proj"]

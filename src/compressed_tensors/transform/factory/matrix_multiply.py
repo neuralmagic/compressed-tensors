@@ -17,11 +17,11 @@ from typing import Optional
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
-from compressed_tensors.transform.utils.helpers import (
-    ParameterizedDefaultDict,
+from compressed_tensors.transform.utils.helpers import ParameterizedDefaultDict
+from compressed_tensors.transform.utils.utils import (
+    apply_matrix_transform,
     get_matrix_size,
 )
-from compressed_tensors.transform.utils.utils import apply_matrix_transform
 from compressed_tensors.utils import get_offloaded_device
 from torch import Tensor, device, dtype
 from torch.nn import Linear, Module, Parameter

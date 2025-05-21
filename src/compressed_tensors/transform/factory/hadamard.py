@@ -20,13 +20,11 @@ from compressed_tensors.transform.factory.base import TransformBase, TransformFa
 from compressed_tensors.transform.utils.hadamard_utils import (
     deterministic_hadamard_matrix,
 )
-from compressed_tensors.transform.utils.helpers import (
-    ParameterizedDefaultDict,
-    get_matrix_size,
-)
+from compressed_tensors.transform.utils.helpers import ParameterizedDefaultDict
 from compressed_tensors.transform.utils.utils import (
     apply_matrix_transform,
     apply_permutation,
+    get_matrix_size,
 )
 from compressed_tensors.utils import get_offloaded_device
 from torch import device, dtype
