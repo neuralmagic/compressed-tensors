@@ -141,6 +141,7 @@ class TransformFactory(RegistryMixin, ABC):
 
 class TransformBase(Module, ABC):
     args: TransformArgs
+    weight: Parameter
 
     @abstractmethod
     def forward(self, value: Parameter) -> Parameter:

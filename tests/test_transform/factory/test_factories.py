@@ -40,13 +40,11 @@ class TransformableModel(torch.nn.Module):
 
 
 @pytest.mark.parametrize(
-    "scheme,size",
-    [
-        (TransformScheme(type=name), (4, 8))
-        for name in TransformFactory.registered_names()
-    ],
+    "scheme",
+    [TransformScheme(type=name) for name in TransformFactory.registered_names()],
 )
-def test_correctness(scheme, size):
+def test_correctness(scheme):
+    size = (4, 8)
     module = torch.nn.Linear(*size, bias=True)
     factory = TransformFactory.from_scheme(scheme, name="")
 
@@ -70,7 +68,11 @@ def test_correctness(scheme, size):
     torch.allclose(true_output, output, atol=1e-7, rtol=0.0)
 
 
-def test_memory_sharing():
+@pytest.mark.parametrize(
+    "scheme",
+    [TransformScheme(type=name) for name in TransformFactory.registered_names()],
+)
+def test_memory_sharing(scheme):
     scheme = TransformScheme(
         type="hadamard",
         apply=[
@@ -85,9 +87,9 @@ def test_memory_sharing():
 
     weights = [mod.weight for mod in model.modules() if isinstance(mod, TransformBase)]
     weight_to_count = Counter(weights)
-    assert len(weight_to_count) == 3
-
     size_to_weight = {weight.size(0): weight for weight in weight_to_count}
+
+    assert len(weight_to_count) == len(size_to_weight) == 3
     assert weight_to_count[size_to_weight[2]] == 3
     assert weight_to_count[size_to_weight[4]] == 4
     assert weight_to_count[size_to_weight[8]] == 3
