@@ -69,13 +69,10 @@ class TransformFactory(RegistryMixin, ABC):
 
     def _apply_to_module(self, module: Module, args: TransformArgs):
         name = self._get_transform_name(args)
-        assert isinstance(module, torch.nn.Linear)
-        assert not hasattr(module, name)
 
-        # register transform as submodule
+        # create transform as submodule
         transform = self.create_transform(module, args)
         assert all(pm.device == torch.device("cpu") for pm in transform.parameters())
-        register_offload_module(module, name, transform)
 
         # because transform weights are often shared between weights,
         if self.keep_onloaded and has_offloaded_params(transform):
@@ -89,9 +86,11 @@ class TransformFactory(RegistryMixin, ABC):
                 return transform(input)
 
             module.register_forward_pre_hook(input_hook)
+            register_offload_module(module, name, transform)
 
         # eagerly apply transformation to weight
         elif args.location == "weight":
+            assert isinstance(module, torch.nn.Linear)
             with torch.no_grad():
                 transformed_weight = transform(module.weight)
                 update_offload_parameter(module, "weight", transformed_weight)
@@ -110,6 +109,7 @@ class TransformFactory(RegistryMixin, ABC):
                 return transform(output)
 
             module.register_forward_hook(output_hook)
+            register_offload_module(module, name, transform)
 
         # other locations such as q_attn and k_attn  has not been implemented
         else:
