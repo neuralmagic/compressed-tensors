@@ -19,7 +19,7 @@ of neuralmagic utilities
 
 import importlib
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union
 
 
 __all__ = [
@@ -34,6 +34,7 @@ __all__ = [
 
 _ALIAS_REGISTRY: Dict[Type, Dict[str, str]] = defaultdict(dict)
 _REGISTRY: Dict[Type, Dict[str, Any]] = defaultdict(dict)
+T = TypeVar("", bound="RegistryMixin")
 
 
 def standardize_lookup_name(name: str) -> str:
@@ -159,7 +160,7 @@ class RegistryMixin:
         )
 
     @classmethod
-    def load_from_registry(cls, name: str, **constructor_kwargs) -> object:
+    def load_from_registry(cls: Type[T], name: str, **constructor_kwargs) -> T:
         """
         :param name: name of registered class to load
         :param constructor_kwargs: arguments to pass to the constructor retrieved
@@ -172,7 +173,7 @@ class RegistryMixin:
         return constructor(**constructor_kwargs)
 
     @classmethod
-    def get_value_from_registry(cls, name: str):
+    def get_value_from_registry(cls: Type[T], name: str) -> T:
         """
         :param name: name to retrieve from the registry
         :return: value from retrieved the registry for the given name, raises
