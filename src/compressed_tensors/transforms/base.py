@@ -82,7 +82,8 @@ class TransformFactory(RegistryMixin, ABC):
             if self.scheme.requires_grad:
                 # for training, the weight changes with every forward pass
                 # so we can leverage parametrization to propagate gradient
-                assert not has_offloaded_params(module), "offloaded training"
+                if has_offloaded_params(module):
+                    raise ValueError("Offloaded training is not supported")
                 P.register_parametrization(module, "weight", transform)
 
         # register output transformation hook
