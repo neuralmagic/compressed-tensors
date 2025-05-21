@@ -7,24 +7,23 @@ from transformers import AutoModelForCausalLM
 from compressed_tensors.transforms.transform_config import quipsharp
 from compressed_tensors.transforms.hadamard import HadamardFactory
 from compressed_tensors.transforms.random_hadamard import RandomHadamardFactory
-from compressed_tensors.transforms.base import MatrixTransformBase
+from compressed_tensors.transforms.base import TransformFactory
 
 
 class Model(torch.nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
         self.fcs = torch.nn.ModuleList([
-            torch.nn.Linear(input_size, hidden_size),
-            torch.nn.Linear(hidden_size, hidden_size),
-            torch.nn.Linear(hidden_size, hidden_size),
-            torch.nn.Linear(hidden_size, output_size)
+            torch.nn.Linear(input_size, hidden_size, bias=False),
+            torch.nn.Linear(hidden_size, hidden_size, bias=False),
+            torch.nn.Linear(hidden_size, hidden_size, bias=False),
+            torch.nn.Linear(hidden_size, output_size, bias=False),
         ])
         self.relu = torch.nn.ReLU()
 
     def forward(self, x):
-        x = self.fcs[0](x)
-        x = self.relu(x)
-        x = self.fcs[1](x)
+        for layer in self.fcs:
+            x = self.relu(layer(x))
         return x
 
 
@@ -32,7 +31,7 @@ def apply_transforms(config, model):
     factories = []
 
     for name, scheme in config.transform_groups.items():
-        transform_factory = RandomHadamardFactory(name, scheme, seed=42)
+        transform_factory = TransformFactory.from_scheme(scheme, name=name, seed=42)
         transform_factory.apply_to_model(model)
         factories.append(transform_factory)
 
@@ -40,8 +39,17 @@ def apply_transforms(config, model):
 
 
 def test_apply():
-    model = Model(2, 8, 4)
+    input = torch.rand((2, 16))
+    model = Model(16, 32, 8)
+    true_output = model(input)
+
     factories = apply_transforms(quipsharp, model)
+    breakpoint()
+
+    output = model(input)
+    breakpoint()
+
+    
 
     # test shared memory
     #assert model.fcs[0].u_input.weight is model.fcs[0].u_input.weight == 
