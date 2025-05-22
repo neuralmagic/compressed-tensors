@@ -189,10 +189,11 @@ def _process_quantization(
     q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
 
-    if args.strategy == QuantizationStrategy.TENSOR_GROUP:
-        x = x.squeeze(0)
+    if args.strategy in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP):
+        if args.strategy == QuantizationStrategy.TENSOR_GROUP:
+            # only valid for activation; remove dim 0
+            x = x.squeeze(0)
 
-    if args.strategy == QuantizationStrategy.GROUP:
         output_dtype = dtype if dtype is not None else x.dtype
         output = torch.zeros_like(x).to(output_dtype)
         columns = output.shape[1]
@@ -254,9 +255,10 @@ def _process_quantization(
         if not is_column_order:
             output = safe_permute(output, torch.argsort(perm), dim=1)
 
-    else:  # covers channel, token and tensor strategies
         if args.strategy == QuantizationStrategy.TENSOR_GROUP:
-            dtype = x.dtype
+            output = output.unsqueeze(0)
+
+    else:  # covers channel, token and tensor strategies
         if do_quantize:
             output = _quantize(
                 x=x,
@@ -277,9 +279,6 @@ def _process_quantization(
                 dtype=dtype,
                 args=args,
             )
-
-    if args.strategy == QuantizationStrategy.TENSOR_GROUP:
-        output = output.unsqueeze(0)
 
     return output
 
@@ -399,10 +398,12 @@ def _quantize(
     if global_scale:
         scale = scale.to(global_scale.dtype) / global_scale
 
+    """
     if args.strategy == QuantizationStrategy.TENSOR_GROUP:
         group_size = args.group_size
         x = torch.reshape(x, (x.shape[0], x.shape[1] // group_size, group_size))
         scale = scale.unsqueeze(-1)
+    """
 
     scaled = x / scale
     """
@@ -440,10 +441,11 @@ def _dequantize(
 
     dequant_value = x_q.to(scale.dtype)
 
+    """
     if args and args.strategy == QuantizationStrategy.TENSOR_GROUP:
         scale = scale.unsqueeze(-1)
 
-    """
+  
     if zero_point is not None:
         dequant_value = dequant_value - zero_point.to(scale.dtype)
     """
@@ -452,9 +454,11 @@ def _dequantize(
     if dtype is not None:
         dequant_value = dequant_value.to(dtype)
 
+    """
     if args and args.strategy == QuantizationStrategy.TENSOR_GROUP:
         # last dimension should be the group_size
         dequant_value = dequant_value.reshape(
             x_q.shape[0], x_q.shape[1] * args.group_size
         )
+    """
     return dequant_value
