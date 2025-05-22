@@ -276,8 +276,6 @@ def _process_quantization(
                 scale=scale,
                 zero_point=zero_point,
                 global_scale=global_scale,
-                dtype=dtype,
-                args=args,
             )
 
     return output
