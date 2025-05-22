@@ -113,7 +113,8 @@ NVFP4A16 = dict(
 
 # TODO: the local scales are dynamic, the global scale is static/calibrated
 # We could potentially extend the dynamic kwarg so that is goes
-# beyond being just a boolean
+# beyond being just a boolean - however we may also want a dynamically
+# generated global scale, so we could use that to separate between the two
 NVFP4 = dict(
     weights=QuantizationArgs(
         num_bits=4,
@@ -128,6 +129,7 @@ NVFP4 = dict(
         type=QuantizationType.FLOAT,
         strategy=QuantizationStrategy.TENSOR_GROUP,
         symmetric=True,
+        dynamic=False,
         group_size=16,
     ),
 )
