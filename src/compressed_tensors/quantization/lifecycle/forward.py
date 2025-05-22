@@ -365,7 +365,7 @@ def forward_quantize(
     if args.dynamic or args.strategy == QuantizationStrategy.TENSOR_GROUP:
         # dynamic quantization - determine the scale/zp on the fly
         scale, zero_point = compute_dynamic_scales_and_zp(
-            value=value, args=args, module=module
+            value=value, args=args, module=module, global_scale=global_scale
         )
     else:
         # static quantization - get scale and zero point from layer
@@ -455,6 +455,6 @@ def _dequantize(
     if args and args.strategy == QuantizationStrategy.TENSOR_GROUP:
         # last dimension should be the group_size
         dequant_value = dequant_value.reshape(
-            x_q.shape[0], x_q.shape[1] * arg.group_size
+            x_q.shape[0], x_q.shape[1] * args.group_size
         )
     return dequant_value
