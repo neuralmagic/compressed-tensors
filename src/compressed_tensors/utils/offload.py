@@ -45,6 +45,7 @@ try:
         PrefixedDataset,
         set_module_tensor_to_device,
     )
+    from accelerate import dispatch_model
 
     _has_accelerate = True
 except ImportError:
@@ -56,6 +57,7 @@ except ImportError:
     PrefixedDataset = None
     set_module_tensor_to_device = None
     named_module_tensors = None
+    dispatch_model = None
 
 
 __all__ = [
@@ -73,6 +75,7 @@ __all__ = [
     "align_modules",
     "align_module_device",
     "register_offload_module",
+    "force_cpu_offload",
 ]
 
 
@@ -349,6 +352,7 @@ def delete_from_weights_map(
         )
 
 
+@check_accelerate(fallback=contextlib.nullcontext())
 @contextlib.contextmanager
 def disable_offload(module: torch.nn.Module):
     """
@@ -365,6 +369,7 @@ def disable_offload(module: torch.nn.Module):
         yield
 
 
+@check_accelerate(fallback=contextlib.nullcontext())
 @contextlib.contextmanager
 def align_modules(
     modules: Union[torch.nn.Module, Iterable[torch.nn.Module]],
@@ -386,6 +391,7 @@ def align_modules(
         yield
 
 
+@check_accelerate(fallback=None)
 def register_offload_module(
     module: torch.nn.Module, name: str, to_register: torch.nn.Module
 ):
@@ -403,6 +409,12 @@ def register_offload_module(
 
     module.register_module(name, to_register)
 
+
+# no fallback, instead error
+def force_cpu_offload(module: torch.nn.Module):
+    device_map = {name: "cpu" for name, _ in module.named_modules()}
+    dispatch_model(module, device_map, main_device=torch.device("cuda"), force_hooks=True)
+    
 
 """ Upstreamed Functions """
 

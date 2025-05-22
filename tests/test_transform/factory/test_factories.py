@@ -25,7 +25,7 @@ from compressed_tensors.transform import (
 from compressed_tensors.utils import (
     align_module_device,
     align_modules,
-    get_execution_device,
+    force_cpu_offload,
 )
 from tests.testing_utils import requires_accelerate, requires_gpu
 
@@ -112,24 +112,13 @@ def test_memory_sharing(scheme, offload=False):
 
     model = TransformableModel(2, 2, 4, 4, 8, 8)
     if offload:
-        from accelerate import cpu_offload, dispatch_model, infer_auto_device_map
-        from accelerate.utils.modeling import get_max_memory
-
-        breakpoint()
-
-        max_memory = get_max_memory(0)
-        infer_auto_device_map(model, max_memory=max_memory)
-
-        model = cpu_offload(
-            model
-        )  # TODO: this doesn't init a tied_params_map, but dispatch_model does
+        force_cpu_offload(model)
 
     factory.apply_to_model(model)
 
     # model.fcs[0]._hf_hook.weights_map["_input.weight"] is model.fcs[1]._hf_hook.weights_map["_input.weight"]
 
     with align_modules(model.modules()):
-        breakpoint()
         weights = [
             mod.weight for mod in model.modules() if isinstance(mod, TransformBase)
         ]
