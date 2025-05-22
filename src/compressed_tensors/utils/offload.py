@@ -398,7 +398,8 @@ def register_offload_module(
             to_register, include_buffers=True, recurse=True
         ):
             offloaded = param.to(offload_device)
-            offload_to_weights_map(hook.weights_map, f"{name}{param_name}", offloaded)
+            offload_to_weights_map(hook.weights_map, f"{name}.{param_name}", offloaded)
+            set_module_tensor_to_device(to_register, param_name, "meta")
 
     module.register_module(name, to_register)
 

@@ -63,7 +63,7 @@ def apply_matrix_transform(
             return value @ weight.T
 
         elif args.side == "output":
-            return weight @ value
+            return weight.T @ value
 
     elif args.location == "output":
         return value @ weight
