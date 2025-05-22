@@ -193,6 +193,13 @@ def _initialize_scale_zero_point(
             module, f"{base_name}_global_scale", init_global_scale
         )
 
+    # initializes empty scale, zero point, and g_idx parameters for the module
+    if is_fp4(quantization_args=quantization_args) and base_name == "input":
+        scale_dtype = torch.float32
+        scale_name = f"{base_name}_global_scale"
+    else:
+        scale_name = f"{base_name}_scale"
+
     if scale_dtype not in [
         torch.float16,
         torch.bfloat16,
@@ -200,19 +207,11 @@ def _initialize_scale_zero_point(
     ] and not is_fp4(quantization_args=quantization_args):
         scale_dtype = torch.float16
 
-    # initializes empty scale, zero point, and g_idx parameters for the module
-    if base_name == "input":
-        scale_dtype = torch.float32
-
     init_scale = Parameter(
         torch.empty(expected_shape, dtype=scale_dtype, device=device),
         requires_grad=False,
     )
-
-    if quantization_args.strategy == QuantizationStrategy.TENSOR_GROUP:
-        register_offload_parameter(module, f"{base_name}_global_scale", init_scale)
-    else:
-        register_offload_parameter(module, f"{base_name}_scale", init_scale)
+    register_offload_parameter(module, scale_name, init_scale)
 
     if force_zero_point or not quantization_args.symmetric:
         if is_fp4(quantization_args=quantization_args):

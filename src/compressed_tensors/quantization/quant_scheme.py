@@ -112,8 +112,8 @@ NVFP4A16 = dict(
 )
 
 # TODO: the local scales are dynamic, the global scale is static/calibrated
-# We need to capture that in a new field/set dynamic to something that isn't a boolean
-# Potentially swap dynamic to be an enum/not a boolean
+# We could potentially extend the dynamic kwarg so that is goes
+# beyond being just a boolean
 NVFP4 = dict(
     weights=QuantizationArgs(
         num_bits=4,
