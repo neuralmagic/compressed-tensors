@@ -181,6 +181,7 @@ def _initialize_scale_zero_point(
     # there is likely bug
 
     if is_fp4(quantization_args=quantization_args) and base_name == "weight":
+        assert quantization_args.strategy == QuantizationStrategy.GROUP
         scale_dtype = FP8_E4M3_DATA.dtype
         # When applying weight-only FP4 quantization, generate a global_scale
         # This scale is applied during runtime to ensure that the generated
@@ -195,6 +196,7 @@ def _initialize_scale_zero_point(
 
     # initializes empty scale, zero point, and g_idx parameters for the module
     if is_fp4(quantization_args=quantization_args) and base_name == "input":
+        assert quantization_args.strategy == QuantizationStrategy.TENSOR_GROUP
         scale_dtype = torch.float32
         scale_name = f"{base_name}_global_scale"
     else:
