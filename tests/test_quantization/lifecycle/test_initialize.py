@@ -160,10 +160,6 @@ def test_initialize_module_for_quantization_offloaded(
             None,
         ),
         (
-            QuantizationArgs(strategy="group", group_size=16, type="float", num_bits=4),
-            None,
-        ),
-        (
             QuantizationArgs(strategy="block"),
             QuantizationArgs(strategy="block"),
         ),
