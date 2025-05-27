@@ -101,6 +101,21 @@ class QuantizationStrategy(str, Enum):
     TENSOR_GROUP = "tensor_group"
 
 
+class DynamicType(Enum):
+    """
+    Enum storing potential dynamic types.
+
+    1. If dynamic is True, all quantization parameters are generated on the fly.
+    2. If dynamic is False, all quantization parameters generated are static.
+    3. If "local" is provided, only local quantization parameters are dynamic.
+
+    Note: "local" is only currently supported for NVFP4.
+
+    """
+
+    LOCAL = "local"
+
+
 class ActivationOrdering(Aliasable, str, Enum):
     """
     Enum storing strategies for activation ordering
@@ -153,7 +168,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     group_size: Optional[int] = None
     strategy: Optional[QuantizationStrategy] = None
     block_structure: Optional[str] = None
-    dynamic: bool = False
+    dynamic: Optional[Union[DynamicType, bool]] = False
     actorder: Union[ActivationOrdering, bool, None] = None
     observer: Optional[str] = Field(
         default=None,
@@ -205,6 +220,12 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         if isinstance(value, str):
             return ActivationOrdering(value.lower())
 
+        return value
+
+    @field_validator("dynamic", mode="before")
+    def validate_dynamic(cls, value) -> Union[DynamicType, bool]:
+        if isinstance(value, str):
+            return DynamicType(value.lower())
         return value
 
     @model_validator(mode="after")
