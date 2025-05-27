@@ -32,6 +32,7 @@ __all__ = [
     "QuantizationArgs",
     "round_to_quantized_type",
     "ActivationOrdering",
+    "DynamicType",
 ]
 
 

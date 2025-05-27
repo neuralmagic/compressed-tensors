@@ -181,7 +181,7 @@ def _initialize_scale_zero_point(
     # there is likely bug
 
     if is_fp4(quantization_args=quantization_args) and base_name == "weight":
-        assert quantization_args.strategy == QuantizationStrategy.GROUP
+        assert quantization_args.strategy == QuantizationStrategy.TENSOR_GROUP
         scale_dtype = FP8_E4M3_DATA.dtype
         # When applying weight-only FP4 quantization, generate a global_scale
         # This scale is applied during runtime to ensure that the generated
