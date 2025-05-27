@@ -164,10 +164,20 @@ def _initialize_scale_zero_point(
 
     # 1. Create global_scales for tensor_group
     if quantization_args.strategy == QuantizationStrategy.TENSOR_GROUP:
-        init_global_scale = Parameter(
-            torch.empty(1, dtype=torch.float32, device=device),
-            requires_grad=False,
-        )
+        # TODO: should move to llmcompressor
+        if base_name == "weight":
+            # When applying weight-only FP4 quantization, generate a global_scale
+            # This scale is applied during runtime to ensure that the generated
+            # local scale falls properly within the FP8 range (i.e max value is FP8_max)
+            # which is the expected dtype of NVFP4A16 scales
+            value = generate_global_scale(input_tensor=module.weight)
+            value = value.to(device)
+            init_global_scale = Parameter(value, requires_grad=False)
+        else:
+            init_global_scale = Parameter(
+                torch.empty(1, dtype=torch.float32, device=device),
+                requires_grad=False,
+            )
         register_offload_parameter(
             module, f"{base_name}_global_scale", init_global_scale
         )
@@ -197,20 +207,6 @@ def _initialize_scale_zero_point(
         if scale_dtype not in [torch.float16, torch.bfloat16, torch.float32]:
             scale_dtype = torch.float16
         zp_dtype = quantization_args.pytorch_dtype()
-
-    """
-    if quantization_args.strategy == QuantizationStrategy.TENSOR_GROUP and base_name == "weight":
-        # When applying weight-only FP4 quantization, generate a global_scale
-        # This scale is applied during runtime to ensure that the generated
-        # local scale falls properly within the FP8 range (i.e max value is FP8_max)
-        # which is the expected dtype of NVFP4A16 scales
-        value = generate_global_scale(input_tensor=module.weight)
-        value = value.to(device)
-        init_global_scale = Parameter(value, requires_grad=False)
-        register_offload_parameter(
-            module, f"{base_name}_global_scale", init_global_scale
-        )
-    """
 
     # 4. Initializes empty scale, zero point, and g_idx parameters for the module
     # do not init scales for quantzation_args.dynamic == DynamicType.local
