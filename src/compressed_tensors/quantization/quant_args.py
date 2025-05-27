@@ -279,11 +279,11 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             if strategy not in (
                 QuantizationStrategy.TOKEN,
                 QuantizationStrategy.TENSOR,
+                QuantizationStrategy.TENSOR_GROUP,
             ):
                 raise ValueError(
-                    f"One of {QuantizationStrategy.TOKEN} or "
-                    f"{QuantizationStrategy.TENSOR} must be used for dynamic ",
-                    "quantization",
+                    f"One of {(QuantizationStrategy.TOKEN, QuantizationStrategy.TENSOR, QuantizationStrategy.TENSOR_GROUP)} "
+                    "must be used for dynamic quantization",
                 )
             if observer is not None:
                 if observer != "memoryless":  # avoid annoying users with old configs

@@ -127,7 +127,7 @@ NVFP4 = dict(
         type=QuantizationType.FLOAT,
         strategy=QuantizationStrategy.TENSOR_GROUP,
         symmetric=True,
-        dynamic=DynamicType.local,
+        dynamic=DynamicType.LOCAL,
         group_size=16,
     ),
 )

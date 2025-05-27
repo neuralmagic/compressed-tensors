@@ -360,7 +360,7 @@ def forward_quantize(
     g_idx = getattr(module, "weight_g_idx", None)
     global_scale = getattr(module, f"{base_name}_global_scale", None)
 
-    if args.dynamic or args.dynamic == DynamicType.LOCAL:
+    if args.dynamic:
         # dynamic quantization - determine the scale/zp on the fly
         scale, zero_point = compute_dynamic_scales_and_zp(
             value=value, args=args, module=module, global_scale=global_scale
