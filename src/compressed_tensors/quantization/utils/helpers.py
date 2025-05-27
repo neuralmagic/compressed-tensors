@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import logging
-from math import ceil
 from typing import Generator, List, Optional, Tuple
 
 import torch
