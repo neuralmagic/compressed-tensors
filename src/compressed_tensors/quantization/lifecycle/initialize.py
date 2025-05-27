@@ -192,7 +192,10 @@ def _initialize_scale_zero_point(
         if quantization_args.strategy == QuantizationStrategy.CHANNEL:
             # (output_channels, 1)
             expected_shape = (weight_shape[0], 1)
-        elif quantization_args.strategy == QuantizationStrategy.GROUP:
+        elif quantization_args.strategy in (
+            QuantizationStrategy.TENSOR_GROUP,
+            QuantizationStrategy.GROUP,
+        ):
             num_groups = math.ceil(weight_shape[1] / quantization_args.group_size)
             expected_shape = (weight_shape[0], max(num_groups, 1))
 
