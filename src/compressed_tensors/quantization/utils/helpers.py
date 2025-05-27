@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+import math
 from typing import Generator, List, Optional, Tuple
 
 import torch
@@ -177,7 +178,12 @@ def compute_dynamic_scales_and_zp(
         reduce_dims = tuple(idx for idx in range(3) if idx not in dim)
         keep_dims = False
         value = torch.reshape(
-            value, (value.shape[0], value.shape[1] // args.group_size, args.group_size)
+            value,
+            (
+                value.shape[0],
+                math.ceil(value.shape[1] / args.group_size),
+                args.group_size,
+            ),
         )
     else:
         raise ValueError(
