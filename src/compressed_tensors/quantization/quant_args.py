@@ -292,6 +292,12 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     )
                 observer = None
 
+            if (
+                dynamic == DynamicType.LOCAL
+                and strategy != QuantizationStrategy.TENSOR_GROUP
+            ):
+                raise ValueError("local is only supported for strategy tensor_group")
+
         elif observer is None:
             # default to minmax for non-dynamic cases
             observer = "minmax"
