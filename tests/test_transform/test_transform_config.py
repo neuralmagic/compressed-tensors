@@ -31,32 +31,31 @@ def basic_transform_scheme():
 
 def test_basic(basic_transform_scheme):
     config = TransformConfig(
-        transform_groups={
+        config_groups={
             "transform_0": basic_transform_scheme,
         }
     )
-    assert isinstance(config.transform_groups.get("transform_0"), TransformScheme)
+    assert isinstance(config.config_groups.get("transform_0"), TransformScheme)
 
 
 def test_to_dict(basic_transform_scheme):
     config = TransformConfig(
-        transform_groups={
+        config_groups={
             "transform_0": basic_transform_scheme,
         }
     )
     config_dict = config.model_dump()
-    assert "transform_groups" in config_dict.keys()
+    assert "config_groups" in config_dict.keys()
 
 
 def test_multiple_groups():
-    location = "weight"
-    side = "input"
+    location = "weight_input"
 
     targets_1 = ["model.layers.0.attn.v_proj"]
-    linear_args_1 = TransformArgs(targets=targets_1, location=location, side=side)
+    linear_args_1 = TransformArgs(targets=targets_1, location=location)
 
     targets_2 = ["model.layers.0.attn.q_proj"]
-    linear_args_2 = TransformArgs(targets=targets_2, location=location, side=side)
+    linear_args_2 = TransformArgs(targets=targets_2, location=location)
 
     scheme_1 = TransformScheme(
         type="hadamard",
@@ -68,5 +67,5 @@ def test_multiple_groups():
         apply=[linear_args_2],
     )
     config = TransformConfig(
-        transform_groups={"transform_0": scheme_1, "transform_1": scheme_2}
+        config_groups={"transform_0": scheme_1, "transform_1": scheme_2}
     )

@@ -33,8 +33,9 @@ class TransformArgs(BaseModel):
     """
 
     targets: List[str]
-    location: Literal["input", "weight", "output", "k_cache", "q_attn"]
-    side: Optional[Literal["input", "output"]] = Field(default=None)
+    location: Literal[
+        "input", "weight_input", "weight_output", "output", "k_cache", "q_attn"
+    ]
     inverse: bool = Field(default=False)
     ignore: List[str] = Field(default_factory=list)
 
@@ -44,22 +45,6 @@ class TransformArgs(BaseModel):
         if isinstance(value, str):
             return [value]
         return value
-
-    @model_validator(mode="after")
-    def determine_side(self):
-        if self.location == "input":
-            self._check_and_assign("side", None)
-        elif self.location == "weight":
-            if self.side not in ("input", "output"):
-                raise ValueError("`side` must be provided for `weight` location")
-        elif self.location == "output":
-            self._check_and_assign("side", None)
-        elif self.location in ("k_cache", "q_attn"):
-            pass
-        else:
-            raise ValueError(f"Unknown location {self.location}")
-
-        return self
 
     def _check_and_assign(self, field_name: str, value: Any):
         existing = getattr(self, field_name)

@@ -36,9 +36,8 @@ def test_multiple_groups_global():
     embedding_args = TransformArgs(targets=targets, location=location)
 
     targets = ["Linear"]
-    location = "weight"
-    side = "input"
-    linear_args = TransformArgs(targets=targets, location=location, side=side)
+    location = "weight_input"
+    linear_args = TransformArgs(targets=targets, location=location)
 
     # same transform applied to multiple groups
     scheme = TransformScheme(
@@ -56,12 +55,11 @@ def test_multiple_groups_global():
 
 def test_multiple_groups():
     apply = []
-    location = "weight"
-    side = "output"
+    location = "weight_output"
 
     for i in range(20):
         targets = [f"model.layers.{i}.attn.v_proj", f"model.layers.{i}.attn.o_proj"]
-        args = TransformArgs(targets=targets, location=location, side=side)
+        args = TransformArgs(targets=targets, location=location)
         apply.append(args)
 
     # global is False, different hadamard transform applied to each group

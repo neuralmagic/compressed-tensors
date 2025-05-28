@@ -26,16 +26,16 @@ class TransformConfig(BaseModel):
     Configuration of transforms to be applied to a model. This config is to be
     serialized within a model's `config.json` file
 
-    :param transform_groups: A dictionary of `TransformSchemes` that should be applied
+    :param config_groups: A dictionary of `TransformSchemes` that should be applied
         to a particular model. The keys can be any arbitrary string
     """
 
-    transform_groups: Dict[str, TransformScheme]
+    config_groups: Dict[str, TransformScheme]
 
 
 # quip / quip sharp
 QUIP = TransformConfig(
-    transform_groups={
+    config_groups={
         "v": TransformScheme(
             type="hadamard",
             apply=[
@@ -45,8 +45,7 @@ QUIP = TransformConfig(
                 ),
                 TransformArgs(
                     targets=["Linear"],
-                    location="weight",
-                    side="input",
+                    location="weight_input",
                     inverse=True,
                 ),
             ],
@@ -57,8 +56,7 @@ QUIP = TransformConfig(
             apply=[
                 TransformArgs(
                     targets=["Linear"],
-                    location="weight",
-                    side="output",
+                    location="weight_output",
                 ),
                 TransformArgs(
                     targets=["Linear"], location="output", inverse=True  # non-mergable
