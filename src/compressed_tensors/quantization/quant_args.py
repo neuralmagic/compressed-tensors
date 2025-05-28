@@ -102,7 +102,7 @@ class QuantizationStrategy(str, Enum):
     TENSOR_GROUP = "tensor_group"
 
 
-class DynamicType(Enum):
+class DynamicType(str, Enum):
     """
     Enum storing potential dynamic types.
 
@@ -285,18 +285,25 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     f"One of {(QuantizationStrategy.TOKEN, QuantizationStrategy.TENSOR, QuantizationStrategy.TENSOR_GROUP)} "
                     "must be used for dynamic quantization",
                 )
-            if observer is not None:
-                if observer != "memoryless":  # avoid annoying users with old configs
-                    warnings.warn(
-                        "No observer is used for dynamic quantization, setting to None"
-                    )
-                observer = None
 
             if (
                 dynamic == DynamicType.LOCAL
                 and strategy != QuantizationStrategy.TENSOR_GROUP
             ):
                 raise ValueError("local is only supported for strategy tensor_group")
+
+            if observer is not None:
+                if dynamic is True:  # checking if dynamic is True, not "local"
+                    if (
+                        observer != "memoryless"
+                    ):  # avoid annoying users with old configs
+                        warnings.warn(
+                            "No observer is used for dynamic quantization, setting to None"
+                        )
+                    observer = None
+            else:
+                if dynamic == DynamicType.LOCAL:
+                    observer = "minmax"
 
         elif observer is None:
             # default to minmax for non-dynamic cases
