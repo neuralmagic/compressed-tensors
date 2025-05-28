@@ -12,12 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, List, Literal, Optional
+from enum import Enum
+from typing import Any, List
 
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 __all__ = ["TransformArgs"]
+
+
+class TransformLocation(str, Enum):
+    INPUT = "input"
+    WEIGHT_INPUT = "weight_input"
+    WEIGHT_OUTPUT = "weight_output"
+    OUTPUT = "output"
+    K_CACHE = "k_cache"
+    Q_ATTN = "q_attn"
 
 
 class TransformArgs(BaseModel):
@@ -33,9 +43,7 @@ class TransformArgs(BaseModel):
     """
 
     targets: List[str]
-    location: Literal[
-        "input", "weight_input", "weight_output", "output", "k_cache", "q_attn"
-    ]
+    location: TransformLocation
     inverse: bool = Field(default=False)
     ignore: List[str] = Field(default_factory=list)
 
