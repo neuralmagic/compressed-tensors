@@ -37,8 +37,7 @@ class TransformArgs(BaseModel):
     :param targets: list of modules to apply transforms to
     :param location: where to apply transform on module, one of (`input`, `weight`,
         `output`, `k_cache`, `q_attn`)
-    :param side: determines which side of the value matrix at `location` to apply the
-        transform. Required for `weight` location only.
+    :param inverse: whether or not to apply the inverse of a transform
     :param ignore: any modules which should be ignored from the targets list
     """
 
@@ -53,13 +52,3 @@ class TransformArgs(BaseModel):
         if isinstance(value, str):
             return [value]
         return value
-
-    def _check_and_assign(self, field_name: str, value: Any):
-        existing = getattr(self, field_name)
-        if existing is not None and existing != value:
-            raise ValueError(
-                f"Attempted to set `{field_name}={value}, but "
-                f"user has already set value to {existing}"
-            )
-
-        setattr(self, field_name, value)
