@@ -38,6 +38,7 @@ try:
     from accelerate.hooks import (
         AlignDevicesHook,
         add_hook_to_module,
+        attach_align_device_hook,
         named_module_tensors,
         remove_hook_from_module,
     )
@@ -58,6 +59,7 @@ except ImportError:
     set_module_tensor_to_device = None
     named_module_tensors = None
     dispatch_model = None
+    attach_align_device_hook = None
 
 
 __all__ = [
@@ -458,10 +460,31 @@ def register_offload_module(base: torch.nn.Module, name: str, module: torch.nn.M
 
 
 @check_accelerate(fallback="error")
-def force_cpu_offload(module: torch.nn.Module, execution_device: torch.device):
+def force_cpu_offload(
+    module: torch.nn.Module, execution_device: torch.device
+) -> torch.nn.Module:
+    """
+    Force cpu offloading a module, primarily used for testing
+
+    :param module: module containing parameters to offload
+    :param execution_device: execution device submodules
+    :return: module with hooks to perform cpu offloading
+    """
+    # edge case: there is a bug in `dispatch_model` which causes
+    # the function to only work if the model contains submodules
+    if next(module.children(), None) is None:
+        attach_align_device_hook(
+            module,
+            execution_device=execution_device,
+            offload=True,
+            weights_map=module.state_dict(),
+            tied_params_map={},
+        )
+        return module
+
     device_map = {}
 
-    def dfs(name: List[str], module: torch.nn.Module):
+    def collect_device_map(name: List[str], module: torch.nn.Module):
         if next(module.parameters(recurse=False), None) is not None:
             device_map[".".join(name)] = "cpu"
             return
@@ -469,10 +492,10 @@ def force_cpu_offload(module: torch.nn.Module, execution_device: torch.device):
         else:
             for submodule_name, submodule in module.named_children():
                 name.append(submodule_name)
-                dfs(name, submodule)
+                collect_device_map(name, submodule)
                 name.pop()
 
-    dfs([], module)
+    collect_device_map([], module)
 
     return dispatch_model(
         module, device_map, main_device=execution_device, force_hooks=True
