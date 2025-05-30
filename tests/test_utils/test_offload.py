@@ -344,9 +344,8 @@ def test_offload_to_weights_map():
 
 @requires_gpu
 @requires_accelerate()
-def test_register_offload_module():
-    execution_device = torch.device("cuda")
-
+@pytest.mark.parametrize("exec_device", [torch.device("cpu"), torch.device("cuda")])
+def test_register_offload_module(exec_device):
     # no offloading
     model = ExampleModel()
     child = torch.nn.Linear(2, 3)
@@ -358,7 +357,7 @@ def test_register_offload_module():
     # with offloading
     model = ExampleModel()
     child = torch.nn.Linear(2, 3)
-    force_cpu_offload(model, execution_device)
+    force_cpu_offload(model, exec_device)
     register_offload_module(model, "child", child)
     register_offload_module(model.linear, "child", child)
     assert child in model.children()
@@ -366,17 +365,16 @@ def test_register_offload_module():
 
     # can run modules
     model(torch.empty(1))
-    child(torch.empty(2, device=execution_device))
+    child(torch.empty(2, device=exec_device))
 
 
 @requires_gpu
 @requires_accelerate()
-def test_force_cpu_offload():
-    execution_device = torch.device("cuda")
-
+@pytest.mark.parametrize("exec_device", [torch.device("cpu"), torch.device("cuda")])
+def test_force_cpu_offload(exec_device):
     # single module
     module = torch.nn.Linear(1, 2)
-    module = force_cpu_offload(module, execution_device)
+    module = force_cpu_offload(module, exec_device)
     assert has_offloaded_params(module)
     assert module._hf_hook.offload
     assert module.weight.device == torch.device("meta")
@@ -384,11 +382,11 @@ def test_force_cpu_offload():
     assert module._hf_hook.tied_params_map is not None
 
     # can run
-    module(torch.empty(1, device=execution_device))
+    module(torch.empty(1, device=exec_device))
 
     # model
     model = ExampleModel()
-    model = force_cpu_offload(model, execution_device)
+    model = force_cpu_offload(model, exec_device)
     assert not has_offloaded_params(model)
 
     assert has_offloaded_params(model.linear)
@@ -398,4 +396,4 @@ def test_force_cpu_offload():
     assert model.linear._hf_hook.tied_params_map is not None
 
     # can run
-    model(torch.empty(1, device=execution_device))
+    model(torch.empty(1, device=exec_device))
