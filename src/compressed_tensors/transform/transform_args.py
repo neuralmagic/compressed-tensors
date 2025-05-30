@@ -18,7 +18,7 @@ from typing import Any, List
 from pydantic import BaseModel, Field, field_validator
 
 
-__all__ = ["TransformArgs"]
+__all__ = ["TransformLocation", "TransformArgs"]
 
 
 class TransformLocation(str, Enum):
