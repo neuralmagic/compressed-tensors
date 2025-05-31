@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Union
 
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
 from compressed_tensors.transform.utils.hadamard import deterministic_hadamard_matrix
 from compressed_tensors.transform.utils.utils import (
+    apply_permutation,
     apply_transform_weight,
     get_matrix_size,
 )
@@ -41,6 +42,7 @@ class HadamardFactory(TransformFactory):
     def __init__(self, name: str, scheme: TransformScheme, seed: int = 42):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
+        self.perms = ParameterizedDefaultDict(self._create_permutation)
 
     def create_transform(self, module: Module, args: TransformArgs):
         """
@@ -56,24 +58,35 @@ class HadamardFactory(TransformFactory):
         device = get_offloaded_device(module)
 
         weight = self.weights[size, dtype, device]
-        return HadamardTransform(weight, args)
+        perm = self.perms[module, weight] if self.scheme.randomize_modules else None
+        return HadamardTransform(weight, perm, args)
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         data = torch.tensor(deterministic_hadamard_matrix(size))  # TODO: seed=self.seed
         data = data.to(dtype=dtype, device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
+    def _create_permutation(self, module: Module, weight: Parameter) -> Parameter:
+        data = torch.randperm(weight.size(0))
+        return Parameter(data, requires_grad=False)
+
 
 class HadamardTransform(TransformBase):
-    def __init__(self, weight: Parameter, args: TransformArgs):
+    def __init__(
+        self, weight: Parameter, perm: Union[Parameter, None], args: TransformArgs
+    ):
         super().__init__()
         self.weight = weight
+        self.perm = perm
         self.args = args
 
     def forward(self, value: Tensor) -> Tensor:
-        if not self.args.inverse:
-            weight = self.weight
-        else:
-            weight = self.weight.T / self.weight.size(0)
+        weight = self.weight
+
+        if self.perm is not None:
+            weight = apply_permutation(weight, self.perm)
+
+        if self.args.inverse:
+            weight = weight.T / weight.size(0)
 
         return apply_transform_weight(weight, value, self.args.location)
