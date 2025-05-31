@@ -105,7 +105,7 @@ class TransformFactory(RegistryMixin, ABC):
                 input = args[0]
                 return transform(input)
 
-            module.register_forward_pre_hook(input_hook)
+            module.register_forward_pre_hook(input_hook, prepend=True)
 
         # eagerly apply transformation to weight
         elif args.location in (
