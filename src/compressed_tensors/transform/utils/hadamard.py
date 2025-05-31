@@ -128,7 +128,7 @@ def _matmul_hadU(X, transpose=False) -> torch.Tensor:
         input = hadK.view(1, K, K).to(input) @ input
 
     # normalize
-    return input.view(X.shape) / torch.tensor(n).sqrt()
+    return input.view(X.shape)
 
 
 def _is_pow2(n: int) -> bool:
