@@ -46,7 +46,7 @@ def test_packed_hadamard_compliant(had_func):
 def test_random_hadamard_matrix_compliant(size):
     had_matrix = random_hadamard_matrix(size)
     val_1 = torch.round(had_matrix @ had_matrix.T)
-    assert torch.equal(val_1, torch.eye(size))
+    assert torch.equal(val_1 / size, torch.eye(size))
 
 
 @pytest.mark.parametrize(
