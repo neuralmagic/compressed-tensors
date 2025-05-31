@@ -16,6 +16,7 @@ import torch
 from compressed_tensors.utils import (
     align_module_device,
     align_modules,
+    delete_offload_module,
     delete_offload_parameter,
     disable_hf_hook,
     force_cpu_offload,
@@ -366,6 +367,32 @@ def test_register_offload_module(exec_device):
     # can run modules
     model(torch.empty(1))
     child(torch.empty(2, device=exec_device))
+
+
+@requires_gpu
+@requires_accelerate()
+@pytest.mark.parametrize("exec_device", [torch.device("cpu"), torch.device("cuda")])
+def test_delete_offload_module(exec_device):
+    # no offloading
+    model = ExampleModel()
+    child = torch.nn.Linear(2, 3)
+    register_offload_module(model, "child", child)
+    register_offload_module(model.linear, "child", child)
+    delete_offload_module(model, "child")
+    delete_offload_module(model.linear, "child")
+    assert not child in model.children()
+    assert not child in model.linear.children()
+
+    # with offloading
+    model = ExampleModel()
+    child = torch.nn.Linear(2, 3)
+    force_cpu_offload(model, exec_device)
+    register_offload_module(model, "child", child)
+    register_offload_module(model.linear, "child", child)
+    delete_offload_module(model, "child")
+    delete_offload_module(model.linear, "child")
+    assert not child in model.children()
+    assert not child in model.linear.children()
 
 
 @requires_gpu
