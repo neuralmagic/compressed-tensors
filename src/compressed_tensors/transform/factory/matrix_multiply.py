@@ -53,19 +53,19 @@ class RandomMatrixFactory(TransformFactory):
         dtype = module.weight.dtype
         device = get_offloaded_device(module)
 
-        if not args.inverse:
-            weight = self.weights[size, dtype, device]
-        else:
-            weight = self.inverses[size, dtype, device]
+        weight = self.weights[size, dtype, device]
+        if args.inverse:
+            weight = self.inverses[weight]
+
         return RandomMatrixTransform(weight, args)
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         data = torch.rand((size, size), dtype=dtype, device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
-    def _create_inverse(self, size: int, dtype: dtype, device: device) -> Parameter:
-        weight = self.weights[size, dtype, device]
-        return Parameter(high_precision_invert(weight.data), requires_grad=False)
+    def _create_inverse(self, weight: Parameter) -> Parameter:
+        data = high_precision_invert(weight.data)
+        return Parameter(data, requires_grad=False)
 
 
 class RandomMatrixTransform(TransformBase):
