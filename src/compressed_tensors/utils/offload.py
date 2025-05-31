@@ -77,6 +77,7 @@ __all__ = [
     "align_modules",
     "align_module_device",
     "register_offload_module",
+    "delete_offload_module",
     "force_cpu_offload",
 ]
 
@@ -398,7 +399,6 @@ def align_modules(
         yield
 
 
-@check_accelerate(fallback=None)
 def register_offload_module(base: torch.nn.Module, name: str, module: torch.nn.Module):
     """
     Register a submodule with offloading if the parent module is offloaded
@@ -457,6 +457,20 @@ def register_offload_module(base: torch.nn.Module, name: str, module: torch.nn.M
 
     # (1): Since we cannot know which pointers are shared when we add parameters in an
     # online way, assume that all pointers are shared. This comes at no runtime cost
+
+
+def delete_offload_module(base: torch.nn.Module, name: str):
+    """
+    Delete a submodule from a model which may contain offloading
+    :param base: parent module to delete submodule from
+    :param name: name of submodule on parent
+    """
+    module: torch.nn.Module = getattr(base, name)
+
+    for param_name, _ in list(module.named_parameters()):
+        delete_offload_parameter(module, param_name)
+
+    delattr(base, name)
 
 
 @check_accelerate(fallback="error")
