@@ -46,8 +46,10 @@ from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
 )
+from compressed_tensors.transform import TransformBase, TransformLocation
 from compressed_tensors.utils import (
     align_module_device,
+    delete_offload_module,
     delete_offload_parameter,
     get_execution_device,
     get_safetensors_folder,
@@ -384,12 +386,22 @@ class ModelCompressor:
             targets=self.sparsity_config.targets if self.sparsity_config else [],
             ignore=self.sparsity_config.ignore if self.sparsity_config else [],
         )
+        module_to_weight_transforms = map_module_to_weight_transforms(model)
 
         for prefix, module in tqdm(model.named_modules(), desc="Compressing model"):
-            if prefix in module_to_scheme or prefix in sparse_compression_targets:
+            if (
+                prefix in module_to_scheme
+                or prefix in sparse_compression_targets
+                or module in module_to_weight_transforms
+            ):
                 # in the future, support compression on same device
                 with align_module_device(module, execution_device="cpu"):
                     state_dict = module.state_dict(prefix=f"{prefix}.")
+
+                # remove weight transform modules (before state_dict for simplicity)
+                if module in module_to_weight_transforms:
+                    for transform_name in module_to_weight_transforms[module]:
+                        delete_offload_module(module, transform_name)
 
                 # quantization first
                 if prefix in module_to_scheme:
@@ -409,15 +421,16 @@ class ModelCompressor:
 
                 # remove any existing parameters
                 device = get_execution_device(module)
-                for name, _ in list(module.named_parameters()):
+                for name, _ in list(module.named_parameters(recurse=False)):
                     delattr(module, name)
 
                 # replace with compressed parameters
                 for name, value in state_dict.items():
                     name = name.removeprefix(f"{prefix}.")
-                    value = value.to(device)
-                    param = torch.nn.Parameter(value, requires_grad=False)
-                    register_offload_parameter(module, name, param)
+                    if "." not in name:  # handle submodules in later iteration
+                        value = value.to(device)
+                        param = torch.nn.Parameter(value, requires_grad=False)
+                        register_offload_parameter(module, name, param)
 
                 module.quantization_status = QuantizationStatus.COMPRESSED
 
@@ -475,7 +488,7 @@ class ModelCompressor:
 
                 # remove any existing parameters
                 device = get_execution_device(module)
-                for name, _ in list(module.named_parameters()):
+                for name, _ in list(module.named_parameters(recurse=False)):
                     delete_offload_parameter(module, name)
 
                 # replace with decompressed parameters
@@ -746,6 +759,27 @@ def map_module_to_scheme(model: Module) -> Dict[str, QuantizationScheme]:
         for name, module in iter_named_leaf_modules(model)
         if is_module_quantized(module)
     }
+
+
+def map_module_to_weight_transforms(model: Module) -> Dict[Module, List[str]]:
+    """
+    Extremely trivial, only exists to follow pattern
+    """
+    mapping = {}
+
+    for module in model.modules():
+        weight_transform_names = []
+        for name, submodule in module.named_children():
+            if isinstance(submodule, TransformBase) and submodule.args.location in (
+                TransformLocation.WEIGHT_INPUT,
+                TransformLocation.WEIGHT_OUTPUT,
+            ):
+                weight_transform_names.append(name)
+
+        if len(weight_transform_names) > 0:
+            mapping[module] = weight_transform_names
+
+    return mapping
 
 
 # HACK: Override the dtype_byte_size function in transformers to support float8 types
