@@ -29,10 +29,6 @@ class RandomHadamardFactory(HadamardFactory):
     """
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
-        for key in self.weights.keys():
-            if key[0] == size:
-                return self.weights[key].to(dtype=dtype, device=device)
-
         data = random_hadamard_matrix(size)  # seed
         data = data.to(dtype=dtype, device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)

@@ -64,8 +64,7 @@ def test_correctness_linear(scheme):
     input_transformed = input_tfm(input)
     weight_transformed = w_out_tfm(w_in_tfm(module.weight))
     output = output_tfm(input_transformed @ weight_transformed.T)
-
-    torch.allclose(true_output, output, atol=1e-7, rtol=0.0)
+    assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
 @pytest.mark.parametrize(
@@ -74,14 +73,24 @@ def test_correctness_linear(scheme):
 )
 def test_correctness_model(scheme, offload=False):
     # load model
-    model = TransformableModel(2, 4, 8, 16)
+    model = TransformableModel(2, 4, 8, 16, 32, 64)
     if offload:
         model = force_cpu_offload(model, torch.device("cuda"))
 
     # create factory
     scheme.apply = [
-        TransformArgs(targets="fcs.0", location="input"),
-        TransformArgs(targets="fcs.2", location="output", inverse=True),
+        # weight output -> input
+        TransformArgs(targets="fcs.0", location="weight_output"),
+        TransformArgs(targets="fcs.1", location="input", inverse=True),
+        # output -> weight input
+        TransformArgs(targets="fcs.1", location="output"),
+        TransformArgs(targets="fcs.2", location="weight_input", inverse=True),
+        # output -> input
+        TransformArgs(targets="fcs.2", location="output"),
+        TransformArgs(targets="fcs.3", location="input", inverse=True),
+        # weight output -> weight input
+        TransformArgs(targets="fcs.3", location="weight_output"),
+        TransformArgs(targets="fcs.4", location="weight_input", inverse=True),
     ]
     factory = TransformFactory.from_scheme(scheme, name="")
 
@@ -94,7 +103,7 @@ def test_correctness_model(scheme, offload=False):
     true_output = model(input)
     factory.apply_to_model(model)
     output = model(input)
-    torch.allclose(true_output, output, atol=1e-7, rtol=0.0)
+    assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
 @requires_gpu
