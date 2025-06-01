@@ -227,6 +227,7 @@ def _process_quantization(
             perm = torch.argsort(g_idx)
             x = safe_permute(x, perm, dim=1)
 
+        
         x = torch.reshape(
             x,
             (
@@ -249,19 +250,19 @@ def _process_quantization(
             )
 
         if do_dequantize:
-            input = output if do_quantize else x
+            input = output if do_dequantize else x
             output = _dequantize(
-                x_q=input,
-                scale=scale.unsqueeze(-1),
-                zero_point=zero_point.unsqueeze(-1) if zero_point is not None else None,
-                global_scale=global_scale,
+                x_q=input, scale=scale.unsqueeze(-1), zero_point=zero_point.unsqueeze(-1), global_scale=global_scale
             )
 
         output = torch.reshape(
             output,
-            (output.shape[0], output.shape[1] * output.shape[2]),
+            (
+                output.shape[0],
+                output.shape[1] * output.shape[2]
+            ),
         )
-
+        
         output = output.to(output_dtype)
 
         if not is_column_order:
