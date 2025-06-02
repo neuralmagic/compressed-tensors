@@ -30,10 +30,7 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.utils import (
-    is_fp4,
-    is_kv_cache_quant_scheme,
-)
+from compressed_tensors.quantization.utils import is_fp4, is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
@@ -46,7 +43,6 @@ __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
     "KVCacheScaleType",
-    "update_fused_layer_weight_global_scales",
 ]
 
 
