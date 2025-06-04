@@ -24,6 +24,7 @@ from compressed_tensors.utils import (
     get_nested_weight_mappings,
     merge_names,
 )
+from compressed_tensors.utils.safetensors_load import match_param_name
 from safetensors import safe_open
 from torch import Tensor
 from tqdm import tqdm
@@ -223,9 +224,7 @@ class BaseQuantizationCompressor(BaseCompressor):
             state_dict, self.compression_param_names
         )
         for module_path in weight_mappings.keys():
-            weight_data = {}
-            for param_name, param_value in weight_mappings[module_path].items():
-                weight_data[param_name] = param_value
+            weight_data = weight_mappings[module_path].copy()
 
             if "weight_scale" in weight_data:
                 quant_args = names_to_scheme[module_path].weights
@@ -234,3 +233,22 @@ class BaseQuantizationCompressor(BaseCompressor):
                 )
                 weight_data["weight"] = decompressed
                 yield module_path, weight_data
+
+    def decompress_module_from_state_dict(
+        self,
+        prefix: str,
+        state_dict: Dict[str, torch.Tensor],
+        scheme: QuantizationScheme,
+    ) -> Generator[Tuple[str, Dict[str, torch.Tensor]], None, None]:
+        state_dict = {
+            key.removeprefix(f"{prefix}."): value for key, value in state_dict.items()
+        }
+
+        if "weight_scale" in state_dict:
+            state_dict["weight"] = self.decompress_weight(
+                compressed_data=state_dict, quantization_args=scheme.weights
+            )
+
+        state_dict = {f"{prefix}.{key}": value for key, value in state_dict.items()}
+
+        return state_dict
