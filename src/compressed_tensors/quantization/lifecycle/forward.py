@@ -21,7 +21,6 @@ from compressed_tensors.quantization.quant_args import (
     DynamicType,
     QuantizationArgs,
     QuantizationStrategy,
-    QuantizationType,
     round_to_quantized_type,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
@@ -370,8 +369,6 @@ def forward_quantize(
 
     g_idx = getattr(module, "weight_g_idx", None)
     global_scale = getattr(module, f"{base_name}_global_scale", None)
-    if global_scale is not None and global_scale.data == 0:
-        return value
 
     if args.dynamic in (True, DynamicType.LOCAL):
         # dynamic quantization - determine the scale/zp on the fly

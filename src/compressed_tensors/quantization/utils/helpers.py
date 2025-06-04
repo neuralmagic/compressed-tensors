@@ -110,6 +110,7 @@ def calculate_qparams(
         else:
             scales = max_val_pos / (float(bit_range) / 2)
 
+        # TODO: in the case of MoEs, the global_scale may also be 0/need to be clamped
         if scales.dtype == FP8_E4M3_DATA.dtype:
             # torch.clamp not supported for FP8
             # use the next largest fp8 value from 0
