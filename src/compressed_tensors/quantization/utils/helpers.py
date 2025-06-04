@@ -495,4 +495,4 @@ def generate_gparam(
     max_vals = torch.max(updated_max_val, torch.zeros_like(updated_max_val))
     max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
     global_scale = scale_data.max * quant_data.max / max_val_pos
-    return global_scale.to(dtype)
+    return global_scale.to(dtype).reshape([1])

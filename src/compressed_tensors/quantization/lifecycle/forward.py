@@ -370,6 +370,8 @@ def forward_quantize(
 
     g_idx = getattr(module, "weight_g_idx", None)
     global_scale = getattr(module, f"{base_name}_global_scale", None)
+    if global_scale is not None and global_scale.data == 0:
+        return value
 
     if args.dynamic in (True, DynamicType.LOCAL):
         # dynamic quantization - determine the scale/zp on the fly
@@ -405,7 +407,7 @@ def _quantize(
 
     # if a global scale is optionally provided, use it
     # to further scale the local `scale` parameter
-    if global_scale:
+    if global_scale is not None:
         scale = scale.to(global_scale.dtype) / global_scale
 
     scaled = x / scale
@@ -438,7 +440,7 @@ def _dequantize(
 
     # if a global scale is optionally provided, use it
     # to further scale the local `scale` parameter
-    if global_scale:
+    if global_scale is not None:
         scale = scale.to(global_scale.dtype) / global_scale
 
     dequant_value = x_q.to(scale.dtype)
