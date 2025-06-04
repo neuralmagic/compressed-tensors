@@ -239,7 +239,16 @@ class BaseQuantizationCompressor(BaseCompressor):
         prefix: str,
         state_dict: Dict[str, torch.Tensor],
         scheme: QuantizationScheme,
-    ) -> Generator[Tuple[str, Dict[str, torch.Tensor]], None, None]:
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Only used by in-memory decompression pathways to decompress the parameters of
+        one module
+
+        :param prefix: prefix of state_dict, typically the path to the module
+        :param state_dict: state dict containing module parameter values
+        :param scheme: quantization scheme of module to decompress
+        :return: state dict with weight decompressed if applicable
+        """
         state_dict = {
             key.removeprefix(f"{prefix}."): value for key, value in state_dict.items()
         }
