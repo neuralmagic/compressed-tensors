@@ -25,14 +25,11 @@ __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix"]
 # https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py
 def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
     """
-    Construct an Hadamard matrix.
+    Construct an n-by-n Hadamard matrix, using Sylvester's construction.
+    `n` must be a power of 2.
 
-    Constructs an n-by-n Hadamard matrix, using Sylvester's
-    construction. `n` must be a power of 2.
-
-    :param size: order of the matrix; must be a power of 2
-
-    returns a (size, size) hadamard matrix
+    :param size: order of the matrix, must be a power of 2
+    :return: hadamard matrix of size `size`
     """
     if size <= 0:
         raise ValueError("Cannot construct deterministic hadamard of size <= 0")
