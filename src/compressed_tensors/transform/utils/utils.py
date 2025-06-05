@@ -41,7 +41,9 @@ def apply_transform_weight(
 ) -> torch.Tensor:
     """
     Using the transform location, determine how to apply the transform weight to the
-    given value
+    given value. For more info on input and output transforms, see `TransformLocation`
+
+    The following explains how weights should be applied to values according to location
 
     let  x          be input activation
          W          be weight,
@@ -49,16 +51,17 @@ def apply_transform_weight(
 
     note that
          y  = (x W.T)        // torch.nn.Linear
-         yh = (xh) (Wh).T    // transformed
+
+    Choose values for yh, xh, and Wh which incorporate matrix transforms
 
     let  V, Vi      be transform matrices on input side
          U, Ui      be transform matrices on output side
 
-    show that the following values for yh, xh, and Wh are consistent
-
     pick xh = (x V)
          Wh = (U.T W Vi.T)
          yh = (y U)
+
+    The following shows that `yh = (xh) (Wh).T` for the chosen values of yh, xh, and Wh
 
     (xh) (Wh).T = (x V) (U.T W Vi.T).T
                 = (x V) (Vi W.T U)        // transpose matrix product identity
@@ -83,3 +86,6 @@ def apply_transform_weight(
 
     elif location == TransformLocation.OUTPUT:
         return value @ weight
+
+    else:
+        raise NotImplementedError(f"{location} has not been implemented yet")
