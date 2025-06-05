@@ -49,6 +49,7 @@ class TransformFactory(RegistryMixin, ABC):
     def __init__(self, name: str, scheme: TransformScheme, seed: int = 42):
         self.name = name
         self.scheme = scheme
+        self.generator = torch.Generator().manual_seed(seed)
         self.seed = seed
 
     @classmethod

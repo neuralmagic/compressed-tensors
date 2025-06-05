@@ -60,7 +60,9 @@ class RandomMatrixFactory(TransformFactory):
         return RandomMatrixTransform(weight, args)
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
-        data = torch.rand((size, size), dtype=dtype, device=device)
+        data = torch.rand(
+            (size, size), generator=self.generator, dtype=dtype, device=device
+        )
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
     def _create_inverse(self, weight: Parameter) -> Parameter:
