@@ -59,7 +59,7 @@ class HadamardFactory(TransformFactory):
         return HadamardTransform(weight, args)
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
-        data = torch.tensor(deterministic_hadamard_matrix(size))  # TODO: seed=self.seed
+        data = deterministic_hadamard_matrix(size)  # TODO: seed=self.seed
         data = data.to(dtype=dtype, device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
@@ -74,6 +74,6 @@ class HadamardTransform(TransformBase):
         if not self.args.inverse:
             weight = self.weight
         else:
-            weight = self.weight.T / self.weight.size(0)
+            weight = self.weight.T
 
         return apply_transform_weight(weight, value, self.args.location)
