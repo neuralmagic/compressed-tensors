@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import math
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy
 import torch
@@ -58,21 +58,20 @@ def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
 # https://github.com/Dao-AILab/fast-hadamard-transform/tree/master
 
 
-def random_hadamard_matrix(size: int) -> torch.Tensor:
+def random_hadamard_matrix(
+    size: int, gen: Optional[torch.Generator] = None
+) -> torch.Tensor:
     """
     Produces a randomly generated Hadamard matrix.
     See https://cornell-relaxml.github.io/quip-sharp/ ,
     Section "Randomized Hadamard Transformation"
 
-    :param size: The dimension of the matrix. Matrix generated will have dimensions
-        (size, size)
-
+    :param size: The dimension of the hamadard matrix
+    :param gen: Optional generator random values
+    :return: randomly generated hadamard matrix
     """
-    # TODO: potentially update to add "seed" as an argument, to allow
-    # the matrix generated to be reproducible
-
     # Benefits: support other shapes / non powers of 2, support randomization
-    Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float64)
+    Q = torch.randint(low=0, high=2, size=(size,), generator=gen, dtype=torch.float64)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
     return _matmul_hadU(Q) / math.sqrt(size)

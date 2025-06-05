@@ -49,6 +49,30 @@ def test_random_hadamard_matrix_compliant(size):
     assert torch.equal(product, torch.eye(size))
 
 
+def test_random_hadamard_generator():
+    generator = torch.Generator().manual_seed(42)
+    one = random_hadamard_matrix(2048, generator)
+    two = random_hadamard_matrix(2048, generator)
+
+    one_true = torch.tensor(
+        [
+            [-1, -1, -1],
+            [+1, -1, +1],
+            [-1, -1, +1],
+        ]
+    )
+    two_true = torch.tensor(
+        [
+            [-1, -1, -1],
+            [-1, +1, -1],
+            [+1, +1, -1],
+        ]
+    )
+
+    assert torch.all(one[:3, :3].sign() == one_true.sign())
+    assert torch.all(two[:3, :3].sign() == two_true.sign())
+
+
 @pytest.mark.parametrize(
     "size",
     [1024],
