@@ -23,7 +23,7 @@ __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix"]
 
 # adapted from:
 # https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py
-def deterministic_hadamard_matrix(size: int) -> numpy.ndarray:
+def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
     """
     Construct an Hadamard matrix.
 
@@ -47,7 +47,7 @@ def deterministic_hadamard_matrix(size: int) -> numpy.ndarray:
     for i in range(0, log2):
         H = numpy.vstack((numpy.hstack((H, H)), numpy.hstack((H, -H))))
 
-    return H
+    return torch.from_numpy(H / math.sqrt(size))
 
 
 # adapted from:
@@ -75,7 +75,7 @@ def random_hadamard_matrix(size: int) -> torch.Tensor:
     Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float64)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
-    return _matmul_hadU(Q)
+    return _matmul_hadU(Q) / math.sqrt(size)
 
 
 def _get_hadK(n: int, transpose: bool = False) -> Tuple[torch.Tensor, int]:
