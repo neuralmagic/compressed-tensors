@@ -33,10 +33,10 @@ from compressed_tensors.transform.utils.hadamard import (
 )
 def test_packed_hadamard_compliant(had_func):
     had_matrix = had_func()
-    size = had_matrix.shape[0]
+    size = had_matrix.size(0)
     # HH.T == nI
-    val_1 = had_matrix @ had_matrix.T
-    assert torch.equal(val_1 / size, torch.eye(size))
+    product = had_matrix @ had_matrix.T
+    assert torch.equal(product, size * torch.eye(size))
 
 
 @pytest.mark.parametrize(
@@ -45,8 +45,8 @@ def test_packed_hadamard_compliant(had_func):
 )
 def test_random_hadamard_matrix_compliant(size):
     had_matrix = random_hadamard_matrix(size)
-    val_1 = torch.round(had_matrix @ had_matrix.T)
-    assert torch.equal(val_1 / size, torch.eye(size))
+    product = torch.round(had_matrix @ had_matrix.T)
+    assert torch.equal(product, torch.eye(size))
 
 
 @pytest.mark.parametrize(
@@ -55,6 +55,6 @@ def test_random_hadamard_matrix_compliant(size):
 )
 def test_deterministic_hadamard_compliant(size):
     had_matrix = deterministic_hadamard_matrix(size)
-    # HH.T == nI
-    val_1 = had_matrix @ had_matrix.T
-    assert numpy.array_equal(val_1 / size, numpy.eye(size))
+    # (H / sqrt(n))(H.T / sqrt(n)) == I
+    product = had_matrix @ had_matrix.T
+    assert numpy.array_equal(product, numpy.eye(size))

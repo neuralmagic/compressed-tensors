@@ -20,10 +20,7 @@ from compressed_tensors.quantization import (
     QuantizationArgs,
     QuantizationStrategy,
 )
-from compressed_tensors.quantization.utils import (
-    calculate_qparams,
-    generate_global_scale,
-)
+from compressed_tensors.quantization.utils import calculate_qparams, generate_gparam
 
 
 @pytest.mark.parametrize(
@@ -70,8 +67,9 @@ def test_fused_global_scales():
     layer = torch.nn.Linear(7, 8)
     max_tensor_value = torch.abs(layer.weight.data).max()
     # use defaults
-    global_scale = generate_global_scale(layer.weight)
+    min_val, max_val = torch.aminmax(layer.weight)
+    global_scale = generate_gparam(min_val.data, max_val.data)
     # max value should be = (448 * 6) / global_scale
-    assert max_tensor_value == pytest.approx(
+    assert max_tensor_value.item() == pytest.approx(
         FP4_E2M1_DATA.max * FP8_E4M3_DATA.max / global_scale, abs=0.001
     )

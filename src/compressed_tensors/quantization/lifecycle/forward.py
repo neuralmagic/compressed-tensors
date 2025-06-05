@@ -21,7 +21,6 @@ from compressed_tensors.quantization.quant_args import (
     DynamicType,
     QuantizationArgs,
     QuantizationStrategy,
-    QuantizationType,
     round_to_quantized_type,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
@@ -227,31 +226,42 @@ def _process_quantization(
             perm = torch.argsort(g_idx)
             x = safe_permute(x, perm, dim=1)
 
-        # TODO: experiment with vectorizing for loop for performance
-        end = 0
-        for index, group_count in enumerate(group_sizes):
-            sc = scale[:, index].view(-1, 1)
-            zp = zero_point[:, index].view(-1, 1) if zero_point is not None else None
+        x = torch.reshape(
+            x,
+            (
+                x.shape[0],
+                ceil(x.shape[1] / group_size),
+                group_size,
+            ),
+        )
 
-            start = end
-            end = start + group_count
-            if do_quantize:
-                output[:, start:end] = _quantize(
-                    x=x[:, start:end],
-                    scale=sc,
-                    zero_point=zp,
-                    q_min=q_min,
-                    q_max=q_max,
-                    args=args,
-                    dtype=dtype,
-                    global_scale=global_scale,
-                )
+        if do_quantize:
+            output = _quantize(
+                x=x,
+                scale=scale.unsqueeze(-1),
+                zero_point=zero_point.unsqueeze(-1) if zero_point is not None else None,
+                dtype=dtype,
+                global_scale=global_scale,
+                q_min=q_min,
+                q_max=q_max,
+                args=args,
+            )
 
-            if do_dequantize:
-                input = output[:, start:end] if do_quantize else x[:, start:end]
-                output[:, start:end] = _dequantize(
-                    x_q=input, scale=sc, zero_point=zp, global_scale=global_scale
-                )
+        if do_dequantize:
+            input = output if do_quantize else x
+            output = _dequantize(
+                x_q=input,
+                scale=scale.unsqueeze(-1),
+                zero_point=zero_point.unsqueeze(-1) if zero_point is not None else None,
+                global_scale=global_scale,
+            )
+
+        output = torch.reshape(
+            output,
+            (output.shape[0], output.shape[1] * output.shape[2]),
+        )
+
+        output = output.to(output_dtype)
 
         if not is_column_order:
             output = safe_permute(output, torch.argsort(perm), dim=1)
@@ -394,7 +404,7 @@ def _quantize(
 
     # if a global scale is optionally provided, use it
     # to further scale the local `scale` parameter
-    if global_scale:
+    if global_scale is not None:
         scale = scale.to(global_scale.dtype) / global_scale
 
     scaled = x / scale
@@ -427,7 +437,7 @@ def _dequantize(
 
     # if a global scale is optionally provided, use it
     # to further scale the local `scale` parameter
-    if global_scale:
+    if global_scale is not None:
         scale = scale.to(global_scale.dtype) / global_scale
 
     dequant_value = x_q.to(scale.dtype)
