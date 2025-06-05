@@ -68,7 +68,7 @@ def random_hadamard_matrix(size: int) -> torch.Tensor:
         (size, size)
 
     """
-    # TODO: potentially update to add "seed" as an arugment, to allow
+    # TODO: potentially update to add "seed" as an argument, to allow
     # the matrix generated to be reproducible
 
     # Benefits: support other shapes / non powers of 2, support randomization
