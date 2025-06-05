@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import math
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy
 import torch
@@ -23,7 +23,7 @@ __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix"]
 
 # adapted from:
 # https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py
-def deterministic_hadamard_matrix(size: int) -> numpy.ndarray:
+def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
     """
     Construct an Hadamard matrix.
 
@@ -47,7 +47,7 @@ def deterministic_hadamard_matrix(size: int) -> numpy.ndarray:
     for i in range(0, log2):
         H = numpy.vstack((numpy.hstack((H, H)), numpy.hstack((H, -H))))
 
-    return H
+    return torch.from_numpy(H / math.sqrt(size))
 
 
 # adapted from:
@@ -58,24 +58,23 @@ def deterministic_hadamard_matrix(size: int) -> numpy.ndarray:
 # https://github.com/Dao-AILab/fast-hadamard-transform/tree/master
 
 
-def random_hadamard_matrix(size: int) -> torch.Tensor:
+def random_hadamard_matrix(
+    size: int, gen: Optional[torch.Generator] = None
+) -> torch.Tensor:
     """
     Produces a randomly generated Hadamard matrix.
     See https://cornell-relaxml.github.io/quip-sharp/ ,
     Section "Randomized Hadamard Transformation"
 
-    :param size: The dimension of the matrix. Matrix generated will have dimensions
-        (size, size)
-
+    :param size: The dimension of the hamadard matrix
+    :param gen: Optional generator random values
+    :return: randomly generated hadamard matrix
     """
-    # TODO: potentially update to add "seed" as an arugment, to allow
-    # the matrix generated to be reproducible
-
     # Benefits: support other shapes / non powers of 2, support randomization
-    Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float64)
+    Q = torch.randint(low=0, high=2, size=(size,), generator=gen, dtype=torch.float64)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
-    return _matmul_hadU(Q)
+    return _matmul_hadU(Q) / math.sqrt(size)
 
 
 def _get_hadK(n: int, transpose: bool = False) -> Tuple[torch.Tensor, int]:
@@ -128,7 +127,7 @@ def _matmul_hadU(X, transpose=False) -> torch.Tensor:
         input = hadK.view(1, K, K).to(input) @ input
 
     # normalize
-    return input.view(X.shape) / torch.tensor(n).sqrt()
+    return input.view(X.shape)
 
 
 def _is_pow2(n: int) -> bool:

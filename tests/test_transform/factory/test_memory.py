@@ -29,7 +29,7 @@ from tests.testing_utils import requires_accelerate, requires_gpu
 _test_schemes = [
     TransformScheme(type=name) for name in TransformFactory.registered_names()
 ] + [
-    TransformScheme(type=name, randomize_modules=True)
+    TransformScheme(type=name, randomize=True)
     for name in TransformFactory.registered_names()
 ]
 

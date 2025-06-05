@@ -16,7 +16,7 @@ import torch
 from compressed_tensors.transform import TransformLocation
 
 
-__all__ = ["get_matrix_size", "apply_transform_weight", "apply_permutation"]
+__all__ = ["get_matrix_size", "apply_transform_weight"]
 
 
 def get_matrix_size(module: torch.nn.Module, location: TransformLocation) -> int:
@@ -83,10 +83,3 @@ def apply_transform_weight(
 
     elif location == TransformLocation.OUTPUT:
         return value @ weight
-
-
-def apply_permutation(weight: torch.Tensor, perm: torch.Tensor) -> torch.Tensor:
-    weight = weight.clone()
-    diag_indices = torch.arange(weight.size(0))
-    weight[diag_indices, diag_indices] = weight.diagonal()[perm]
-    return weight
