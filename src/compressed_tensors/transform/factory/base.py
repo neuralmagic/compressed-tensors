@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import torch
 import torch.nn.utils.parametrize as P
@@ -46,11 +47,12 @@ class TransformFactory(RegistryMixin, ABC):
     :param seed: random seed used to transform weight randomization
     """
 
-    def __init__(self, name: str, scheme: TransformScheme, seed: int = 42):
+    def __init__(self, name: str, scheme: TransformScheme, seed: Optional[int] = None):
         self.name = name
         self.scheme = scheme
-        self.generator = torch.Generator().manual_seed(seed)
-        self.seed = seed
+        self.generator = torch.Generator()
+        if seed is not None:
+            self.generator.manual_seed(seed)
 
     @classmethod
     def from_scheme(cls: type[T], scheme: TransformScheme, **kwargs) -> T:
