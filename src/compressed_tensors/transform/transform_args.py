@@ -27,7 +27,7 @@ class TransformLocation(str, Enum):
     to on a given module.
 
     | -------------------------------------------------------------------------------------------------------- |  # noqa: E501
-    | Name            | Runtime     | Values        | Candidate Inverse Locations                              |  # noqa: E501
+    | Name            | Runtime     | Values        | Locations Where Inverse Could Be Applied                 |  # noqa: E501
     | --------------- | ----------- | ------------- | -------------------------------------------------------- |  # noqa: E501
     | `INPUT`         | online      | activations   | `prev.WEIGHT_OUTPUT`, `prev.OUTPUT`, `this.WEIGHT_INPUT` |  # noqa: E501
     | `WEIGHT_INPUT`  | offline     | weight        | `prev.WEIGHT_OUTPUT`, `prev.OUTPUT`, `this.INPUT`        |  # noqa: E501
