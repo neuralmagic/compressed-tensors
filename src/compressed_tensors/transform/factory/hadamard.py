@@ -40,6 +40,7 @@ class HadamardFactory(TransformFactory):
 
     def __init__(self, name: str, scheme: TransformScheme, seed: int = 42):
         super().__init__(name, scheme, seed)
+        self.generator = torch.Generator(device="cpu").manual_seed(seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
 
     def create_transform(self, module: Module, args: TransformArgs):
@@ -59,7 +60,7 @@ class HadamardFactory(TransformFactory):
         return HadamardTransform(weight, args)
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
-        data = deterministic_hadamard_matrix(size)  # TODO: seed=self.seed
+        data = deterministic_hadamard_matrix(size)
         data = data.to(dtype=dtype, device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 

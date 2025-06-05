@@ -25,7 +25,7 @@ from torch import Tensor, device, dtype
 from torch.nn import Linear, Module, Parameter
 
 
-@TransformFactory.register("matrix-mul")
+@TransformFactory.register("random-matrix")
 class RandomMatrixFactory(TransformFactory):
     """
     Factory used to apply random matrix transforms to a model

@@ -82,8 +82,8 @@ class TransformFactory(RegistryMixin, ABC):
         :param model: module to apply transforms to
         """
         for arg in self.scheme.apply:
-            for path, module in list(model.named_modules()):
-                if is_target(path, module, arg.targets, arg.ignore):
+            for name, module in list(model.named_modules()):
+                if is_target(name, module, arg.targets, arg.ignore):
                     self._apply_to_module(module, arg)
 
     def _apply_to_module(self, module: Module, args: TransformArgs):
