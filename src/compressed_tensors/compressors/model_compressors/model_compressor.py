@@ -30,8 +30,12 @@ from compressed_tensors.base import (
     QUANTIZATION_METHOD_NAME,
     SPARSITY_CONFIG_NAME,
 )
-from compressed_tensors.compressors.base import BaseCompressor
-from compressed_tensors.compressors.sparse_compressors import DenseCompressor
+from compressed_tensors.compressors import (
+    BaseCompressor,
+    BaseQuantizationCompressor,
+    BaseSparseCompressor,
+    DenseCompressor,
+)
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
@@ -257,7 +261,9 @@ class ModelCompressor:
         self.sparsity_config = sparsity_config
         self.quantization_config = quantization_config
         self.sparsity_compressor = None
-        self.quantization_compressor = None
+        self.quantization_compressor: Optional[
+            Union[BaseQuantizationCompressor, BaseSparseCompressor]
+        ] = None
 
         if sparsity_config is not None:
             self.sparsity_compressor = BaseCompressor.load_from_registry(
