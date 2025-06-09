@@ -210,7 +210,7 @@ class BaseSparseCompressor(BaseCompressor):
         self,
         prefix: str,
         state_dict: Dict[str, torch.Tensor],
-        scheme: QuantizationScheme,
+        scheme: "QuantizationScheme",
     ) -> Dict[str, torch.Tensor]:
         """
         This function is implemented as a workaround because of how
