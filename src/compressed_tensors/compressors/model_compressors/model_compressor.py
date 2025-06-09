@@ -69,10 +69,7 @@ from transformers.file_utils import CONFIG_NAME
 
 
 if TYPE_CHECKING:
-    from compressed_tensors.compressors import (
-        BaseQuantizationCompressor,
-        BaseSparseCompressor,
-    )
+    from compressed_tensors.compressors import BaseQuantizationCompressor
 
 
 __all__ = ["ModelCompressor", "map_module_to_scheme"]
@@ -265,7 +262,7 @@ class ModelCompressor:
         self.quantization_config = quantization_config
         self.sparsity_compressor = None
         self.quantization_compressor: Optional[
-            Union[BaseQuantizationCompressor, BaseSparseCompressor]
+            Union[BaseQuantizationCompressor, DenseCompressor]
         ] = None
 
         if sparsity_config is not None:
