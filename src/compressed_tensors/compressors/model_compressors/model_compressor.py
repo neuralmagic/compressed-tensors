@@ -30,7 +30,8 @@ from compressed_tensors.base import (
     QUANTIZATION_METHOD_NAME,
     SPARSITY_CONFIG_NAME,
 )
-from compressed_tensors.compressors import BaseCompressor, DenseCompressor
+from compressed_tensors.compressors.base import BaseCompressor
+from compressed_tensors.compressors.sparse_compressors import DenseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
