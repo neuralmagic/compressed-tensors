@@ -62,6 +62,6 @@ class DenseCompressor(BaseCompressor):
         """
         This function is implemented as a workaround because of how
         `ModelCompressor.quantization_compressor` can be set to either
-        an instance of `BaseQuantizationCompressor` or `BaseSparseCompressor`.
+        an instance of `BaseQuantizationCompressor` or `DenseCompressor`.
         """
         return state_dict.copy()
