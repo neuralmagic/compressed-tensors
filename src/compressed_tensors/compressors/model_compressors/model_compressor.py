@@ -30,12 +30,7 @@ from compressed_tensors.base import (
     QUANTIZATION_METHOD_NAME,
     SPARSITY_CONFIG_NAME,
 )
-from compressed_tensors.compressors import (
-    BaseCompressor,
-    BaseQuantizationCompressor,
-    BaseSparseCompressor,
-    DenseCompressor,
-)
+from compressed_tensors.compressors import BaseCompressor, DenseCompressor
 from compressed_tensors.config import CompressionFormat, SparsityCompressionConfig
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
@@ -70,6 +65,13 @@ from torch.nn import Module
 from tqdm import tqdm
 from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
+
+
+if TYPE_CHECKING:
+    from compressed_tensors.compressors import (
+        BaseQuantizationCompressor,
+        BaseSparseCompressor,
+    )
 
 
 __all__ = ["ModelCompressor", "map_module_to_scheme"]
