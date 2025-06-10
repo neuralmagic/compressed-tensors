@@ -16,38 +16,27 @@ import pytest
 import torch
 from compressed_tensors.transform import (
     TransformArgs,
+    TransformConfig,
     TransformFactory,
     TransformScheme,
+    apply_transform_config,
 )
 from compressed_tensors.utils import force_cpu_offload
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
-def all_schemes():
+def scheme_kwargs():
     all_types = TransformFactory.registered_names()
-    base = [TransformScheme(type=type) for type in all_types]
-    randomized = [TransformScheme(type=type, randomize=True) for type in all_types]
+    base = [{"type": type} for type in all_types]
+    randomized = [{"type": type, "randomize": True} for type in all_types]
     return base + randomized
 
 
-class TransformableModel(torch.nn.Module):
-    def __init__(self, *sizes):
-        super().__init__()
-        self.fcs = torch.nn.ModuleList([])
-        self.fcs.append(torch.nn.Linear(sizes[0], sizes[1], bias=False))
-        for index in range(1, len(sizes) - 1):
-            self.fcs.append(torch.nn.Linear(sizes[index], sizes[index + 1], bias=False))
-
-    def forward(self, x):
-        for layer in self.fcs:
-            x = layer(x)
-        return x
-
-
-@pytest.mark.parametrize("scheme", all_schemes())
-def test_correctness_linear(scheme):
+@pytest.mark.parametrize("scheme_kwargs", scheme_kwargs())
+def test_correctness_linear(scheme_kwargs):
     size = (4, 8)
     module = torch.nn.Linear(*size, bias=True)
+    scheme = TransformScheme(**scheme_kwargs)
     factory = TransformFactory.from_scheme(scheme, name="")
 
     input_tfm = factory.create_transform(
@@ -71,44 +60,37 @@ def test_correctness_linear(scheme):
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
-@pytest.mark.parametrize("scheme", all_schemes())
-def test_correctness_model(scheme, offload=False):
+@pytest.mark.parametrize("scheme_kwargs", scheme_kwargs())
+def test_correctness_model(scheme_kwargs, model_apply, offload=False):
     # load model
-    model = TransformableModel(2, 4, 8, 16, 32, 64)
+    model = model_apply[0]
     if offload:
         model = force_cpu_offload(model, torch.device("cuda"))
 
-    # create factory
-    scheme.apply = [
-        # weight output -> input
-        TransformArgs(targets="fcs.0", location="weight_output"),
-        TransformArgs(targets="fcs.1", location="input", inverse=True),
-        # output -> weight input
-        TransformArgs(targets="fcs.1", location="output"),
-        TransformArgs(targets="fcs.2", location="weight_input", inverse=True),
-        # output -> input
-        TransformArgs(targets="fcs.2", location="output"),
-        TransformArgs(targets="fcs.3", location="input", inverse=True),
-        # weight output -> weight input
-        TransformArgs(targets="fcs.3", location="weight_output"),
-        TransformArgs(targets="fcs.4", location="weight_input", inverse=True),
-    ]
-    factory = TransformFactory.from_scheme(scheme, name="")
-
-    # create inputs
+    # get output
     input = torch.rand((17, model.fcs[0].in_features))
     if offload:
         input = input.to(torch.device("cuda"))
+    true_output = model(input)
+
+    # apply transforms
+    config = TransformConfig(
+        config_groups={
+            "": TransformScheme(
+                **scheme_kwargs,
+                apply=model_apply[1],
+            )
+        }
+    )
+    apply_transform_config(model, config)
 
     # compare outputs
-    true_output = model(input)
-    factory.apply_to_model(model)
     output = model(input)
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
 @requires_gpu
 @requires_accelerate()
-@pytest.mark.parametrize("scheme", all_schemes())
-def test_correctness_model_offload(scheme):
-    test_correctness_model(scheme, offload=True)
+@pytest.mark.parametrize("scheme_kwargs", scheme_kwargs())
+def test_correctness_model_offload(scheme_kwargs, model_apply):
+    test_correctness_model(scheme_kwargs, model_apply, offload=True)

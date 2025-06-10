@@ -12,15 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# flake8: noqa
-# isort: skip_file
+import torch
+from compressed_tensors.transform import TransformConfig, TransformFactory
 
-from .transform_args import *
-from .transform_scheme import *
-from .transform_config import *
 
-from .factory.base import *
-from .factory.hadamard import *
-from .factory.matrix_multiply import *
-from .factory.random_hadamard import *
-from .apply import *
+__all__ = ["apply_transform_config"]
+
+
+def apply_transform_config(model: torch.nn.Module, config: TransformConfig):
+    for name, scheme in config.config_groups.items():
+        factory = TransformFactory.from_scheme(scheme, name=name)
+        factory.apply_to_model(model)
