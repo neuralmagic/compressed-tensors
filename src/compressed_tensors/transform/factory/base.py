@@ -99,7 +99,6 @@ class TransformFactory(RegistryMixin, ABC):
         # create transform as submodule
         transform_name = f"{self.name}_{args.location}"
         transform = self.create_transform(module, args)
-        register_offload_module(module, transform_name, transform)  # (1)
 
         # register input transformation hook
         if args.location == TransformLocation.INPUT:
@@ -109,6 +108,7 @@ class TransformFactory(RegistryMixin, ABC):
                 return transform(input)
 
             module.register_forward_pre_hook(input_hook, prepend=True)
+            register_offload_module(module, transform_name, transform)
 
         # eagerly apply transformation to weight
         elif args.location in (
@@ -135,13 +135,11 @@ class TransformFactory(RegistryMixin, ABC):
                 return transform(output)
 
             module.register_forward_hook(output_hook)
+            register_offload_module(module, transform_name, transform)
 
         # other locations such as q_attn and k_attn have not been implemented
         else:
             raise NotImplementedError()
-
-        # (1) even in the `weight` cases, this submodule attachment is needed in order
-        # to support saving in the frozen state
 
 
 class TransformBase(Module, ABC):
