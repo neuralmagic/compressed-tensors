@@ -331,10 +331,12 @@ def find_name_or_class_matches(
         3. matches on module names
     """
     targets = sorted(targets, key=lambda x: ("re:" in x, x))
-    matches = _find_matches(name, targets) + _find_matches(
-        module.__class__.__name__, targets, check_contains
-    )
-    return [match for match in matches if match is not None]
+    if isinstance(targets, Iterable):
+        matches = _find_matches(name, targets) + _find_matches(
+            module.__class__.__name__, targets, check_contains
+        )
+        matches = [match for match in matches if match is not None]
+        return matches
 
 
 def _find_matches(
