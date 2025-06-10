@@ -111,3 +111,16 @@ def test_compress_decompress():
 
     output = model(input)
     assert torch.allclose(true_output, output, atol=1e-7, rtol=0.0)
+
+    keys = {
+        "fcs.0.weight",
+        "fcs.1.weight",
+        "fcs.1._input.weight",
+        "fcs.1._output.weight",
+        "fcs.2.weight",
+        "fcs.2._output.weight",
+        "fcs.3.weight",
+        "fcs.3._input.weight",
+        "fcs.4.weight",
+    }
+    assert model.state_dict().keys() == keys
