@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
@@ -25,7 +27,7 @@ from torch import Tensor, device, dtype
 from torch.nn import Linear, Module, Parameter
 
 
-@TransformFactory.register("matrix-mul")
+@TransformFactory.register("random-matrix")
 class RandomMatrixFactory(TransformFactory):
     """
     Factory used to apply random matrix transforms to a model
@@ -35,7 +37,7 @@ class RandomMatrixFactory(TransformFactory):
     :param seed: random seed used to transform weight randomization
     """
 
-    def __init__(self, name: str, scheme: TransformScheme, seed: int = 42):
+    def __init__(self, name: str, scheme: TransformScheme, seed: Optional[int] = None):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
         self.inverses = ParameterizedDefaultDict(self._create_inverse)
@@ -53,19 +55,21 @@ class RandomMatrixFactory(TransformFactory):
         dtype = module.weight.dtype
         device = get_offloaded_device(module)
 
-        if not args.inverse:
-            weight = self.weights[size, dtype, device]
-        else:
-            weight = self.inverses[size, dtype, device]
+        weight = self.weights[size, dtype, device]
+        if args.inverse:
+            weight = self.inverses[weight]
+
         return RandomMatrixTransform(weight, args)
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
-        data = torch.rand((size, size), dtype=dtype, device=device)
+        data = torch.rand(
+            (size, size), generator=self.generator, dtype=dtype, device=device
+        )
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
-    def _create_inverse(self, size: int, dtype: dtype, device: device) -> Parameter:
-        weight = self.weights[size, dtype, device]
-        return Parameter(high_precision_invert(weight.data), requires_grad=False)
+    def _create_inverse(self, weight: Parameter) -> Parameter:
+        data = high_precision_invert(weight.data)
+        return Parameter(data, requires_grad=False)
 
 
 class RandomMatrixTransform(TransformBase):

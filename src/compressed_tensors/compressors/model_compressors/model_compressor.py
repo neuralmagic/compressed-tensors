@@ -46,12 +46,11 @@ from compressed_tensors.quantization.utils import (
     is_module_quantized,
     iter_named_leaf_modules,
 )
-from compressed_tensors.transform import TransformBase, TransformLocation
 from compressed_tensors.utils import (
     align_module_device,
-    delete_offload_module,
     delete_offload_parameter,
     get_execution_device,
+    get_offloaded_device,
     get_safetensors_folder,
     has_offloaded_params,
     merge_names,
@@ -67,6 +66,10 @@ from torch.nn import Module
 from tqdm import tqdm
 from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
+
+
+if TYPE_CHECKING:
+    from compressed_tensors.compressors import BaseQuantizationCompressor
 
 
 __all__ = ["ModelCompressor", "map_module_to_scheme"]
@@ -258,7 +261,9 @@ class ModelCompressor:
         self.sparsity_config = sparsity_config
         self.quantization_config = quantization_config
         self.sparsity_compressor = None
-        self.quantization_compressor = None
+        self.quantization_compressor: Optional[
+            Union[BaseQuantizationCompressor, DenseCompressor]
+        ] = None
 
         if sparsity_config is not None:
             self.sparsity_compressor = BaseCompressor.load_from_registry(
@@ -386,22 +391,12 @@ class ModelCompressor:
             targets=self.sparsity_config.targets if self.sparsity_config else [],
             ignore=self.sparsity_config.ignore if self.sparsity_config else [],
         )
-        module_to_weight_transforms = map_module_to_weight_transforms(model)
 
         for prefix, module in tqdm(model.named_modules(), desc="Compressing model"):
-            if (
-                prefix in module_to_scheme
-                or prefix in sparse_compression_targets
-                or module in module_to_weight_transforms
-            ):
+            if prefix in module_to_scheme or prefix in sparse_compression_targets:
                 # in the future, support compression on same device
                 with align_module_device(module, execution_device="cpu"):
                     state_dict = module.state_dict(prefix=f"{prefix}.")
-
-                # remove weight transform modules (before state_dict for simplicity)
-                if module in module_to_weight_transforms:
-                    for transform_name in module_to_weight_transforms[module]:
-                        delete_offload_module(module, transform_name)
 
                 # quantization first
                 if prefix in module_to_scheme:
@@ -420,17 +415,17 @@ class ModelCompressor:
                     )
 
                 # remove any existing parameters
-                device = get_execution_device(module)
-                for name, _ in list(module.named_parameters(recurse=False)):
-                    delattr(module, name)
+                exec_device = get_execution_device(module)
+                offload_device = get_offloaded_device(module)
+                for name, _ in list(module.named_parameters()):
+                    delete_offload_parameter(module, name)
 
                 # replace with compressed parameters
                 for name, value in state_dict.items():
                     name = name.removeprefix(f"{prefix}.")
-                    if "." not in name:  # handle submodules in later iteration
-                        value = value.to(device)
-                        param = torch.nn.Parameter(value, requires_grad=False)
-                        register_offload_parameter(module, name, param)
+                    value = value.to(exec_device)
+                    param = torch.nn.Parameter(value, requires_grad=False)
+                    register_offload_parameter(module, name, param, offload_device)
 
                 module.quantization_status = QuantizationStatus.COMPRESSED
 
@@ -473,30 +468,26 @@ class ModelCompressor:
 
                 # quantization second
                 if prefix in module_to_scheme:
-                    generator = self.quantization_compressor.decompress_from_state_dict(
-                        state_dict,
-                        names_to_scheme=module_to_scheme,
+                    state_dict = (
+                        self.quantization_compressor.decompress_module_from_state_dict(
+                            prefix,
+                            state_dict,
+                            scheme=module_to_scheme[prefix],
+                        )
                     )
-                    # generates (mod_path, {param_name, param_val})
-                    # of compressed params and used params, but not unused params
-                    # some used params are removed by get_unexpected_file_keys
-                    state_dict = {
-                        merge_names(module_path, param_name): param_value
-                        for module_path, compressed_data in generator
-                        for param_name, param_value in compressed_data.items()
-                    }
 
                 # remove any existing parameters
-                device = get_execution_device(module)
+                exec_device = get_execution_device(module)
+                offload_device = get_offloaded_device(module)
                 for name, _ in list(module.named_parameters(recurse=False)):
                     delete_offload_parameter(module, name)
 
                 # replace with decompressed parameters
                 for name, value in state_dict.items():
                     name = name.removeprefix(f"{prefix}.")
-                    value = value.to(device)
+                    value = value.to(exec_device)
                     param = torch.nn.Parameter(value, requires_grad=False)
-                    register_offload_parameter(module, name, param)
+                    register_offload_parameter(module, name, param, offload_device)
 
                 module.quantization_status = QuantizationStatus.FROZEN
 
@@ -759,27 +750,6 @@ def map_module_to_scheme(model: Module) -> Dict[str, QuantizationScheme]:
         for name, module in iter_named_leaf_modules(model)
         if is_module_quantized(module)
     }
-
-
-def map_module_to_weight_transforms(model: Module) -> Dict[Module, List[str]]:
-    """
-    Extremely trivial, only exists to follow pattern
-    """
-    mapping = {}
-
-    for module in model.modules():
-        weight_transform_names = []
-        for name, submodule in module.named_children():
-            if isinstance(submodule, TransformBase) and submodule.args.location in (
-                TransformLocation.WEIGHT_INPUT,
-                TransformLocation.WEIGHT_OUTPUT,
-            ):
-                weight_transform_names.append(name)
-
-        if len(weight_transform_names) > 0:
-            mapping[module] = weight_transform_names
-
-    return mapping
 
 
 # HACK: Override the dtype_byte_size function in transformers to support float8 types

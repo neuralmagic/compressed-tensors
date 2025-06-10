@@ -26,12 +26,11 @@ from compressed_tensors.utils import align_modules, force_cpu_offload
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
-_test_schemes = [
-    TransformScheme(type=name) for name in TransformFactory.registered_names()
-] + [
-    TransformScheme(type=name, randomize_modules=True)
-    for name in TransformFactory.registered_names()
-]
+def all_schemes():
+    all_types = TransformFactory.registered_names()
+    base = [TransformScheme(type=type) for type in all_types]
+    randomized = [TransformScheme(type=type, randomize=True) for type in all_types]
+    return base + randomized
 
 
 class TransformableModel(torch.nn.Module):
@@ -48,7 +47,7 @@ class TransformableModel(torch.nn.Module):
         return x
 
 
-@pytest.mark.parametrize("scheme", _test_schemes)
+@pytest.mark.parametrize("scheme", all_schemes())
 def test_memory_sharing(scheme, offload=False):
     # load scheme and factory
     scheme = TransformScheme(
@@ -98,12 +97,12 @@ def test_memory_sharing(scheme, offload=False):
 
 @requires_gpu
 @requires_accelerate()
-@pytest.mark.parametrize("scheme", _test_schemes)
+@pytest.mark.parametrize("scheme", all_schemes())
 def test_memory_sharing_offload(scheme):
     test_memory_sharing(scheme, offload=True)
 
 
-@pytest.mark.parametrize("scheme", _test_schemes)
+@pytest.mark.parametrize("scheme", all_schemes())
 def test_memory_sharing_training(scheme):
     scheme.requires_grad = True
     test_memory_sharing(scheme, offload=False)

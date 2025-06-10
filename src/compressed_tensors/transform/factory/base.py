@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import torch
 import torch.nn.utils.parametrize as P
@@ -46,10 +47,12 @@ class TransformFactory(RegistryMixin, ABC):
     :param seed: random seed used to transform weight randomization
     """
 
-    def __init__(self, name: str, scheme: TransformScheme, seed: int = 42):
+    def __init__(self, name: str, scheme: TransformScheme, seed: Optional[int] = None):
         self.name = name
         self.scheme = scheme
-        self.seed = seed
+        self.generator = torch.Generator()
+        if seed is not None:
+            self.generator.manual_seed(seed)
 
     @classmethod
     def from_scheme(cls: type[T], scheme: TransformScheme, **kwargs) -> T:
@@ -82,8 +85,8 @@ class TransformFactory(RegistryMixin, ABC):
         :param model: module to apply transforms to
         """
         for arg in self.scheme.apply:
-            for path, module in list(model.named_modules()):
-                if is_target(path, module, arg.targets, arg.ignore):
+            for name, module in list(model.named_modules()):
+                if is_target(name, module, arg.targets, arg.ignore):
                     self._apply_to_module(module, arg)
 
     def _apply_to_module(self, module: Module, args: TransformArgs):
@@ -105,7 +108,7 @@ class TransformFactory(RegistryMixin, ABC):
                 input = args[0]
                 return transform(input)
 
-            module.register_forward_pre_hook(input_hook)
+            module.register_forward_pre_hook(input_hook, prepend=True)
 
         # eagerly apply transformation to weight
         elif args.location in (
