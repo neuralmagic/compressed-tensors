@@ -27,11 +27,9 @@ from tests.testing_utils import requires_accelerate, requires_gpu
 
 
 def all_schemes():
-    base = [TransformScheme(type=name) for name in TransformFactory.registered_names()]
-    randomized = [
-        TransformScheme(type=name, randomize=True)
-        for name in TransformFactory.registered_names()
-    ]
+    all_types = TransformFactory.registered_names()
+    base = [TransformScheme(type=type) for type in all_types]
+    randomized = [TransformScheme(type=type, randomize=True) for type in all_types]
     return base + randomized
 
 
