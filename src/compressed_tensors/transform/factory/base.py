@@ -26,6 +26,7 @@ from compressed_tensors.transform import (
 )
 from compressed_tensors.utils import (
     align_module_device,
+    delete_offload_module,
     has_offloaded_params,
     patch_attr,
     register_offload_module,
@@ -99,6 +100,7 @@ class TransformFactory(RegistryMixin, ABC):
         # create transform as submodule
         transform_name = f"{self.name}_{args.location}"
         transform = self.create_transform(module, args)
+        register_offload_module(module, transform_name, transform)
 
         # register input transformation hook
         if args.location == TransformLocation.INPUT:
@@ -108,7 +110,6 @@ class TransformFactory(RegistryMixin, ABC):
                 return transform(input)
 
             module.register_forward_pre_hook(input_hook, prepend=True)
-            register_offload_module(module, transform_name, transform)
 
         # eagerly apply transformation to weight
         elif args.location in (
@@ -128,6 +129,10 @@ class TransformFactory(RegistryMixin, ABC):
                     raise ValueError("Offloaded training is not supported")
                 P.register_parametrization(module, "weight", transform)
 
+            else:
+                # if we're not training, there's no reason to keep the transform
+                delete_offload_module(module, transform_name)
+
         # register output transformation hook
         elif args.location == TransformLocation.OUTPUT:
 
@@ -135,7 +140,6 @@ class TransformFactory(RegistryMixin, ABC):
                 return transform(output)
 
             module.register_forward_hook(output_hook)
-            register_offload_module(module, transform_name, transform)
 
         # other locations such as q_attn and k_attn have not been implemented
         else:
