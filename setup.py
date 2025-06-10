@@ -29,13 +29,16 @@ if BUILD_TYPE not in VALID_BUILD_TYPES:
 from setuptools_scm import ScmVersion
 
 def version_func(version: ScmVersion) -> str:
-    from setuptools_scm.version import guess_next_version
+    from setuptools_scm.version import guess_next_simple_semver, guess_next_version
+
+    def next_minor_version(version: ScmVersion):
+        return guess_next_simple_semver(version, retain=2)
 
     if BUILD_TYPE == "nightly":
         # Nightly builds use alpha versions to ensure they are marked
         # as pre-releases on pypi.org.
         return version.format_next_version(
-            guess_next=guess_next_version,
+            guess_next=next_minor_version,
             fmt="{guessed}.a{node_date:%Y%m%d}",
         )
 
