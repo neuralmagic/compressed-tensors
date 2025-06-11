@@ -30,5 +30,5 @@ class RandomHadamardFactory(HadamardFactory):
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         data = random_hadamard_matrix(size, dtype=dtype, gen=self.generator)
-        data = data.to(dtype=dtype, device=device)
+        data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)

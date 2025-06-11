@@ -31,7 +31,9 @@ __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix", "is_pow2"]
 
 
 def deterministic_hadamard_matrix(
-    size: int, dtype: torch.dtype = torch.bfloat16
+    size: int,
+    dtype: torch.dtype = torch.bfloat16,
+    device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:
     """
     Construct an n-by-n Hadamard matrix, using Sylvester's construction.
@@ -49,7 +51,7 @@ def deterministic_hadamard_matrix(
     if size != 2**log2:
         raise ValueError("Cannot construct deterministic hadamard of size != 2^n")
 
-    H = torch.tensor([[1]], dtype=dtype)
+    H = torch.tensor([[1]], dtype=dtype, device=device)
 
     # Sylvester's construction
     for _ in range(0, log2):
@@ -61,6 +63,7 @@ def deterministic_hadamard_matrix(
 def random_hadamard_matrix(
     size: int,
     dtype: torch.dtype = torch.bfloat16,
+    device: torch.device = torch.device("cpu"),
     gen: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
     """
@@ -75,7 +78,9 @@ def random_hadamard_matrix(
     :return: randomly generated hadamard matrix
     """
     # Benefits: support other shapes / non powers of 2, support randomization
-    Q = torch.randint(low=0, high=2, size=(size,), generator=gen, dtype=dtype)
+    Q = torch.randint(
+        low=0, high=2, size=(size,), generator=gen, dtype=dtype, device=device
+    )
     Q = Q * 2 - 1
     Q = torch.diag(Q)
     return _matmul_hadU(Q) / math.sqrt(size)
@@ -86,7 +91,10 @@ def is_pow2(n: int) -> bool:
 
 
 def _get_known_divisor(
-    n: int, dtype: torch.dtype, file_path: str = REPO_PATH
+    n: int,
+    dtype: torch.dtype,
+    device: torch.device = torch.device("cpu"),
+    file_path: str = REPO_PATH,
 ) -> Optional[torch.Tensor]:
     """
     Fetch a known hadamard matrix from the given file path. The returned matrix will
@@ -94,8 +102,7 @@ def _get_known_divisor(
     matrix exists.
 
     Note: This function reopens the safetensors file every time it is called.
-    This is inefficient, but inconsequential because hadamards are typically
-    cached by size through the factory that produced them. This is also simpler
+    This is technically inefficient, but a very small runtime cost and simpler
     than forcing callers to manage the file open context
 
     :param n: size of known hadamard matrix
@@ -105,17 +112,18 @@ def _get_known_divisor(
         divisors = sorted([int(key) for key in file.keys()], reverse=True)
         for divisor in divisors:
             if n % divisor == 0 and is_pow2(n // divisor):
-                return file.get_tensor(str(divisor)).to(dtype=dtype)
+                return file.get_tensor(str(divisor)).to(dtype=dtype, device=device)
 
     return None
 
 
 def _matmul_hadU(X: torch.Tensor) -> torch.Tensor:
-    size = X.shape[-1]
+    size = X.size(0)
     dtype = X.dtype
+    device = X.device
 
     # Check if we have the determined hadamard matrix
-    hadK = _get_known_divisor(size, dtype)
+    hadK = _get_known_divisor(size, dtype, device=device)
     if hadK is None:
         raise ValueError(f"Cannot construct random hadamard matrix of size {size}")
     K = hadK.size(0)
@@ -130,6 +138,7 @@ def _matmul_hadU(X: torch.Tensor) -> torch.Tensor:
         output[:, :, 1, :] = input[:, :, 0, :] - input[:, :, 1, :]
         output = output.view(input.shape[0], input.shape[1], -1)
         (input, output) = (output, input)
+    assert input.shape[1] == K
     del output
 
     # Do not explicitly repeat - OOM

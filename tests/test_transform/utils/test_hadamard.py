@@ -32,19 +32,22 @@ _sizes_to_test = [
     3584,  # qwen_2_5_vl
     3840,  # qwen_2_5_vl vision qkv
     4096,  # llama3
+    7168,  # deepseek_v3
     14336,  # llama3 intermediate
+    18432,  # deepseek_v3 intermediate
     18944,  # qwen_2_5_vl intermediate
 ]
+_atol = 1e-1  # bfloat16 is low precision for large matrices
 
 
 @requires_gpu
 @pytest.mark.parametrize("size", _sizes_to_test)
 def test_random_hadamard_matrix_compliant(size):
     # (H / sqrt(n))(H.T / sqrt(n)) == I
-    with torch.device("cuda"):
-        had_matrix = random_hadamard_matrix(size)
-        product = torch.round(had_matrix @ had_matrix.T)
-        assert torch.allclose(product, torch.eye(size, dtype=product.dtype), atol=1e-5)
+    had_matrix = random_hadamard_matrix(size, device="cuda")
+    product = had_matrix @ had_matrix.T
+    eye = torch.eye(size, dtype=product.dtype, device="cuda")
+    assert torch.allclose(product, eye, atol=_atol)
 
 
 def test_random_hadamard_generator():
@@ -75,13 +78,13 @@ def test_random_hadamard_generator():
 @requires_gpu
 @pytest.mark.parametrize("size", _sizes_to_test)
 def test_deterministic_hadamard_compliant(size):
-    with torch.device("cuda"):
-        if not is_pow2(size):
-            with pytest.raises(ValueError):
-                had_matrix = deterministic_hadamard_matrix(size)
-            return
+    if not is_pow2(size):
+        with pytest.raises(ValueError):
+            matrix = deterministic_hadamard_matrix(size, device="cuda")
+        return
 
-        # (H / sqrt(n))(H.T / sqrt(n)) == I
-        had_matrix = deterministic_hadamard_matrix(size)
-        product = had_matrix @ had_matrix.T
-        assert torch.allclose(product, torch.eye(size, dtype=product.dtype), atol=1e-5)
+    # (H / sqrt(n))(H.T / sqrt(n)) == I
+    matrix = deterministic_hadamard_matrix(size, device="cuda")
+    product = matrix @ matrix.T
+    eye = torch.eye(size, dtype=product.dtype, device="cuda")
+    assert torch.allclose(product, eye, atol=_atol)
