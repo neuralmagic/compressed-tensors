@@ -373,16 +373,11 @@ class ParameterizedDefaultDict(dict):
 
     def __init__(self, default_factory: Callable[[Any], Any]):
         self.default_factory = default_factory
-        self._kwargs = {}
 
-    def __missing__(self, key: Any) -> Any:
+    def __missing__(self, key):
         if isinstance(key, tuple):
-            value = self.default_factory(*key, **self._kwargs)
+            value = self.default_factory(*key)
         else:
-            value = self.default_factory(key, **self._kwargs)
+            value = self.default_factory(key)
         self[key] = value
         return value
-
-    def get(self, *args, **kwargs) -> Any:
-        with patch_attr(self, "_kwargs", kwargs):
-            return self[args]
