@@ -17,26 +17,9 @@ import numpy
 import pytest
 import torch
 from compressed_tensors.transform.utils.hadamard import (
-    _get_had12,
-    _get_had20,
     deterministic_hadamard_matrix,
     random_hadamard_matrix,
 )
-
-
-@pytest.mark.parametrize(
-    "had_func",
-    [
-        _get_had12,
-        _get_had20,
-    ],
-)
-def test_packed_hadamard_compliant(had_func):
-    had_matrix = had_func()
-    size = had_matrix.size(0)
-    # HH.T == nI
-    product = had_matrix @ had_matrix.T
-    assert torch.equal(product, size * torch.eye(size))
 
 
 @pytest.mark.parametrize(

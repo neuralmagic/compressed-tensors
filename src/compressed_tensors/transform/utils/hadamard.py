@@ -74,29 +74,26 @@ def random_hadamard_matrix(
     return _matmul_hadU(Q) / math.sqrt(size)
 
 
-def _get_hadK(n: int, transpose: bool = False) -> Tuple[torch.Tensor, int]:
-    # NOTE: we can easily extend the list of supported shapes/sizes
-    # by adding to these methods
-    hadK, K = None, None
-    if n % 20 == 0:
-        assert _is_pow2(n // 20)
-        K = 20
-        hadK = _get_had20().T if transpose else _get_had20()
-    elif n % 12 == 0:
-        assert _is_pow2(n // 12)
-        K = 12
-        hadK = _get_had12().T if transpose else _get_had12()
-    else:
-        assert _is_pow2(n)
-        K = 1
+def _get_hadK(n: int) -> Tuple[torch.Tensor, int]:
+    import os
 
-    return hadK, K
+    from safetensors import safe_open
+
+    file_path = os.path.join(os.path.dirname(__file__), "hadamards.safetensors")
+    with safe_open(file_path, framework="pt", device="cpu") as file:
+        for divisor in file.keys():
+            if n % int(divisor) == 0:
+                return file.get_tensor(str(divisor)), int(divisor)
+
+        else:
+            assert _is_pow2(n)
+            return None, 1
 
 
-def _matmul_hadU(X, transpose=False) -> torch.Tensor:
+def _matmul_hadU(X) -> torch.Tensor:
     n = X.shape[-1]
     # Check if we have the determined hadamard matrix
-    hadK, K = _get_hadK(n, transpose)
+    hadK, K = _get_hadK(n)
     # Reshape diag matrix with randomized -1/+1
     input = X.clone().view(-1, n, 1)
     output = input.clone()
@@ -129,33 +126,3 @@ def _matmul_hadU(X, transpose=False) -> torch.Tensor:
 
 def _is_pow2(n: int) -> bool:
     return (n & (n - 1) == 0) and (n > 0)
-
-
-def _reshape_bits(packed_bits: numpy.ndarray, original_size: int) -> numpy.ndarray:
-    had_unpacked = numpy.unpackbits(packed_bits)
-    had_unpacked = [1 if x == 1 else -1 for x in had_unpacked]
-    had_unpacked = numpy.array(had_unpacked).reshape((original_size, original_size))
-    return had_unpacked
-
-
-# http://www.neilsloane.com/hadamard/index.html
-def _get_had12() -> torch.Tensor:
-    # fmt: off
-    had_12 = numpy.array([128,  13,  29, 232, 235,  71, 218,  
-        62, 209, 246, 139, 180, 157, 168, 237, 199, 106,  59], dtype=numpy.uint8)
-    # fmt: on
-    # TODO: just unpack during apply
-    had_12_unpacked = _reshape_bits(had_12, original_size=12)
-    return torch.tensor(had_12_unpacked)
-
-
-def _get_had20() -> torch.Tensor:
-    # fmt: off
-    had_20 = numpy.array([128, 0,  13, 133, 121, 236,  43, 203,  97,  94, 155,  10, 252, 
-        216, 87, 230, 194, 191,  54,  21, 249, 176, 171, 205, 133, 222, 108,  42, 243,  
-        97, 215, 155,  10, 188, 216, 149, 230, 200, 175, 54, 133, 121, 188,  43, 
-        205, 225,  94, 107,  10, 243], dtype=numpy.uint8)
-    # fmt: on
-    # TODO: just unpack during apply
-    had_20_unpacked = _reshape_bits(had_20, original_size=20)
-    return torch.tensor(had_20_unpacked)
