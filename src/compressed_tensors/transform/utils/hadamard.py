@@ -90,8 +90,8 @@ def _get_known_divisor(
 ) -> Optional[torch.Tensor]:
     """
     Fetch a known hadamard matrix from the given file path. The returned matrix will
-    be of of size `k` such that `n` divides `d` and `n / d` is a power of two. Return
-    None if no such matrix exists.
+    be of of size `k` such that `n / k` is a power of two. Return None if no such
+    matrix exists.
 
     Note: This function reopens the safetensors file every time it is called.
     This is inefficient, but inconsequential because hadamards are typically
