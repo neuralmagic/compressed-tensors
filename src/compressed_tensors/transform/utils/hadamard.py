@@ -21,7 +21,6 @@ from safetensors import safe_open
 
 
 REPO_PATH = os.path.join(os.path.dirname(__file__), "hadamards.safetensors")
-DTYPE = torch.int32
 
 
 __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix", "is_pow2"]
@@ -31,7 +30,9 @@ __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix", "is_pow2"]
 # https://github.com/Dao-AILab/fast-hadamard-transform/tree/master
 
 
-def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
+def deterministic_hadamard_matrix(
+    size: int, dtype: torch.dtype = torch.bfloat16
+) -> torch.Tensor:
     """
     Construct an n-by-n Hadamard matrix, using Sylvester's construction.
     `n` must be a power of 2.
@@ -44,11 +45,11 @@ def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
     if size <= 0:
         raise ValueError("Cannot construct deterministic hadamard of size <= 0")
 
-    log2 = int(math.log(size, 2))
+    log2 = int(math.log2(size))
     if size != 2**log2:
         raise ValueError("Cannot construct deterministic hadamard of size != 2^n")
 
-    H = torch.tensor([[1]], dtype=DTYPE)
+    H = torch.tensor([[1]], dtype=dtype)
 
     # Sylvester's construction
     for _ in range(0, log2):
@@ -58,7 +59,9 @@ def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
 
 
 def random_hadamard_matrix(
-    size: int, gen: Optional[torch.Generator] = None
+    size: int,
+    dtype: torch.dtype = torch.bfloat16,
+    gen: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
     """
     Produces a randomly generated Hadamard matrix.
@@ -72,7 +75,7 @@ def random_hadamard_matrix(
     :return: randomly generated hadamard matrix
     """
     # Benefits: support other shapes / non powers of 2, support randomization
-    Q = torch.randint(low=0, high=2, size=(size,), generator=gen, dtype=DTYPE)
+    Q = torch.randint(low=0, high=2, size=(size,), generator=gen, dtype=dtype)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
     return _matmul_hadU(Q) / math.sqrt(size)
@@ -82,7 +85,9 @@ def is_pow2(n: int) -> bool:
     return (n & (n - 1) == 0) and (n > 0)
 
 
-def _get_known_divisor(n: int, file_path: str = REPO_PATH) -> Optional[torch.Tensor]:
+def _get_known_divisor(
+    n: int, dtype: torch.dtype, file_path: str = REPO_PATH
+) -> Optional[torch.Tensor]:
     """
     Fetch a known hadamard matrix from the given file path. The returned matrix will
     be of of size `k` such that `n` divides `d` and `n / d` is a power of two. Return
@@ -100,16 +105,17 @@ def _get_known_divisor(n: int, file_path: str = REPO_PATH) -> Optional[torch.Ten
         divisors = sorted([int(key) for key in file.keys()], reverse=True)
         for divisor in divisors:
             if n % divisor == 0 and is_pow2(n // divisor):
-                return file.get_tensor(str(divisor)).to(dtype=DTYPE)
+                return file.get_tensor(str(divisor)).to(dtype=dtype)
 
     return None
 
 
 def _matmul_hadU(X: torch.Tensor) -> torch.Tensor:
     size = X.shape[-1]
+    dtype = X.dtype
 
     # Check if we have the determined hadamard matrix
-    hadK = _get_known_divisor(size)
+    hadK = _get_known_divisor(size, dtype)
     if hadK is None:
         raise ValueError(f"Cannot construct random hadamard matrix of size {size}")
     K = hadK.size(0)

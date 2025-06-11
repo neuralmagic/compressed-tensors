@@ -20,6 +20,7 @@ from compressed_tensors.transform.utils.hadamard import (
     is_pow2,
     random_hadamard_matrix,
 )
+from tests.testing_utils import requires_gpu
 
 
 _sizes_to_test = [
@@ -28,27 +29,29 @@ _sizes_to_test = [
     1280,  # qwen_2_5_vl vision
     1600,  # gpt2 xl
     2048,  # gpt3 small
-    # 3584,  # qwen_2_5_vl
-    # 3840,  # qwen_2_5_vl vision qkv
-    # 4096,  # llama3
-    # 14336,  # llama3 intermediate
-    # 18944,  # qwen_2_5_vl intermediate
+    3584,  # qwen_2_5_vl
+    3840,  # qwen_2_5_vl vision qkv
+    4096,  # llama3
+    14336,  # llama3 intermediate
+    18944,  # qwen_2_5_vl intermediate
 ]
 
 
+@requires_gpu
 @pytest.mark.parametrize("size", _sizes_to_test)
 def test_random_hadamard_matrix_compliant(size):
     # (H / sqrt(n))(H.T / sqrt(n)) == I
-    had_matrix = random_hadamard_matrix(size)
-    product = torch.round(had_matrix @ had_matrix.T)
-    assert torch.allclose(product, torch.eye(size, dtype=product.dtype), atol=1e-5)
+    with torch.device("cuda"):
+        had_matrix = random_hadamard_matrix(size)
+        product = torch.round(had_matrix @ had_matrix.T)
+        assert torch.allclose(product, torch.eye(size, dtype=product.dtype), atol=1e-5)
 
 
 def test_random_hadamard_generator():
     # check that generation is deterministic with a seed
     generator = torch.Generator().manual_seed(42)
-    one = random_hadamard_matrix(2048, generator)
-    two = random_hadamard_matrix(2048, generator)
+    one = random_hadamard_matrix(2048, gen=generator)
+    two = random_hadamard_matrix(2048, gen=generator)
 
     one_true = torch.tensor(
         [
@@ -69,14 +72,16 @@ def test_random_hadamard_generator():
     assert torch.all(two[:3, :3].sign() == two_true.sign())
 
 
+@requires_gpu
 @pytest.mark.parametrize("size", _sizes_to_test)
 def test_deterministic_hadamard_compliant(size):
-    if not is_pow2(size):
-        with pytest.raises(ValueError):
-            had_matrix = deterministic_hadamard_matrix(size)
-        return
+    with torch.device("cuda"):
+        if not is_pow2(size):
+            with pytest.raises(ValueError):
+                had_matrix = deterministic_hadamard_matrix(size)
+            return
 
-    # (H / sqrt(n))(H.T / sqrt(n)) == I
-    had_matrix = deterministic_hadamard_matrix(size)
-    product = had_matrix @ had_matrix.T
-    assert torch.allclose(product, torch.eye(size, dtype=product.dtype), atol=1e-5)
+        # (H / sqrt(n))(H.T / sqrt(n)) == I
+        had_matrix = deterministic_hadamard_matrix(size)
+        product = had_matrix @ had_matrix.T
+        assert torch.allclose(product, torch.eye(size, dtype=product.dtype), atol=1e-5)
