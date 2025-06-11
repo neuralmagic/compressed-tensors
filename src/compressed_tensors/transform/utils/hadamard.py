@@ -13,20 +13,30 @@
 # limitations under the License.
 
 import math
+import os
 from typing import Optional, Tuple
 
 import numpy
 import torch
+from safetensors import safe_open
+
+
+REPO_PATH = os.path.join(os.path.dirname(__file__), "hadamards.safetensors")
 
 
 __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix"]
 
-# adapted from:
-# https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py
+
+# note that hadamard matrix multiplication can be accelerated using a library such as
+# https://github.com/Dao-AILab/fast-hadamard-transform/tree/master
+
+
 def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
     """
     Construct an n-by-n Hadamard matrix, using Sylvester's construction.
     `n` must be a power of 2.
+
+    Adapated from https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py  # noqa: E501
 
     :param size: order of the matrix, must be a power of 2
     :return: hadamard matrix of size `size`
@@ -41,18 +51,10 @@ def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
     H = numpy.array([[1]], dtype=int)
 
     # Sylvester's construction
-    for i in range(0, log2):
+    for _ in range(0, log2):
         H = numpy.vstack((numpy.hstack((H, H)), numpy.hstack((H, -H))))
 
     return torch.from_numpy(H / math.sqrt(size))
-
-
-# adapted from:
-# https://github.com/facebookresearch/SpinQuant/blob/main/utils/hadamard_utils.py
-
-# TODO: the following library exists for online rotations and should be considered
-# in the future:
-# https://github.com/Dao-AILab/fast-hadamard-transform/tree/master
 
 
 def random_hadamard_matrix(
@@ -62,6 +64,8 @@ def random_hadamard_matrix(
     Produces a randomly generated Hadamard matrix.
     See https://cornell-relaxml.github.io/quip-sharp/ ,
     Section "Randomized Hadamard Transformation"
+
+    Adapated from https://github.com/facebookresearch/SpinQuant/blob/main/utils/hadamard_utils.py  # noqa: E501
 
     :param size: The dimension of the hamadard matrix
     :param gen: Optional generator random values
@@ -74,31 +78,39 @@ def random_hadamard_matrix(
     return _matmul_hadU(Q) / math.sqrt(size)
 
 
-def _get_hadK(n: int) -> Tuple[torch.Tensor, int]:
-    import os
+def _get_known_hadamard(n: int, file_path: str = REPO_PATH) -> Optional[torch.Tensor]:
+    """
+    Fetch a known hadamard matrix of size `n` from hadamard repo path if it exists
 
-    from safetensors import safe_open
+    Note: This function reopens the safetensors file every time it is called.
+    This is inefficient, but inconsequential because hadamards are typically
+    cached by size through the factory that produced them. This is also simpler
+    than forcing callers to manage the file open context
 
-    file_path = os.path.join(os.path.dirname(__file__), "hadamards.safetensors")
+    :param n: size of known hadamard matrix
+    :return: a known hadamard matrix of size `n` if one exists, else None
+    """
     with safe_open(file_path, framework="pt", device="cpu") as file:
         for divisor in file.keys():
             if n % int(divisor) == 0:
-                return file.get_tensor(str(divisor)), int(divisor)
+                return file.get_tensor(divisor)
 
-        else:
-            assert _is_pow2(n)
-            return None, 1
+    return None
 
 
-def _matmul_hadU(X) -> torch.Tensor:
-    n = X.shape[-1]
+def _matmul_hadU(X: torch.Tensor) -> torch.Tensor:
+    size = X.shape[-1]
+
     # Check if we have the determined hadamard matrix
-    hadK, K = _get_hadK(n)
-    # Reshape diag matrix with randomized -1/+1
-    input = X.clone().view(-1, n, 1)
-    output = input.clone()
+    hadK = _get_known_hadamard(size)
+    K = hadK.size(0) if hadK is not None else 1
+    if hadK is None and not _is_pow2(size):
+        raise ValueError(f"Cannot construct random hadamard matrix of size {size}")
 
-    # for cases when hadK is not predetermined, determine hadamard matrix
+    # For cases when hadK is not predetermined, determine hadamard matrix
+    # Reshape diag matrix with randomized -1/+1
+    input = X.clone().view(-1, size, 1)
+    output = input.clone()
     while input.shape[1] > K:
         input = input.view(input.shape[0], input.shape[1] // 2, 2, input.shape[2])
         output = output.view(input.shape)
