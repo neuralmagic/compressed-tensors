@@ -44,8 +44,8 @@ _atol = 1e-1  # bfloat16 is low precision for large matrices
 @pytest.mark.parametrize("size", _sizes_to_test)
 def test_random_hadamard_matrix_compliant(size):
     # (H / sqrt(n))(H.T / sqrt(n)) == I
-    had_matrix = random_hadamard_matrix(size, device="cuda")
-    product = had_matrix @ had_matrix.T
+    matrix = random_hadamard_matrix(size, device="cuda")
+    product = matrix @ matrix.T
     eye = torch.eye(size, dtype=product.dtype, device="cuda")
     assert torch.allclose(product, eye, atol=_atol)
 

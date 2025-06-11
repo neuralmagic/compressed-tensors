@@ -71,16 +71,17 @@ def random_hadamard_matrix(
     See https://cornell-relaxml.github.io/quip-sharp/ ,
     Section "Randomized Hadamard Transformation"
 
+    Improves upon deterministic_hadamard_matrix
+    in that this supports non powers of 2 and random seeds
+
     Adapated from https://github.com/facebookresearch/SpinQuant/blob/main/utils/hadamard_utils.py  # noqa: E501
 
     :param size: The dimension of the hamadard matrix
     :param gen: Optional generator random values
     :return: randomly generated hadamard matrix
     """
-    # Benefits: support other shapes / non powers of 2, support randomization
-    Q = torch.randint(
-        low=0, high=2, size=(size,), generator=gen, dtype=dtype, device=device
-    )
+    Q = torch.randint(low=0, high=2, size=(size,), generator=gen, dtype=dtype)  # cpu
+    Q = Q.to(device=device)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
     return _matmul_hadU(Q) / math.sqrt(size)
