@@ -110,11 +110,11 @@ def _get_known_divisor(
     :param n: size of known hadamard matrix
     :return: a known hadamard matrix of size `n` if one exists, else None
     """
-    with safe_open(file_path, framework="pt", device="cpu") as file:
+    with safe_open(file_path, framework="pt", device=str(device)) as file:
         divisors = sorted([int(key) for key in file.keys()], reverse=True)
         for divisor in divisors:
             if n % divisor == 0 and is_pow2(n // divisor):
-                return file.get_tensor(str(divisor)).to(dtype=dtype, device=device)
+                return file.get_tensor(str(divisor)).to(dtype=dtype)
 
     return None
 
