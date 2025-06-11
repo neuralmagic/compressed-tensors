@@ -75,6 +75,7 @@ def random_hadamard_matrix(
     in that this supports non powers of 2 and random seeds
 
     Adapated from https://github.com/facebookresearch/SpinQuant/blob/main/utils/hadamard_utils.py  # noqa: E501
+    Known matrices were retrieved from N. J. A. Sloane's Library of Hadamard Matrices http://www.neilsloane.com/hadamard/  # noqa: E501
 
     :param size: The dimension of the hamadard matrix
     :param gen: Optional generator random values
