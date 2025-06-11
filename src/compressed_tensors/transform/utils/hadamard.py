@@ -14,17 +14,17 @@
 
 import math
 import os
-from typing import Optional, Tuple
+from typing import Optional
 
-import numpy
 import torch
 from safetensors import safe_open
 
 
 REPO_PATH = os.path.join(os.path.dirname(__file__), "hadamards.safetensors")
+DTYPE = torch.int32
 
 
-__all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix"]
+__all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix", "is_pow2"]
 
 
 # note that hadamard matrix multiplication can be accelerated using a library such as
@@ -48,13 +48,13 @@ def deterministic_hadamard_matrix(size: int) -> torch.Tensor:
     if size != 2**log2:
         raise ValueError("Cannot construct deterministic hadamard of size != 2^n")
 
-    H = numpy.array([[1]], dtype=int)
+    H = torch.tensor([[1]], dtype=DTYPE)
 
     # Sylvester's construction
     for _ in range(0, log2):
-        H = numpy.vstack((numpy.hstack((H, H)), numpy.hstack((H, -H))))
+        H = torch.vstack((torch.hstack((H, H)), torch.hstack((H, -H))))
 
-    return torch.from_numpy(H / math.sqrt(size))
+    return H / math.sqrt(size)
 
 
 def random_hadamard_matrix(
@@ -72,15 +72,21 @@ def random_hadamard_matrix(
     :return: randomly generated hadamard matrix
     """
     # Benefits: support other shapes / non powers of 2, support randomization
-    Q = torch.randint(low=0, high=2, size=(size,), generator=gen, dtype=torch.float64)
+    Q = torch.randint(low=0, high=2, size=(size,), generator=gen, dtype=DTYPE)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
     return _matmul_hadU(Q) / math.sqrt(size)
 
 
-def _get_known_hadamard(n: int, file_path: str = REPO_PATH) -> Optional[torch.Tensor]:
+def is_pow2(n: int) -> bool:
+    return (n & (n - 1) == 0) and (n > 0)
+
+
+def _get_known_divisor(n: int, file_path: str = REPO_PATH) -> Optional[torch.Tensor]:
     """
-    Fetch a known hadamard matrix of size `n` from hadamard repo path if it exists
+    Fetch a known hadamard matrix from the given file path. The returned matrix will
+    be of of size `k` such that `n` divides `d` and `n / d` is a power of two. Return
+    None if no such matrix exists.
 
     Note: This function reopens the safetensors file every time it is called.
     This is inefficient, but inconsequential because hadamards are typically
@@ -91,9 +97,10 @@ def _get_known_hadamard(n: int, file_path: str = REPO_PATH) -> Optional[torch.Te
     :return: a known hadamard matrix of size `n` if one exists, else None
     """
     with safe_open(file_path, framework="pt", device="cpu") as file:
-        for divisor in file.keys():
-            if n % int(divisor) == 0:
-                return file.get_tensor(divisor)
+        divisors = sorted([int(key) for key in file.keys()], reverse=True)
+        for divisor in divisors:
+            if n % divisor == 0 and is_pow2(n // divisor):
+                return file.get_tensor(str(divisor)).to(dtype=DTYPE)
 
     return None
 
@@ -102,12 +109,11 @@ def _matmul_hadU(X: torch.Tensor) -> torch.Tensor:
     size = X.shape[-1]
 
     # Check if we have the determined hadamard matrix
-    hadK = _get_known_hadamard(size)
-    K = hadK.size(0) if hadK is not None else 1
-    if hadK is None and not _is_pow2(size):
+    hadK = _get_known_divisor(size)
+    if hadK is None:
         raise ValueError(f"Cannot construct random hadamard matrix of size {size}")
+    K = hadK.size(0)
 
-    # For cases when hadK is not predetermined, determine hadamard matrix
     # Reshape diag matrix with randomized -1/+1
     input = X.clone().view(-1, size, 1)
     output = input.clone()
@@ -120,21 +126,11 @@ def _matmul_hadU(X: torch.Tensor) -> torch.Tensor:
         (input, output) = (output, input)
     del output
 
-    # K == 1 when hadK is None; this happens when the size dim (n)
-    # is not comaptible with any of the maintained hadamard matrices
-
-    if K > 1:
-        # Do not explicitly repeat - OOM
-        # input = torch.bmm(
-        #     hadK.repeat(len(input), 1, 1).to(input.device).to(input.dtype), input)
-        # Use bcast instead
-
-        # for cases when hadK is pre-determined
-        input = hadK.view(1, K, K).to(input) @ input
+    # Do not explicitly repeat - OOM
+    # input = torch.bmm(
+    #     hadK.repeat(len(input), 1, 1).to(input.device).to(input.dtype), input)
+    # Use bcast instead
+    input = hadK.view(1, K, K).to(input) @ input
 
     # normalize
     return input.view(X.shape)
-
-
-def _is_pow2(n: int) -> bool:
-    return (n & (n - 1) == 0) and (n > 0)
