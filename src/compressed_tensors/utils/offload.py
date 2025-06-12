@@ -205,6 +205,7 @@ def register_offload_parameter(
     module.register_parameter(name, parameter)
 
     # do everything AlignDevicesHook.init_hook does
+    # https://github.com/huggingface/accelerate/blob/main/src/accelerate/hooks.py#L281
     if has_offloaded_params(module):
         hook: AlignDevicesHook = module._hf_hook
         assert hook.weights_map is not None
