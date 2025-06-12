@@ -13,14 +13,14 @@
 # limitations under the License.
 
 import math
-import os
+from pathlib import Path
 from typing import Optional
 
 import torch
 from safetensors import safe_open
 
 
-REPO_PATH = os.path.join(os.path.dirname(__file__), "hadamards.safetensors")
+REPO_PATH = Path(__file__).parent / "hadamards.safetensors"
 
 
 __all__ = ["random_hadamard_matrix", "deterministic_hadamard_matrix", "is_pow2"]
@@ -42,6 +42,8 @@ def deterministic_hadamard_matrix(
     Adapated from https://github.com/scipy/scipy/blob/v1.15.2/scipy/linalg/_special_matrices.py  # noqa: E501
 
     :param size: order of the matrix, must be a power of 2
+    :param dtype: data type of matrix
+    :param device: device to construct matrix on
     :return: hadamard matrix of size `size`
     """
     if size <= 0:
@@ -54,7 +56,7 @@ def deterministic_hadamard_matrix(
     H = torch.tensor([[1]], dtype=dtype, device=device)
 
     # Sylvester's construction
-    for _ in range(0, log2):
+    for _ in range(log2):
         H = torch.vstack((torch.hstack((H, H)), torch.hstack((H, -H))))
 
     return H / math.sqrt(size)
@@ -78,6 +80,8 @@ def random_hadamard_matrix(
     Known matrices were retrieved from N. J. A. Sloane's Library of Hadamard Matrices http://www.neilsloane.com/hadamard/  # noqa: E501
 
     :param size: The dimension of the hamadard matrix
+    :param dtype: data type of matrix
+    :param device: device to construct matrix on
     :param gen: Optional generator random values
     :return: randomly generated hadamard matrix
     """
@@ -89,10 +93,16 @@ def random_hadamard_matrix(
 
 
 def is_pow2(n: int) -> bool:
-    return (n & (n - 1) == 0) and (n > 0)
+    """
+    Check if a number is a power of 2
+
+    :param n: number to check
+    :return: True iff `n` is a power of 2
+    """
+    return n > 0 and (n & (n - 1) == 0)
 
 
-def _get_known_divisor(
+def _fetch_hadamard_divisor(
     n: int,
     dtype: torch.dtype,
     device: torch.device = torch.device("cpu"),
@@ -111,7 +121,7 @@ def _get_known_divisor(
     :return: a known hadamard matrix of size `n` if one exists, else None
     """
     with safe_open(file_path, framework="pt", device=str(device)) as file:
-        divisors = sorted([int(key) for key in file.keys()], reverse=True)
+        divisors = sorted((int(key) for key in file.keys()), reverse=True)
         for divisor in divisors:
             if n % divisor == 0 and is_pow2(n // divisor):
                 return file.get_tensor(str(divisor)).to(dtype=dtype)
@@ -125,7 +135,7 @@ def _matmul_hadU(X: torch.Tensor) -> torch.Tensor:
     device = X.device
 
     # Check if we have the determined hadamard matrix
-    hadK = _get_known_divisor(size, dtype, device=device)
+    hadK = _fetch_hadamard_divisor(size, dtype, device=device)
     if hadK is None:
         raise ValueError(f"Cannot construct random hadamard matrix of size {size}")
     K = hadK.size(0)
