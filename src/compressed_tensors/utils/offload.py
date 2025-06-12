@@ -34,6 +34,7 @@ from operator import attrgetter
 from typing import Any, Callable, Dict, Iterable, Literal, Optional, Union
 
 import torch
+from compressed_tensors.utils import patch_attr
 
 
 try:
@@ -83,6 +84,7 @@ __all__ = [
     "register_offload_module",
     "delete_offload_module",
     "offloaded_dispatch",
+    "disable_offloading",
 ]
 
 
@@ -501,7 +503,9 @@ def offloaded_dispatch(
         raise NotImplementedError("Disk offloading is not currently supported")
 
     # create weights map
-    weights_map = OffloadedWeightsLoader(state_dict=module.state_dict(), device="cpu")
+    state_dict = module.state_dict()
+    state_dict = {key: val.to(offload_device) for key, val in state_dict.items()}
+    weights_map = OffloadedWeightsLoader(state_dict=state_dict, device=offload_device)
 
     # create tied params map
     tied_params = find_tied_parameters(module)
@@ -520,6 +524,33 @@ def offloaded_dispatch(
         tied_params_map=tied_params_map,
     )
     return module
+
+
+@contextlib.contextmanager
+def disable_offloading():
+    """
+    Keep modules onloaded and disable offloading until this context exits.
+    Affects modules which have been hooked with accelerate's `AlignDevicesHook`
+    """
+    original_pre_forward = AlignDevicesHook.pre_forward
+    onloaded_modules = dict()
+
+    # onload once and disable any future onloading/offloading steps
+    def keep_onload_pre_forward(self: AlignDevicesHook, module, *args, **kwargs):
+        ret = original_pre_forward(self, module, *args, **kwargs)
+        if module not in onloaded_modules:
+            onloaded_modules[module] = (self, self.offload)
+            self.offload = False
+        return ret
+
+    # use the patched pre_forward function within the context
+    with patch_attr(AlignDevicesHook, "pre_forward", keep_onload_pre_forward):
+        yield
+
+    # manually offload all modules that were onloaded
+    for module, (hook, offload) in onloaded_modules.items():
+        hook.offload = offload
+        hook.post_forward(module, None)
 
 
 """ Upstreamed Functions """
