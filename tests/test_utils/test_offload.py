@@ -186,7 +186,6 @@ def test_register_offload_parameter_shared():
     register_offload_parameter(module, "d", parameter)
 
     with align_module_device(module):
-        breakpoint()
         assert module.c is module.d
 
 
