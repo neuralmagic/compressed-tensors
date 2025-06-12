@@ -69,12 +69,9 @@ def random_hadamard_matrix(
     gen: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
     """
-    Produces a randomly generated Hadamard matrix.
-    See https://cornell-relaxml.github.io/quip-sharp/ ,
-    Section "Randomized Hadamard Transformation"
-
-    Improves upon deterministic_hadamard_matrix
-    in that this supports non powers of 2 and random seeds
+    Produces a randomly generated Hadamard matrix. Differs from
+    `deterministic_hadamard_matrix` in that this function supports non powers of 2
+    and randomization using a seeded generator
 
     Adapated from https://github.com/facebookresearch/SpinQuant/blob/main/utils/hadamard_utils.py  # noqa: E501
     Known matrices were retrieved from N. J. A. Sloane's Library of Hadamard Matrices http://www.neilsloane.com/hadamard/  # noqa: E501
