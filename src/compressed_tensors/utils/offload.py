@@ -229,7 +229,7 @@ def update_offload_parameter(
     :param offload_device: device on which weight will be offloaded to. If None is
         provided, then infer device from parameters on module
     """
-    param = getattr(module, name)
+    param: torch.nn.Parameter = getattr(module, name)
     if param.data.shape != data.shape:
         warnings.warn(
             f"Shape of parameter being updated {param.data.shape} does not match shape "
@@ -237,7 +237,7 @@ def update_offload_parameter(
         )
 
     # copy data into onloaded parameter if applicable
-    if param.device != torch.device("meta"):
+    if param.device != torch.device("meta") and data is not param.data:
         param.data.copy_(data)
 
     # update offload dict
