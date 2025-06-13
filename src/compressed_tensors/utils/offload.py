@@ -31,7 +31,7 @@ import contextlib
 import warnings
 from functools import wraps
 from operator import attrgetter
-from typing import Any, Callable, Dict, Iterable, Literal, Optional, Union
+from typing import Any, Callable, Dict, Iterable, Literal, Optional, Tuple, Union
 
 import torch
 from compressed_tensors.utils import patch_attr
@@ -216,7 +216,7 @@ def register_offload_parameter(
 def update_offload_parameter(
     module: torch.nn.Module,
     name: str,
-    data: Optional[torch.Tensor],
+    data: torch.Tensor,
     offload_device: Optional[Union[torch.device, Literal["disk"]]] = None,
 ):
     """
@@ -533,7 +533,7 @@ def disable_offloading():
     Affects modules which have been hooked with accelerate's `AlignDevicesHook`
     """
     original_pre_forward = AlignDevicesHook.pre_forward
-    onloaded_modules = dict()
+    onloaded_modules: Dict[torch.nn.Module, Tuple[AlignDevicesHook, bool]] = dict()
 
     # onload once and disable any future onloading/offloading steps
     def keep_onload_pre_forward(self: AlignDevicesHook, module, *args, **kwargs):
@@ -548,8 +548,11 @@ def disable_offloading():
         yield
 
     # manually offload all modules that were onloaded
+    # update any parameters which may have changed
     for module, (hook, offload) in onloaded_modules.items():
         hook.offload = offload
+        for name, param in module.named_parameters():
+            update_offload_parameter(module, name, param.data)
         hook.post_forward(module, None)
 
 
