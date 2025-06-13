@@ -470,6 +470,7 @@ def register_offload_module(base: torch.nn.Module, name: str, module: torch.nn.M
 def delete_offload_module(base: torch.nn.Module, name: str):
     """
     Delete a submodule from a model which may contain offloading
+
     :param base: parent module to delete submodule from
     :param name: name of submodule on parent
     """
