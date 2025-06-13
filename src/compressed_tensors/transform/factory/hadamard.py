@@ -67,8 +67,8 @@ class HadamardFactory(TransformFactory):
         construct_device: device,
     ) -> Parameter:
         # construct on execution device, cache on offload device
-        data = deterministic_hadamard_matrix(size, dtype, construct_device)
-        data = data.to(device=device)
+        data = deterministic_hadamard_matrix(size, torch.float32, construct_device)
+        data = data.to(dtype=dtype, device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
 
