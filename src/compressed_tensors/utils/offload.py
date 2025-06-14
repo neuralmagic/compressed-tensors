@@ -523,6 +523,21 @@ def offloaded_dispatch(
         weights_map=weights_map,
         tied_params_map=tied_params_map,
     )
+
+    # when saving a model, `PretrainedModel.save_pretrained` will only
+    # onload weights if the following requirements are met
+    # if (
+    #     hasattr(self, "hf_device_map")
+    #     and len(set(self.hf_device_map.values())) > 1
+    #     and ("cpu" in self.hf_device_map.values()
+    #          or "disk" in self.hf_device_map.values())
+    # ):
+    setattr(
+        module,
+        "hf_device_map",
+        {"offload_device": str(offload_device), "exec_device": str(execution_device)},
+    )
+
     return module
 
 
