@@ -499,8 +499,8 @@ def offloaded_dispatch(
     :param offload_device: device that module parameters will offload to
     :return: module with offloading device hooks
     """
-    if offload_device == "disk":
-        raise NotImplementedError("Disk offloading is not currently supported")
+    if offload_device != torch.device("cpu"):
+        raise NotImplementedError("Only CPU offloading is supported")
 
     # create weights map
     state_dict = module.state_dict()
