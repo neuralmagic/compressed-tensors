@@ -502,6 +502,9 @@ def offloaded_dispatch(
     if offload_device != torch.device("cpu"):
         raise NotImplementedError("Only CPU offloading is supported")
 
+    # remove any existing hooks
+    remove_hook_from_module(module, recurse=True)
+
     # create weights map
     state_dict = module.state_dict()
     state_dict = {key: val.to(offload_device) for key, val in state_dict.items()}
