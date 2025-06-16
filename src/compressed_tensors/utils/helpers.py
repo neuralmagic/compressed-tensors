@@ -301,46 +301,31 @@ def pack_bitmasks(bytemasks: torch.Tensor) -> torch.Tensor:
     :param bytemasks: mask tensor where each byte corresponds to a weight
     :return: mask tensor where each bit corresounds to a weight
     """
-    # Try PyTorch-based implementation first to avoid CPU transfer
     try:
         device = bytemasks.device
         dtype = bytemasks.dtype
         
-        # Ensure input is boolean or can be treated as boolean
         if dtype != torch.bool:
             bytemasks = bytemasks.bool()
         
         rows, cols = bytemasks.shape
-        packed_cols = (cols + 7) // 8  # ceil(cols/8)
+        packed_cols = (cols + 7) // 8
         
-        # Convert boolean mask to uint8
         bytemasks_uint8 = bytemasks.to(torch.uint8)
-        
-        # Pad to multiple of 8 if needed
-        if cols % 8 != 0:
-            padding = 8 - (cols % 8)
-            bytemasks_uint8 = torch.nn.functional.pad(bytemasks_uint8, (0, padding))
-        
-        # Reshape to group by 8 bits
-        reshaped = bytemasks_uint8.view(rows, packed_cols, 8)
-        
-        # Pack bits (little endian) - use bitwise operations
         packed = torch.zeros(rows, packed_cols, dtype=torch.uint8, device=device)
-        for i in range(8):
-            packed |= reshaped[:, :, i] << i
+        
+        # Pack bits directly without padding
+        for i in range(cols):
+            packed[:, i // 8] |= bytemasks_uint8[:, i] << (i % 8)
         
         return packed
         
     except Exception:
-        # Fallback to NumPy implementation for compatibility
-        # Move to CPU if needed
         if bytemasks.is_cuda:
             bytemasks = bytemasks.cpu()
         
         packed_bits_numpy = numpy.packbits(bytemasks.numpy(), axis=-1, bitorder="little")
-        packed_bits_torch = torch.from_numpy(packed_bits_numpy)
-        
-        return packed_bits_torch
+        return torch.from_numpy(packed_bits_numpy)
 
 
 def unpack_bitmasks(
