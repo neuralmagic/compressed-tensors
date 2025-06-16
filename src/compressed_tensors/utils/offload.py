@@ -85,6 +85,7 @@ __all__ = [
     "delete_offload_module",
     "offloaded_dispatch",
     "disable_offloading",
+    "remove_dispatch",
 ]
 
 
