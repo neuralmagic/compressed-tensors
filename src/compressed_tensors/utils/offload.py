@@ -535,11 +535,9 @@ def offloaded_dispatch(
     #     and ("cpu" in self.hf_device_map.values()
     #          or "disk" in self.hf_device_map.values())
     # ):
-    setattr(
-        module,
-        "hf_device_map",
-        {"offload_device": str(offload_device), "exec_device": str(execution_device)},
-    )
+    # because this function always offloads, disregard actual devices and
+    # always use `cpu` and `cuda:0` to guarantee this condition passes
+    setattr(module, "hf_device_map", {"fake_offload": "cpu", "fake_exec": "cuda:0"})
 
     return module
 
