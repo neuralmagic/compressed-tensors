@@ -90,9 +90,16 @@ class Sparse24BitMaskTensor:
         :return: instantiated compressed tensor
         """
         shape = list(tensor.shape)
+        
+        # Perform compression on the original device (CPU or GPU)
+        # This avoids unnecessary device transfers during compression
         compressed, bitmask = sparse24_bitmask_compress(
             tensor, sparsity_structure=sparsity_structure
         )
+        
+        # Move to CPU only for storage after compression is complete
+        # This is required by the storage format but we delay it until the end
+        # to maximize GPU utilization during compression
         return Sparse24BitMaskTensor(
             shape=shape,
             compressed=compressed.cpu() if compressed.is_cuda else compressed,
@@ -206,7 +213,38 @@ def sparse24_bitmask_decompress(
     return decompressed_tensor
 
 
-def get_24_bytemasks(tensor):
+def _validate_24_sparsity_tensor(tensor: torch.Tensor) -> None:
+    """
+    Validate that tensor is suitable for 2:4 sparsity.
+    
+    :param tensor: Input tensor to validate
+    :raises ValueError: If tensor size is not a multiple of 4
+    """
+    if tensor.numel() % 4 != 0:
+        raise ValueError(
+            f"Tensor size must be a multiple of 4 for 2:4 sparsity, "
+            f"got {tensor.numel()} elements"
+        )
+
+
+def _get_topk_mask(reshaped_tensor: torch.Tensor, k: int = 2) -> torch.Tensor:
+    """
+    Get mask for top-k elements per group based on absolute values.
+    
+    :param reshaped_tensor: Tensor reshaped into groups
+    :param k: Number of elements to keep per group
+    :return: Boolean mask tensor
+    """
+    abs_tensor = reshaped_tensor.abs()
+    # sorted=False provides performance improvement without affecting correctness
+    topk_indices = abs_tensor.topk(k, dim=1, largest=True, sorted=False).indices
+    
+    mask = torch.zeros_like(reshaped_tensor, dtype=torch.bool)
+    mask.scatter_(1, topk_indices, True)
+    return mask
+
+
+def get_24_bytemasks(tensor: torch.Tensor) -> torch.Tensor:
     """
     Generate a 2:4 sparsity mask for the given tensor.
 
@@ -222,22 +260,25 @@ def get_24_bytemasks(tensor):
     :raises ValueError: If the total number of elements in the tensor is not a
                         multiple of 4.
     """
+    # Validate input
+    _validate_24_sparsity_tensor(tensor)
+    
     original_dtype = tensor.dtype
+    original_shape = tensor.shape
+    
+    # Handle FP8 dtype by viewing as int8 for magnitude comparison
     if tensor.dtype == FP8_DTYPE:
         tensor = tensor.view(torch.int8)
-    original_shape = tensor.shape
-    num_elements = tensor.numel()
-
-    if num_elements % 4 != 0:
-        raise ValueError("Tensor size must be a multiple of 4 for TWO_FOUR sparsity")
-
+    
+    # Reshape into groups of 4 and get top-2 mask
     reshaped_tensor = tensor.view(-1, 4)
-    abs_tensor = reshaped_tensor.abs()
-    topk_indices = abs_tensor.topk(2, dim=1, largest=True, sorted=False).indices
-    mask = torch.zeros_like(reshaped_tensor, dtype=torch.bool)
-    mask.scatter_(1, topk_indices, True)
+    mask = _get_topk_mask(reshaped_tensor, k=2)
+    
+    # Restore original shape
     mask = mask.view(original_shape)
-    if tensor.dtype == torch.int8:
+    
+    # Restore tensor dtype if it was changed
+    if tensor.dtype == torch.int8 and original_dtype == FP8_DTYPE:
         tensor = tensor.view(original_dtype)
-
+    
     return mask

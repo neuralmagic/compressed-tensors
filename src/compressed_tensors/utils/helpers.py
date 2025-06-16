@@ -293,39 +293,96 @@ def combine_shards(shards, dim=0):
     return combined
 
 
+def _validate_bitmask_shape(bytemasks: torch.Tensor) -> None:
+    """
+    Validates input tensor shape for bitmask packing.
+    
+    :param bytemasks: Input tensor to validate
+    :raises ValueError: If tensor is not 2D
+    """
+    if len(bytemasks.shape) != 2:
+        raise ValueError(
+            f"pack_bitmasks expects a 2D tensor, got shape {bytemasks.shape}"
+        )
+
+
+def _pack_bits_torch(bytemasks_uint8: torch.Tensor, rows: int, cols: int, 
+                     device: torch.device) -> torch.Tensor:
+    """
+    Pack bits using PyTorch operations.
+    
+    :param bytemasks_uint8: Boolean mask converted to uint8
+    :param rows: Number of rows in the mask
+    :param cols: Number of columns in the mask
+    :param device: Device to create the packed tensor on
+    :return: Packed bitmask tensor
+    """
+    # Calculate packed array size: ceil(cols/8)
+    # This ensures we have enough bytes to store all bits without padding
+    packed_cols = (cols + 7) // 8
+    packed = torch.zeros(rows, packed_cols, dtype=torch.uint8, device=device)
+    
+    # Pack bits directly without padding
+    # We iterate through each column and pack 8 bits into each byte
+    # The bit position within each byte is determined by (i % 8)
+    # The target byte is at position (i // 8)
+    # This approach avoids padding and maintains exact bit alignment
+    for i in range(cols):
+        packed[:, i // 8] |= bytemasks_uint8[:, i] << (i % 8)
+    
+    return packed
+
+
+def _pack_bits_numpy_fallback(bytemasks: torch.Tensor) -> torch.Tensor:
+    """
+    Fallback to NumPy implementation for compatibility.
+    
+    :param bytemasks: Input boolean mask tensor
+    :return: Packed bitmask tensor
+    """
+    if bytemasks.is_cuda:
+        bytemasks = bytemasks.cpu()
+    
+    packed_bits_numpy = numpy.packbits(bytemasks.numpy(), axis=-1, bitorder="little")
+    return torch.from_numpy(packed_bits_numpy)
+
+
 def pack_bitmasks(bytemasks: torch.Tensor) -> torch.Tensor:
     """
     Converts a bytemask tensor to a bitmask tensor to reduce memory. Shape RxC will be
-    compressed to R x ceil(C/8)
+    compressed to R x ceil(C/8).
+    
+    Supports both CPU and GPU tensors with automatic fallback to NumPy for compatibility.
 
-    :param bytemasks: mask tensor where each byte corresponds to a weight
-    :return: mask tensor where each bit corresounds to a weight
+    :param bytemasks: 2D boolean mask tensor where each element corresponds to a weight
+    :return: Packed mask tensor where each bit corresponds to a weight
+    :raises ValueError: If input tensor is not 2D
     """
+    # Validate input shape
+    _validate_bitmask_shape(bytemasks)
+    
     try:
         device = bytemasks.device
         dtype = bytemasks.dtype
         
+        # Ensure boolean type for consistent behavior
+        # Some tensors might come as uint8 or other types
         if dtype != torch.bool:
             bytemasks = bytemasks.bool()
         
         rows, cols = bytemasks.shape
-        packed_cols = (cols + 7) // 8
-        
+        # Convert to uint8 for bit manipulation operations
+        # PyTorch's bitwise operations work on integer types
         bytemasks_uint8 = bytemasks.to(torch.uint8)
-        packed = torch.zeros(rows, packed_cols, dtype=torch.uint8, device=device)
         
-        # Pack bits directly without padding
-        for i in range(cols):
-            packed[:, i // 8] |= bytemasks_uint8[:, i] << (i % 8)
-        
-        return packed
+        # Use PyTorch implementation for GPU efficiency
+        return _pack_bits_torch(bytemasks_uint8, rows, cols, device)
         
     except Exception:
-        if bytemasks.is_cuda:
-            bytemasks = bytemasks.cpu()
-        
-        packed_bits_numpy = numpy.packbits(bytemasks.numpy(), axis=-1, bitorder="little")
-        return torch.from_numpy(packed_bits_numpy)
+        # Fallback to NumPy for compatibility
+        # This ensures the function works even if PyTorch operations fail
+        # (e.g., on older PyTorch versions or specific hardware)
+        return _pack_bits_numpy_fallback(bytemasks)
 
 
 def unpack_bitmasks(
