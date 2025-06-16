@@ -90,13 +90,15 @@ class Sparse24BitMaskTensor:
         :return: instantiated compressed tensor
         """
         shape = list(tensor.shape)
+        # Keep tensor on its original device for faster processing
         compressed, bitmask = sparse24_bitmask_compress(
-            tensor.cpu(), sparsity_structure=sparsity_structure
+            tensor, sparsity_structure=sparsity_structure
         )
+        # Move to CPU only at the end if needed for storage
         return Sparse24BitMaskTensor(
             shape=shape,
-            compressed=compressed,
-            bitmask=bitmask,
+            compressed=compressed.cpu() if compressed.is_cuda else compressed,
+            bitmask=bitmask.cpu() if bitmask.is_cuda else bitmask,
         )
 
     @staticmethod
@@ -233,10 +235,12 @@ def get_24_bytemasks(tensor):
 
     reshaped_tensor = tensor.view(-1, 4)
     abs_tensor = reshaped_tensor.abs()
-    topk_indices = abs_tensor.topk(2, dim=1).indices
+    # Use largest=True, sorted=False for better performance
+    topk_indices = abs_tensor.topk(2, dim=1, largest=True, sorted=False).indices
     mask = torch.zeros_like(reshaped_tensor, dtype=torch.bool)
     mask.scatter_(1, topk_indices, True)
     mask = mask.view(original_shape)
-    tensor = tensor.view(original_dtype)
+    if tensor.dtype == torch.int8:
+        tensor = tensor.view(original_dtype)
 
     return mask
