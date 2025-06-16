@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 from collections import Counter
 
 import pytest
@@ -22,7 +23,7 @@ from compressed_tensors.transform import (
     TransformFactory,
     TransformScheme,
 )
-from compressed_tensors.utils import align_modules, offloaded_dispatch
+from compressed_tensors.utils import align_module_device, offloaded_dispatch
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
@@ -64,7 +65,10 @@ def test_memory_sharing(scheme, offload=False):
     factory.apply_to_model(model)
 
     # check that memory is shared when onloaded
-    with align_modules(model.modules()):
+    with contextlib.ExitStack() as stack:
+        for module in model.modules():
+            stack.enter_context(align_module_device(module))
+
         weights = [m.weight for m in model.modules() if isinstance(m, TransformBase)]
         weight_to_count = Counter(weights)
         size_to_weight = {weight.size(0): weight for weight in weight_to_count}
