@@ -320,15 +320,22 @@ def _pack_bits_torch(bytemasks_uint8: torch.Tensor, rows: int, cols: int,
     # Calculate packed array size: ceil(cols/8)
     # This ensures we have enough bytes to store all bits without padding
     packed_cols = (cols + 7) // 8
-    packed = torch.zeros(rows, packed_cols, dtype=torch.uint8, device=device)
     
-    # Pack bits directly without padding
-    # We iterate through each column and pack 8 bits into each byte
-    # The bit position within each byte is determined by (i % 8)
-    # The target byte is at position (i // 8)
-    # This approach avoids padding and maintains exact bit alignment
-    for i in range(cols):
-        packed[:, i // 8] |= bytemasks_uint8[:, i] << (i % 8)
+    # Reshape to process 8 bits at a time
+    # If cols is not divisible by 8, pad with zeros
+    if cols % 8 != 0:
+        padding = 8 - (cols % 8)
+        bytemasks_uint8 = torch.nn.functional.pad(bytemasks_uint8, (0, padding))
+    
+    # Reshape to (rows, packed_cols, 8)
+    reshaped = bytemasks_uint8.view(rows, packed_cols, 8)
+    
+    # Create bit shift pattern [1, 2, 4, 8, 16, 32, 64, 128]
+    bit_shifts = (1 << torch.arange(8, device=device, dtype=torch.uint8))
+    
+    # Multiply each bit by its position value and sum
+    # This packs 8 bits into a single byte
+    packed = (reshaped * bit_shifts).sum(dim=2, dtype=torch.uint8)
     
     return packed
 
@@ -370,13 +377,18 @@ def pack_bitmasks(bytemasks: torch.Tensor) -> torch.Tensor:
         if dtype != torch.bool:
             bytemasks = bytemasks.bool()
         
-        rows, cols = bytemasks.shape
-        # Convert to uint8 for bit manipulation operations
-        # PyTorch's bitwise operations work on integer types
-        bytemasks_uint8 = bytemasks.to(torch.uint8)
-        
-        # Use PyTorch implementation for GPU efficiency
-        return _pack_bits_torch(bytemasks_uint8, rows, cols, device)
+        # For CPU tensors, use NumPy which is much faster
+        # For GPU tensors, keep on GPU to avoid transfer overhead
+        if device.type == 'cpu':
+            # NumPy's packbits is highly optimized C code
+            # It's ~100x faster than our PyTorch loop implementation
+            return _pack_bits_numpy_fallback(bytemasks)
+        else:
+            # On GPU, the PyTorch implementation avoids CPU transfers
+            # which is more important than the packing speed itself
+            rows, cols = bytemasks.shape
+            bytemasks_uint8 = bytemasks.to(torch.uint8)
+            return _pack_bits_torch(bytemasks_uint8, rows, cols, device)
         
     except Exception:
         # Fallback to NumPy for compatibility
