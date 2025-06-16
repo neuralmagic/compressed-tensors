@@ -515,7 +515,7 @@ def offloaded_dispatch(
         raise NotImplementedError("Disk offloading is not currently supported")
 
     # remove any existing hooks
-    remove_hook_from_module(module, recurse=True)
+    remove_dispatch(module)
 
     # create weights map
     state_dict = module.state_dict()
@@ -550,6 +550,20 @@ def offloaded_dispatch(
     # because this function always offloads, disregard actual devices and
     # always use `cpu` and `cuda:0` to guarantee this condition passes
     setattr(module, "hf_device_map", {"fake_offload": "cpu", "fake_exec": "cuda:0"})
+
+    return module
+
+
+def remove_dispatch(module: torch.nn.Module) -> torch.nn.Module:
+    """
+    Remove any existing dispatches from module
+
+    :param module: module which may be dispatched with hf hooks
+    :return: module without dispatch
+    """
+    remove_hook_from_module(module, recurse=True)
+    if hasattr(module, "hf_device_map"):
+        delattr(module, "hf_device_map")
 
     return module
 
