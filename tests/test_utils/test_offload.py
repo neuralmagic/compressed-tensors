@@ -305,6 +305,7 @@ def test_align_modules():
     module0 = ExampleModule()
     module1 = ExampleModule()
     module2 = ExampleModule()
+    new_data = torch.tensor(1.0)
     model = torch.nn.Sequential(module0, torch.nn.Sequential(module1, module2))
     attach_align_device_hook(
         model,
@@ -318,13 +319,16 @@ def test_align_modules():
     assert module2.a.device == torch.device("meta")
 
     with align_modules((module0, module1)):
-        assert module0.a.device != torch.device("meta")
-        assert module1.a.device != torch.device("meta")
+        assert module0.a.device == torch.device("cpu")
+        assert module1.a.device == torch.device("cpu")
         assert module2.a.device == torch.device("meta")
+        update_offload_parameter(module0, "a", new_data)
+        assert module0.a == new_data
 
     assert module0.a.device == torch.device("meta")
     assert module1.a.device == torch.device("meta")
     assert module2.a.device == torch.device("meta")
+    assert module0._hf_hook.weights_map["a"] == new_data
 
 
 @requires_accelerate()
