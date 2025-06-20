@@ -171,13 +171,8 @@ def update_parameter_data(
 
 def get_execution_device(module: torch.nn.Module) -> torch.device:
     """
-    Get the device which inputs should be moved to before module execution
-
-    If a model is offloaded, assume that modules execute in the same order
-    that they are returned by `model.modules()`
-
-    If a model is not offloaded, assume that parameters are used in the same order
-    that they are returned by `model.parameters()`
+    Get the device which inputs should be moved to before module execution.
+    Assume that modules execute in the same order as returned by `model.modules()`
 
     :param module: module to check, may be offloaded
     :return: onload device of module
@@ -186,14 +181,14 @@ def get_execution_device(module: torch.nn.Module) -> torch.device:
         if has_offloaded_params(module):
             return module._hf_hook.execution_device
 
-    first_param = next(module.parameters(), None)
-    if first_param is None:
-        warnings.warn(
-            f"Unable able to infer execution device of {module}, falling back to CPU"
-        )
-        return torch.device("cpu")
+        param = next(module.parameters(), None)
+        if param is not None:
+            return param.device
 
-    return first_param.device
+    warnings.warn(
+        f"Unable able to infer execution device of {module}, falling back to CPU"
+    )
+    return torch.device("cpu")
 
 
 def register_offload_parameter(

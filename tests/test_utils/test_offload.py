@@ -101,9 +101,23 @@ def test_get_execution_device():
     with init_empty_weights():
         assert get_execution_device(module) == torch.device("cuda:0")
 
-    # execution device of model
-    model = ExampleModel()
-    attach_align_device_hook(model, torch.device("cuda:0"))
+
+def test_get_execution_device_model():
+    from accelerate.hooks import attach_align_device_hook
+
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.a = torch.nn.Linear(1, 2)
+            self.b = torch.nn.Linear(2, 2, device="cuda:0")
+
+        def forward(self, x):
+            return self.b(self.a(x).to("cuda:0"))
+
+    model = Model()
+    assert get_execution_device(model) == torch.device("cpu")
+
+    attach_align_device_hook(model.a, torch.device("cuda:0"))
     assert get_execution_device(model) == torch.device("cuda:0")
 
 
