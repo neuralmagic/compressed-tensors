@@ -123,9 +123,11 @@ def is_module_offloaded(module: torch.nn.Module) -> bool:
 
 def get_offloaded_device(module: torch.nn.Module) -> torch.device:
     """
-    Get the offload device of this module. If this module has multiple offloaded
-    parameters, return the first one. If this module is not offloaded, return the
-    device of the first parameter
+    Get the offload device of this module. This is determined through analysis of the
+    first module with parameters returned by `module.modules()`.
+
+    If this module is offloaded, return its offload device. If this module not
+    offloaded, return the parameter's device.
 
     :param module: module to check
     :return: offload device of module
