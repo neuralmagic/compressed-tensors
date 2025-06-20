@@ -186,7 +186,7 @@ def get_execution_device(module: torch.nn.Module) -> torch.device:
             return param.device
 
     warnings.warn(
-        f"Unable able to infer execution device of {module}, falling back to CPU"
+        f"Unable able to get execution device of {module}, falling back to CPU"
     )
     return torch.device("cpu")
 
