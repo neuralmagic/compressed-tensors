@@ -21,6 +21,7 @@ from compressed_tensors.utils import (
     disable_hf_hook,
     disable_offloading,
     get_execution_device,
+    get_offloaded_device,
     has_offloaded_params,
     offloaded_dispatch,
     register_offload_module,
@@ -119,6 +120,75 @@ def test_get_execution_device_model():
 
     offloaded_dispatch(model.a, torch.device("cuda:0"))
     assert get_execution_device(model) == torch.device("cuda:0")
+
+
+def test_get_offloaded_device():
+    from accelerate import init_empty_weights
+
+    # no offloading
+    module = ExampleModule()
+    assert get_offloaded_device(module) == torch.device("cpu")
+
+    # with offloading
+    offloaded_dispatch(
+        module,
+        execution_device=torch.device("cpu"),
+        offload_device=torch.device("cuda:0"),
+    )
+    assert get_offloaded_device(module) == torch.device("cuda:0")
+
+    # in meta context
+    with torch.device("meta"):
+        module = ExampleModule()
+        assert get_offloaded_device(module) == torch.device("meta")
+
+    # offloaded in meta context
+    module = ExampleModule()
+    offloaded_dispatch(
+        module,
+        execution_device=torch.device("cpu"),
+        offload_device=torch.device("cuda:0"),
+    )
+    with torch.device("meta"):
+        assert get_offloaded_device(module) == torch.device("cuda:0")
+
+    # in empty weights context
+    with init_empty_weights():
+        module = ExampleModule()
+        assert get_offloaded_device(module) == torch.device("meta")
+
+    # offloaded in empty weights context
+    module = ExampleModule()
+    offloaded_dispatch(
+        module,
+        execution_device=torch.device("cpu"),
+        offload_device=torch.device("cuda:0"),
+    )
+    with init_empty_weights():
+        assert get_offloaded_device(module) == torch.device("cuda:0")
+
+
+@requires_gpu
+@requires_accelerate()
+def test_get_execution_device_model():
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.a = torch.nn.Linear(1, 2)
+            self.b = torch.nn.Linear(2, 2, device="cuda:0")
+
+        def forward(self, x):
+            return self.b(self.a(x).to("cuda:0"))
+
+    model = Model()
+    assert get_offloaded_device(model) == torch.device("cpu")
+
+    offloaded_dispatch(
+        model.a,
+        execution_device=torch.device("cpu"),
+        offload_device=torch.device("cuda:0"),
+    )
+    assert get_offloaded_device(model) == torch.device("cuda:0")
 
 
 @requires_accelerate()
