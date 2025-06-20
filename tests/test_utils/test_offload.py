@@ -102,9 +102,9 @@ def test_get_execution_device():
         assert get_execution_device(module) == torch.device("cuda:0")
 
 
+@requires_gpu
+@requires_accelerate()
 def test_get_execution_device_model():
-    from accelerate.hooks import attach_align_device_hook
-
     class Model(torch.nn.Module):
         def __init__(self):
             super().__init__()
