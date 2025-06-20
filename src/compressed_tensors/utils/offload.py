@@ -181,7 +181,7 @@ def get_execution_device(module: torch.nn.Module) -> torch.device:
         if has_offloaded_params(module):
             return module._hf_hook.execution_device
 
-        param = next(module.parameters(), None)
+        param = next(module.parameters(recurse=False), None)
         if param is not None:
             return param.device
 

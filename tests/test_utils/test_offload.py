@@ -117,7 +117,7 @@ def test_get_execution_device_model():
     model = Model()
     assert get_execution_device(model) == torch.device("cpu")
 
-    attach_align_device_hook(model.a, torch.device("cuda:0"))
+    offloaded_dispatch(model.a, torch.device("cuda:0"))
     assert get_execution_device(model) == torch.device("cuda:0")
 
 
