@@ -120,7 +120,7 @@ jobs:
               shell: bash
 
             - name: report to reportportal
-              uses: neuralmagic/nm-actions/actions/reportportal_submit_execution_results@dmk/use_action_patb
+              uses: neuralmagic/nm-actions/actions/reportportal_submit_execution_results@dmk/use_action_path
               with:
                 droute_username: ${{ secrets.DROUTE_USERNAME }}
                 droute_password: ${{ secrets.DROUTE_PASSWORD }}
