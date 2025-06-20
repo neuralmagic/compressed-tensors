@@ -173,11 +173,18 @@ def get_execution_device(module: torch.nn.Module) -> torch.device:
     """
     Get the device which inputs should be moved to before module execution
 
+    If a model is offloaded, assume that modules execute in the same order
+    that they are returned by `model.modules()`
+
+    If a model is not offloaded, assume that parameters are used in the same order
+    that they are returned by `model.parameters()`
+
     :param module: module to check, may be offloaded
     :return: onload device of module
     """
-    if has_offloaded_params(module):
-        return module._hf_hook.execution_device
+    for module in module.modules():
+        if has_offloaded_params(module):
+            return module._hf_hook.execution_device
 
     first_param = next(module.parameters(), None)
     if first_param is None:

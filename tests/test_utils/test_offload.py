@@ -101,6 +101,11 @@ def test_get_execution_device():
     with init_empty_weights():
         assert get_execution_device(module) == torch.device("cuda:0")
 
+    # execution device of model
+    model = ExampleModel()
+    attach_align_device_hook(model, torch.device("cuda:0"))
+    assert get_execution_device(model) == torch.device("cuda:0")
+
 
 @requires_accelerate()
 def test_register_offload_parameter():
