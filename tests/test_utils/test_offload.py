@@ -122,6 +122,8 @@ def test_get_execution_device_model():
     assert get_execution_device(model) == torch.device("cuda:0")
 
 
+@requires_gpu
+@requires_accelerate()
 def test_get_offloaded_device():
     from accelerate import init_empty_weights
 
