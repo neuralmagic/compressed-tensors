@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional, Union
 import torch
 from compressed_tensors.utils import Aliasable
 from compressed_tensors.utils.helpers import deprecated
+from compressed_tensors.quantization.utils import is_fp4
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -309,6 +310,11 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         elif observer is None:
             # default to minmax for non-dynamic cases
             observer = "minmax"
+
+        # validate fp4
+        if is_fp4(model) and model.symmetric:
+            raise NotImplementedError("FP4 asymmetric quantization is not supported")
+            
 
         # write back modified values
         model.strategy = strategy
