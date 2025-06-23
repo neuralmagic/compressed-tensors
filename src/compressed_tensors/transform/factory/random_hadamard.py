@@ -37,8 +37,6 @@ class RandomHadamardFactory(HadamardFactory):
         construct_device: device,
     ) -> Parameter:
         # construct on execution device, cache on offload device
-        data = random_hadamard_matrix(
-            size, torch.float32, construct_device, self.generator
-        )
-        data = data.to(dtype=dtype, device=device)
+        data = random_hadamard_matrix(size, dtype, construct_device, self.generator)
+        data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
