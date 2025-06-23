@@ -21,7 +21,7 @@ from compressed_tensors.transform import (
     TransformScheme,
     apply_transform_config,
 )
-from compressed_tensors.utils import force_cpu_offload
+from compressed_tensors.utils import offloaded_dispatch
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
@@ -65,7 +65,7 @@ def test_correctness_model(scheme_kwargs, model_apply, offload=False):
     # load model
     model = model_apply[0]
     if offload:
-        model = force_cpu_offload(model, torch.device("cuda"))
+        model = offloaded_dispatch(model, torch.device("cuda"))
 
     # get output
     input = torch.rand((17, model.fcs[0].in_features))

@@ -24,7 +24,7 @@ from compressed_tensors.transform import (
     TransformScheme,
     apply_transform_config,
 )
-from compressed_tensors.utils import align_modules, force_cpu_offload
+from compressed_tensors.utils import align_modules, offloaded_dispatch
 from tests.test_transform.conftest import TransformableModel
 from tests.testing_utils import requires_accelerate, requires_gpu
 
@@ -41,7 +41,7 @@ def test_memory_sharing(scheme_kwargs, offload=False):
     # load model (maybe with offloading)
     model = TransformableModel(2, 2, 4, 4, 8, 8)
     if offload:
-        force_cpu_offload(model, torch.device("cuda"))
+        offloaded_dispatch(model, torch.device("cuda"))
 
     # add transforms to model
     config = TransformConfig(
