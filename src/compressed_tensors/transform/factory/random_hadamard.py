@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch
 from compressed_tensors.transform import HadamardFactory, TransformFactory
 from compressed_tensors.transform.utils.hadamard import random_hadamard_matrix
 from torch import device, dtype
@@ -36,6 +37,8 @@ class RandomHadamardFactory(HadamardFactory):
         construct_device: device,
     ) -> Parameter:
         # construct on execution device, cache on offload device
-        data = random_hadamard_matrix(size, dtype, construct_device, self.generator)
-        data = data.to(device=device)
+        data = random_hadamard_matrix(
+            size, torch.float32, construct_device, self.generator
+        )
+        data = data.to(dtype=dtype, device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
