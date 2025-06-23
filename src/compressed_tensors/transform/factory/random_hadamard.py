@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 from compressed_tensors.transform import HadamardFactory, TransformFactory
 from compressed_tensors.transform.utils.hadamard import random_hadamard_matrix
 from torch import device, dtype
