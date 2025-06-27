@@ -155,7 +155,7 @@ def calculate_qparams(
                 max_pos = F4_E2M1_MAX
             else:
                 raise AssertionError(
-                    f"unsupported element dtype for MX quantization: {quantization_args.type}"
+                    f"unsupported element dtype {quantization_args.type} for MX quantization. Supported types are FP4 and FP8."
                 )
 
             descale = max_abs / max_pos
