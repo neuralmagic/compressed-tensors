@@ -452,6 +452,7 @@ def get_fp_scale(scale_e8m0):
         E8M0_EXPONENT_BIAS,
         E8M0_EXPONENT_NAN_VAL,
     )
+
     scale_e8m0 = scale_e8m0.view(torch.uint8)
     s_offset = scale_e8m0.to(torch.int16) - E8M0_EXPONENT_BIAS
     # TODO(later): it would be nice if there was a way to do the 2^x operation
@@ -466,6 +467,7 @@ def get_fp_scale(scale_e8m0):
     s_fp = torch.where(scale_e8m0 != E8M0_EXPONENT_NAN_VAL, s_fp, float("nan"))
 
     return s_fp
+
 
 @torch.no_grad()
 def _dequantize(

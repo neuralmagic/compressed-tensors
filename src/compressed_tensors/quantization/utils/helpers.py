@@ -66,12 +66,14 @@ def is_fp4(quantization_args: QuantizationArgs):
         and not quantization_args.is_mx
     )
 
+
 def is_mxfp4(quantization_args: QuantizationArgs):
     return (
         quantization_args.num_bits == 4
         and quantization_args.type == QuantizationType.FLOAT
         and quantization_args.is_mx
     )
+
 
 def calculate_qparams(
     min_vals: Tensor,
@@ -115,7 +117,9 @@ def calculate_qparams(
             scales = torch.clamp(scales, max=FP8_E4M3_DATA.max, min=FP8_E4M3_DATA.min)
             scales = scales.to(FP8_E4M3_DATA.dtype)
         elif is_mxfp4(quantization_args=quantization_args):
-            assert global_scale is None, f"Global scale not used for MXFP4, but got {global_scale}"
+            assert (
+                global_scale is None
+            ), f"Global scale not used for MXFP4, but got {global_scale}"
 
             # https://github.com/pytorch/ao/blob/994a4ba6c869854fcaa6ca7e118fcbd75e6c28cc/torchao/prototype/mx_formats/mx_tensor.py#L94
 
@@ -133,9 +137,7 @@ def calculate_qparams(
             descale = max_abs / max_pos
             # TODO: nan/inf needs to be set for any value
             # of nan/inf in input not just amax.
-            from torchao.prototype.mx_formats.constants import (
-                E8M0_EXPONENT_BIAS,
-            )
+            from torchao.prototype.mx_formats.constants import E8M0_EXPONENT_BIAS
 
             exponent = torch.where(
                 torch.isnan(descale),
