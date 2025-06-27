@@ -434,7 +434,7 @@ def _quantize(
             max_pos = F4_E2M1_MAX
         else:
             raise ValueError(
-                f"Unsupported MX quantization args {args}. " "Expected mxfp4 or mxfp8."
+                f"Unsupported MX quantization args {args}. Expected mxfp4 or mxfp8."
             )
         # scale and saturated cast the data elements to max of target dtype
         data_lp = torch.clamp(data_hp * descale_fp, min=-1 * max_pos, max=max_pos)
