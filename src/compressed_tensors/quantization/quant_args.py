@@ -186,6 +186,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             "Observers constructor excluding quantization range or symmetry"
         ),
     )
+    # For FP4 and FP8, OCP MX standard
+    is_mx: Optional[bool] = False
 
     @field_validator("type", mode="before")
     def validate_type(cls, value) -> QuantizationType:
@@ -316,7 +318,10 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
-        if self.type == QuantizationType.FLOAT:
+        if self.is_mx:
+            # For MXFP4, both data and scale are stored as torch.uint8
+            return torch.uint8
+        elif self.type == QuantizationType.FLOAT:
             if self.num_bits == 8:
                 return FP8_E4M3_DATA.dtype
             else:

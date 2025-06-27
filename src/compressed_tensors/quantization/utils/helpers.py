@@ -49,6 +49,7 @@ __all__ = [
     "calculate_qparams",
     "generate_gparam",
     "is_fp4",
+    "is_mxfp4",
 ]
 
 # target the self_attn layer
@@ -62,8 +63,15 @@ def is_fp4(quantization_args: QuantizationArgs):
     return (
         quantization_args.num_bits == 4
         and quantization_args.type == QuantizationType.FLOAT
+        and not quantization_args.is_mx
     )
 
+def is_mxfp4(quantization_args: QuantizationArgs):
+    return (
+        quantization_args.num_bits == 4
+        and quantization_args.type == QuantizationType.FLOAT
+        and quantization_args.is_mx
+    )
 
 def calculate_qparams(
     min_vals: Tensor,
@@ -106,7 +114,52 @@ def calculate_qparams(
             scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
             scales = torch.clamp(scales, max=FP8_E4M3_DATA.max, min=FP8_E4M3_DATA.min)
             scales = scales.to(FP8_E4M3_DATA.dtype)
+        elif is_mxfp4(quantization_args=quantization_args):
+            assert global_scale is None, f"Global scale not used for MXFP4, but got {global_scale}"
 
+            # https://github.com/pytorch/ao/blob/994a4ba6c869854fcaa6ca7e118fcbd75e6c28cc/torchao/prototype/mx_formats/mx_tensor.py#L94
+
+            # Args:
+            #     data_hp: High precision data.
+            #     max_abs: Maximum absolute value for data_hp along specified dimension/block_size.
+            #     max_pos: The maximum value of the low precision data type.
+
+            # Returns:
+            #     exponent: The biased exponent with dtype E8M0 in uint8 container.
+            #     data_lp: The targeted low precision data, in high precision container
+            #         (requires cast to low precision data type).
+            max_abs = max_val_pos
+            max_pos = FP4_E2M1_DATA.max
+            descale = max_abs / max_pos
+            # TODO: nan/inf needs to be set for any value
+            # of nan/inf in input not just amax.
+            from torchao.prototype.mx_formats.constants import (
+                E8M0_EXPONENT_BIAS,
+            )
+
+            exponent = torch.where(
+                torch.isnan(descale),
+                0xFF,  # Handle biased exponent for nan
+                # NOTE: descale < (torch.finfo(torch.float32).smallest_normal / 2) is handled through clamping
+                (
+                    torch.clamp(
+                        torch.ceil(torch.log2(descale)),
+                        min=-E8M0_EXPONENT_BIAS,
+                        max=E8M0_EXPONENT_BIAS,
+                    )
+                    + E8M0_EXPONENT_BIAS
+                ).to(torch.uint8),
+            )
+            scales = exponent
+            # The next part is quantized data
+            # descale_fp = torch.where(
+            #     exponent == 0, 1.0, torch.exp2(E8M0_EXPONENT_BIAS - exponent.to(torch.float32))
+            # )
+
+            # # scale and saturated cast the data elements to max of target dtype
+            # data_lp = torch.clamp(
+            #     data_hp * descale_fp.unsqueeze(1), min=-1 * max_pos, max=max_pos
+            # )
         else:
             scales = max_val_pos / (float(bit_range) / 2)
 
@@ -119,6 +172,9 @@ def calculate_qparams(
                 torch.tensor(0.125, dtype=FP8_E4M3_DATA.dtype, device=device),
                 scales,
             )
+        elif scales.dtype == torch.uint8:
+            # FIXME: (Yi) clamp se8m0 scale
+            scales = scales
         else:
             scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
 
@@ -495,5 +551,8 @@ def generate_gparam(
     min_vals = torch.min(updated_min_val, torch.zeros_like(updated_min_val))
     max_vals = torch.max(updated_max_val, torch.zeros_like(updated_max_val))
     max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
+    # For NVFP4,
+    #  scale_data: FP8_E4M3_DATA
+    #  quant_data: FP4_E2M1_DATA
     global_scale = scale_data.max * quant_data.max / max_val_pos
     return global_scale.to(dtype).reshape([1])
