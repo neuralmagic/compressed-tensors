@@ -28,9 +28,14 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     calculate_range,
     compute_dynamic_scales_and_zp,
+    is_fp4,
+    is_kv_cache_quant_scheme,
+    is_mxfp4,
+    is_mxfp8,
 )
 from compressed_tensors.utils import safe_permute
 from torch.nn import Module
+from torchao.prototype.mx_formats.constants import F8E4M3_MAX
 
 
 __all__ = [
@@ -288,6 +293,7 @@ def _process_quantization(
                 scale=scale,
                 zero_point=zero_point,
                 global_scale=global_scale,
+                args=args,
             )
 
     return output
@@ -422,7 +428,14 @@ def _quantize(
             1.0,
             torch.exp2(E8M0_EXPONENT_BIAS - exponent.to(torch.float32)),
         )
-        max_pos = F4_E2M1_MAX
+        if is_mxfp8(quantization_args=args):
+            max_pos = F8E4M3_MAX
+        elif is_mxfp4(quantization_args=args):
+            max_pos = F4_E2M1_MAX
+        else:
+            raise ValueError(
+                f"Unsupported MX quantization args {args}. " "Expected mxfp4 or mxfp8."
+            )
         # scale and saturated cast the data elements to max of target dtype
         data_lp = torch.clamp(data_hp * descale_fp, min=-1 * max_pos, max=max_pos)
         scaled: torch.Tensor = data_lp
