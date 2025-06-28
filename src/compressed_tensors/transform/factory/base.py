@@ -13,7 +13,8 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from collections import defaultdict
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.utils.parametrize as P
@@ -48,10 +49,13 @@ class TransformFactory(RegistryMixin, ABC):
     :param seed: random seed used to transform weight randomization
     """
 
+    transforms: List["TransformBase"]
+
     def __init__(self, name: str, scheme: TransformScheme, seed: Optional[int] = None):
         self.name = name
         self.scheme = scheme
         self.generator = torch.Generator()
+        self.transforms = list()
         if seed is not None:
             self.generator.manual_seed(seed)
 
@@ -89,6 +93,8 @@ class TransformFactory(RegistryMixin, ABC):
             for name, module in list(model.named_modules()):
                 if is_target(name, module, arg.targets, arg.ignore):
                     self._apply_to_module(module, arg)
+
+        self._update_tied_weights()
 
     def _apply_to_module(self, module: Module, args: TransformArgs):
         """
@@ -145,6 +151,28 @@ class TransformFactory(RegistryMixin, ABC):
         else:
             raise NotImplementedError()
 
+    def _update_tied_weights(self):
+        """
+        Populate the `_dynamic_tied_weights_keys` attribute of transforms,
+        which is used by transformers to detect and remove shared pointers
+        during saving
+        """
+        # avoid issues with this method being called twice
+        for transform in self.transforms:
+            transform._dynamic_tied_weights_keys = list()
+
+        # map from data_ptrs to keys
+        ptr_to_keys: dict[int, List[Tuple[TransformBase, str]]] = defaultdict(list)
+        for transform in self.transforms:
+            for name, param in transform.named_parameters(recurse=False):
+                ptr_to_keys[param.data_ptr()].append((transform, name))
+
+        # populate `_dynamic_tied_weights_keys` if there is more than one key
+        for shared_keys in ptr_to_keys.values():
+            if len(shared_keys) > 1:
+                for transform, name in shared_keys:
+                    transform._dynamic_tied_weights_keys.append(name)
+
 
 class TransformBase(Module, ABC):
     """
@@ -153,6 +181,11 @@ class TransformBase(Module, ABC):
 
     args: TransformArgs
     weight: Parameter
+    _dynamic_tied_weights_keys: List[str]
+
+    def __init__(self):
+        super().__init__()
+        self._dynamic_tied_weights_keys = list()
 
     @abstractmethod
     def forward(self, value: Tensor) -> Tensor:

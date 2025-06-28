@@ -59,7 +59,9 @@ class RandomMatrixFactory(TransformFactory):
         if args.inverse:
             weight = self.inverses[weight]
 
-        return RandomMatrixTransform(weight, args)
+        transform = RandomMatrixTransform(weight, args)
+        self.transforms.append(transform)
+        return transform
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         # TODO: verify that weight is invertible (has non-zero determinant)
