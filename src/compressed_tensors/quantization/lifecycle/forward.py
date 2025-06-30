@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from functools import wraps
-import math
 from math import ceil
 from typing import Optional
 
@@ -199,8 +198,8 @@ def _process_quantization(
         b_h, b_w = bs
         rows, cols = x.shape[-2], x.shape[-1]
         # ensure exact division (assumes shapes match spec)
-        n_rb = math.ceil(rows / b_h)
-        n_cb = math.ceil(cols / b_w)
+        n_rb = ceil(rows / b_h)
+        n_cb = ceil(cols / b_w)
         # reshape into blocks
         x_blocks = x.reshape(
             n_rb,
