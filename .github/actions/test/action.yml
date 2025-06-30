@@ -26,6 +26,7 @@ runs:
       run: |
           echo "cleaning up wheel files..."
           find . -type f -name '*.whl' -exec rm -rf {} \;
+          df -h
       shell: bash
 
     - name: test
