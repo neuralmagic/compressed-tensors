@@ -24,7 +24,7 @@ runs:
 
     - name: clean up
       run: |
-          echo "cleaning up wheel files..."
+          echo "cleaning up disk space..."
           find . -type f -name '*.whl' -exec rm -rf {} \;
           rm -rf ~/.cache/pip
           sudo rm -rf /usr/local/.ghcup
