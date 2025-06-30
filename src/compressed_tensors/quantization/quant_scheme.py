@@ -243,6 +243,29 @@ FP8_DYNAMIC = dict(
     ),
 )
 
+# Block‐wise FP8 (deepseekv3-style quantization):
+# static 128x128 per‐block weights and 
+# dynamic per‐token‐group activations
+FP8_BLOCK = dict(
+    weights=QuantizationArgs(
+        num_bits=8,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.BLOCK,
+        symmetric=True,
+        dynamic=False,
+        block_structure=[128, 128],
+    ),
+    input_activations=QuantizationArgs(
+        num_bits=8,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.GROUP,
+        symmetric=True,
+        dynamic=True,
+        observer=None,
+        group_size=128,
+    ),
+)
+
 PRESET_SCHEMES = {
     # Unquantized (no-op)
     "UNQUANTIZED": UNQUANTIZED,
@@ -257,6 +280,7 @@ PRESET_SCHEMES = {
     # Float weight and activation schemes
     "FP8": FP8,
     "FP8_DYNAMIC": FP8_DYNAMIC,
+    "FP8_BLOCK": FP8_BLOCK,
     "NVFP4A16": NVFP4A16,
     "NVFP4": NVFP4,
 }

@@ -30,6 +30,10 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from torch.nn import Linear
+import math
+
+from compressed_tensors.quantization.lifecycle.forward import _process_quantization
+from compressed_tensors.quantization.utils.helpers import calculate_range
 
 
 def make_dummy_g_idx(columns: int, group_size: int) -> torch.Tensor:
@@ -203,3 +207,49 @@ def test_dequantize(num_bits, type, strategy, group_size, scale, zero_point, g_i
         dtype=None,
         g_idx=g_idx,
     )
+
+
+def test_process_quantization_block_static():
+    """
+    Static block quantization (QuantizationStrategy.BLOCK) should split a 2D tensor
+    into blocks, quantize each block, and reassemble without changing shape.
+    """
+    rows, cols = 8, 8
+    bh, bw = 2, 4
+    x = torch.randn(rows, cols)
+    args = QuantizationArgs(
+        num_bits=8,
+        type="float",
+        strategy=QuantizationStrategy.BLOCK,
+        symmetric=True,
+        dynamic=False,
+        block_structure=[bh, bw],
+    )
+    num_rb = math.ceil(rows / bh)
+    num_cb = math.ceil(cols / bw)
+    scale = torch.rand(num_rb, num_cb) + 0.1
+    zp = torch.zeros_like(scale)
+    q_min, q_max = calculate_range(args, x.device)
+    out = _process_quantization(
+        x=x,
+        scale=scale,
+        zero_point=zp,
+        args=args,
+        do_quantize=True,
+        do_dequantize=False,
+        dtype=None,
+        global_scale=None,
+    )
+    assert out.shape == x.shape
+    # full fake-quantize roundtrip
+    out2 = _process_quantization(
+        x=x,
+        scale=scale,
+        zero_point=zp,
+        args=args,
+        do_quantize=True,
+        do_dequantize=True,
+        dtype=None,
+        global_scale=None,
+    )
+    assert out2.shape == x.shape
