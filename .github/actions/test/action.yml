@@ -33,7 +33,7 @@ runs:
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/share/boost
-          if [ $(cat /etc/issue) =~ Ubuntu ]; then
+          if [[ "$(cat /etc/issue)" =~ Ubuntu ]]; then
               sudo apt-get clean
           fi
           df -h
