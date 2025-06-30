@@ -46,7 +46,7 @@ on:
         type: string
         required: true
       whl:
-        description: "whl to test (variable appears late binding so unusable outside 'download artifact')"
+        description: "whl to test (provide either whl or run_id)"
         type: string
       run_id:
         description: run id of the BUILD job that generated the assets
@@ -117,13 +117,6 @@ jobs:
               with:
                   bucket_source: ${{ secrets.GCP_BUILD_ML_ASSETS2 }}
                   run_id: ${{ inputs.run_id }}
-
-#            - name: find whl
-#              id: find-asset
-#              uses: neuralmagic/nm-actions/actions/find-asset@v1.1.0
-#              with:
-#                  run_id: ${{ inputs.run_id }}
-#                  asset_identifier: compressed*.whl
 
             - name: run tests
               id: test
