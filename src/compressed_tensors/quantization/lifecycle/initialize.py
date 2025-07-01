@@ -77,31 +77,6 @@ def initialize_module_for_quantization(
     module.quantization_scheme = scheme
     module.quantization_status = QuantizationStatus.INITIALIZED
 
-    if is_attention_module(module):
-        assert scheme.input_activations is not None
-        for base_name in ("q", "k", "v"):
-            _initialize_quantization_parameters(
-                module,
-                base_name,
-                scheme.input_activations,
-                force_zero_point=force_zero_point,
-                scale_dtype=scale_dtype,
-            )
-
-        # wrap attention interface
-        config = getattr(module, "config")
-        original_forward = module.forward
-        assert isinstance(config, PretrainedConfig) and hasattr(
-            config, "_attn_implementation"
-        )
-
-        def wrapped_forward(self, *args, **kwargs):
-            with patch_attr(config, "_attn_implementation", "calibrated_attention"):
-                return original_forward(*args, **kwargs)
-
-        module.forward = wrapped_forward
-        return
-
     if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
         if scheme.input_activations is not None:
             _initialize_quantization_parameters(
@@ -134,6 +109,17 @@ def initialize_module_for_quantization(
             # wrap forward call of module to perform
             # quantized actions based on calltime status
             wrap_module_forward_quantized(module, scheme)
+
+    elif is_attention_module(module):
+        assert scheme.input_activations is not None
+        for base_name in ("q", "k", "v"):
+            _initialize_quantization_parameters(
+                module,
+                base_name,
+                scheme.input_activations,
+                force_zero_point=force_zero_point,
+                scale_dtype=scale_dtype,
+            )
 
     else:
         raise ValueError(f"Unsupported quantization target {type(module)}")
