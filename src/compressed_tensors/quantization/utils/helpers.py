@@ -29,7 +29,6 @@ from compressed_tensors.quantization.quant_args import (
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
-from torchao.prototype.mx_formats.constants import F4_E2M1_MAX, F8E4M3_MAX
 from tqdm import tqdm
 
 
@@ -151,9 +150,9 @@ def calculate_qparams(
             max_abs = max_val_pos
 
             if is_mxfp8(quantization_args=quantization_args):
-                max_pos = F8E4M3_MAX
+                max_pos = FP8_E4M3_DATA.max
             elif is_mxfp4(quantization_args=quantization_args):
-                max_pos = F4_E2M1_MAX
+                max_pos = FP4_E2M1_DATA.max
             else:
                 raise AssertionError(
                     f"unsupported element dtype {quantization_args.type} for MX quantization. Supported types are FP4 and FP8."

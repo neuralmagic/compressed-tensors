@@ -38,7 +38,6 @@ from compressed_tensors.quantization.utils import (
 )
 from compressed_tensors.utils import safe_permute
 from torch.nn import Module
-from torchao.prototype.mx_formats.constants import F8E4M3_MAX
 
 __all__ = [
     "quantize",
