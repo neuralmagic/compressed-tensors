@@ -26,7 +26,7 @@ runs:
       run: |
           echo "cleaning up disk space..."
           find . -type f -name '*.whl' -exec rm -rf {} \;
-          rm -rf ~/.cache/pip
+          python -m pip cache purge
           sudo rm -rf /usr/local/.ghcup
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo rm -rf /usr/local/lib/android/sdk/ndk
