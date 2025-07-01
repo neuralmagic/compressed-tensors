@@ -244,7 +244,7 @@ FP8_DYNAMIC = dict(
 )
 
 # Block‐wise FP8 (deepseekv3-style quantization):
-# static 128x128 per‐block weights and 
+# static 128x128 per‐block weights and
 # dynamic per‐token‐group activations
 FP8_BLOCK = dict(
     weights=QuantizationArgs(

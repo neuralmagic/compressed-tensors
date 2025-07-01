@@ -13,9 +13,12 @@
 # limitations under the License.
 
 
+import math
+
 import pytest
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
+    _process_quantization,
     dequantize,
     forward_quantize,
     quantize,
@@ -29,11 +32,8 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationStrategy,
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
-from torch.nn import Linear
-import math
-
-from compressed_tensors.quantization.lifecycle.forward import _process_quantization
 from compressed_tensors.quantization.utils.helpers import calculate_range
+from torch.nn import Linear
 
 
 def make_dummy_g_idx(columns: int, group_size: int) -> torch.Tensor:

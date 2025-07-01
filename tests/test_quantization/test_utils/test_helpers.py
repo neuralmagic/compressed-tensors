@@ -20,7 +20,11 @@ from compressed_tensors.quantization import (
     QuantizationArgs,
     QuantizationStrategy,
 )
-from compressed_tensors.quantization.utils import calculate_qparams, compute_dynamic_scales_and_zp, generate_gparam
+from compressed_tensors.quantization.utils import (
+    calculate_qparams,
+    compute_dynamic_scales_and_zp,
+    generate_gparam,
+)
 
 
 @pytest.mark.parametrize(
@@ -73,6 +77,7 @@ def test_fused_global_scales():
     assert max_tensor_value.item() == pytest.approx(
         FP4_E2M1_DATA.max * FP8_E4M3_DATA.max / global_scale, abs=0.001
     )
+
 
 @pytest.mark.parametrize(
     "shape,group_size,exp_shape",

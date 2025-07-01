@@ -197,12 +197,18 @@ def _process_quantization(
     if args.strategy == QuantizationStrategy.BLOCK:
         # x: [*, H, W] or [H, W]
         bs = args.block_structure
-        if not (isinstance(bs, (list, tuple)) and len(bs) == 2 and all(isinstance(dim, int) for dim in bs)):
-            raise ValueError(f"Invalid block_structure '{bs}'. Must be a list of two ints [rows, cols].")
+        if not (
+            isinstance(bs, (list, tuple))
+            and len(bs) == 2
+            and all(isinstance(dim, int) for dim in bs)
+        ):
+            raise ValueError(
+                f"Invalid block_structure '{bs}'. Must be a list of two ints [rows, cols]."
+            )
         original_shape = x.shape
         rows, cols = x.shape[-2], x.shape[-1]
         block_height, block_width = bs
-        
+
         # Ensure exact division (tensor dimensions must be divisible by block size)
         if rows % block_height != 0:
             raise ValueError(
@@ -214,7 +220,7 @@ def _process_quantization(
                 f"Tensor width {cols} is not divisible by block_width {block_width}. "
                 f"Block quantization requires exact division."
             )
-        
+
         # reshape into blocks
         num_rows_blocks = rows // block_height
         num_cols_blocks = cols // block_width
@@ -224,7 +230,7 @@ def _process_quantization(
             num_cols_blocks,
             block_width,
         ).transpose(1, 2)
-        
+
         # expand scale/zero_point for blocks
         sb = scale.unsqueeze(-1).unsqueeze(-1)
         zb = zero_point.unsqueeze(-1).unsqueeze(-1) if zero_point is not None else None
@@ -250,7 +256,10 @@ def _process_quantization(
             )
         # restore original shape
         output = x_blocks.transpose(1, 2).reshape(original_shape)
-    elif args.strategy in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP):
+    elif args.strategy in (
+        QuantizationStrategy.GROUP,
+        QuantizationStrategy.TENSOR_GROUP,
+    ):
         n_dims = x.shape
         if len(n_dims) > 2:
             x = x.squeeze(0)

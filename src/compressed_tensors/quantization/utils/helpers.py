@@ -171,7 +171,10 @@ def compute_dynamic_scales_and_zp(
         reduce_dims = tuple(idx for idx in range(value.ndim) if idx not in dim)
     elif args.strategy == QuantizationStrategy.TENSOR:
         reduce_dims = None
-    elif args.strategy in (QuantizationStrategy.TENSOR_GROUP, QuantizationStrategy.GROUP):
+    elif args.strategy in (
+        QuantizationStrategy.TENSOR_GROUP,
+        QuantizationStrategy.GROUP,
+    ):
         if len(value.shape) > 2:
             value = value.squeeze(0)
 
