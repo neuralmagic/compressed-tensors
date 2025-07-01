@@ -48,11 +48,11 @@ runs:
       run: |
           source ${{ inputs.venv }}/bin/activate
           rm -rf src
-          echo "ENABLE_COVERAGE: ${ENABLE_COVERAGE}"
+
           if [[ "${ENABLE_COVERAGE}" == "true" ]]; then
             echo "::group::Installing code coverage requirements via pip"
-            uv pip install bashlex https://github.com/neuralmagic/pytest-nm-releng/archive/v0.4.0.tar.gz
-            uv pip install coverage pytest-cov
+            pip install bashlex https://github.com/neuralmagic/pytest-nm-releng/archive/v0.4.0.tar.gz
+            pip install coverage pytest-cov
 
             # Adding Code coverage to the tests
             nmre-generate-coverage-flags --package "vllm" --output-file ".coverage_flags.sh"
