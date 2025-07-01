@@ -20,6 +20,7 @@ import torch
 from compressed_tensors.quantization.quant_args import (
     FP4_E2M1_DATA,
     FP8_E4M3_DATA,
+    FP8_E8M0_DATA,
     FloatArgs,
     QuantizationArgs,
     QuantizationStrategy,
@@ -137,7 +138,7 @@ def calculate_qparams(
             descale = max_abs / max_pos
             # TODO: nan/inf needs to be set for any value
             # of nan/inf in input not just amax.
-            from torchao.prototype.mx_formats.constants import E8M0_EXPONENT_BIAS
+            E8M0_EXPONENT_BIAS = FP8_E8M0_DATA.bias
 
             exponent = torch.where(
                 torch.isnan(descale),
