@@ -177,7 +177,13 @@ def _initialize_quantization_parameters(
             expected_shape = (weight_shape[0], max(num_groups, 1))
 
     # 3. Identify quantization scale and zp dtype
-    scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
+    if scale_dtype is None:
+        if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
+            scale_dtype = module.weight.dtype
+        elif is_attention_module(module):
+            scale_dtype = next(module.parameters()).dtype
+        else:
+            raise ValueError()
 
     if is_fp4(quantization_args=quantization_args):
         scale_dtype = zp_dtype = FP8_E4M3_DATA.dtype
