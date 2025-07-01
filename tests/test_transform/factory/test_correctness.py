@@ -23,6 +23,13 @@ from compressed_tensors.utils import offloaded_dispatch
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
+def all_schemes():
+    all_types = TransformFactory.registered_names()
+    base = [TransformScheme(type=type) for type in all_types]
+    randomized = [TransformScheme(type=type, randomize=True) for type in all_types]
+    return base + randomized
+
+
 class TransformableModel(torch.nn.Module):
     def __init__(self, *sizes):
         super().__init__()
@@ -37,10 +44,7 @@ class TransformableModel(torch.nn.Module):
         return x
 
 
-@pytest.mark.parametrize(
-    "scheme",
-    [TransformScheme(type=name) for name in TransformFactory.registered_names()],
-)
+@pytest.mark.parametrize("scheme", all_schemes())
 def test_correctness_linear(scheme):
     size = (4, 8)
     module = torch.nn.Linear(*size, bias=True)
@@ -67,10 +71,7 @@ def test_correctness_linear(scheme):
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
-@pytest.mark.parametrize(
-    "scheme",
-    [TransformScheme(type=name) for name in TransformFactory.registered_names()],
-)
+@pytest.mark.parametrize("scheme", all_schemes())
 def test_correctness_model(scheme, offload=False):
     # load model
     model = TransformableModel(2, 4, 8, 16, 32, 64)
@@ -108,9 +109,6 @@ def test_correctness_model(scheme, offload=False):
 
 @requires_gpu
 @requires_accelerate()
-@pytest.mark.parametrize(
-    "scheme",
-    [TransformScheme(type=name) for name in TransformFactory.registered_names()],
-)
+@pytest.mark.parametrize("scheme", all_schemes())
 def test_correctness_model_offload(scheme):
     test_correctness_model(scheme, offload=True)
