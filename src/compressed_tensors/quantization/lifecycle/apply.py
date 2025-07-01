@@ -140,7 +140,6 @@ def apply_quantization_config(
     # build mapping of targets to schemes for easier matching
     # use ordered dict to preserve target ordering in config
     target_to_scheme = OrderedDict()
-    config = process_quantization_config(config)
     names_to_scheme = dict()
     for scheme in config.config_groups.values():
         for target in scheme.targets:
@@ -152,13 +151,7 @@ def apply_quantization_config(
     # list of submodules to ignore
     ignored_submodules = defaultdict(list)
     # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in iter_named_quantizable_modules(
-        model,
-        include_children=True,
-        include_attn=True,
-    ):  # child modules and attention modules
-        # potentially fix module name to remove FSDP wrapper prefix
-        name = fix_fsdp_module_name(name)
+    for name, submodule in model.named_modules():
         if matches := find_name_or_class_matches(name, submodule, config.ignore):
             for match in matches:
                 ignored_submodules[match].append(name)
@@ -198,42 +191,6 @@ def apply_quantization_config(
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
     return names_to_scheme
-
-
-def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
-    """
-    Preprocess the raw QuantizationConfig
-
-    :param config: the raw QuantizationConfig
-    :return: the processed QuantizationConfig
-    """
-    if config.kv_cache_scheme is not None:
-        config = process_kv_cache_config(config)
-
-    return config
-
-
-def process_kv_cache_config(
-    config: QuantizationConfig, targets: Union[List[str], str] = KV_CACHE_TARGETS
-) -> QuantizationConfig:
-    """
-    Reformulate the `config.kv_cache` as a `config_group`
-    and add it to the set of existing `config.groups`
-
-    :param config: the QuantizationConfig
-    :return: the QuantizationConfig with additional "kv_cache" group
-    """
-    if targets == KV_CACHE_TARGETS:
-        _LOGGER.info(f"KV cache targets set to default value of: {KV_CACHE_TARGETS}")
-
-    kv_cache_dict = config.kv_cache_scheme.model_dump()
-    kv_cache_scheme = QuantizationScheme(
-        output_activations=QuantizationArgs(**kv_cache_dict),
-        targets=targets,
-    )
-    kv_cache_group = dict(kv_cache=kv_cache_scheme)
-    config.config_groups.update(kv_cache_group)
-    return config
 
 
 def apply_quantization_status(model: Module, status: QuantizationStatus):

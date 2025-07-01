@@ -36,22 +36,15 @@ from compressed_tensors.utils import (
     get_execution_device,
     register_offload_parameter,
 )
+from compressed_tensors.utils.helpers import patch_attr
 from torch.nn import Module, Parameter
+from transformers.configuration_utils import PretrainedConfig
 
 
 __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
-    "KVCacheScaleType",
 ]
-
-
-_LOGGER = logging.getLogger(__name__)
-
-
-class KVCacheScaleType(Enum):
-    KEY = "k_scale"
-    VALUE = "v_scale"
 
 
 def initialize_module_for_quantization(
@@ -78,17 +71,40 @@ def initialize_module_for_quantization(
     # TODO: don't initialize parameters when running decompression
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:
-        # no scheme passed and layer not targeted for quantization - skip
         return
 
+    # initialize scheme and status
+    module.quantization_scheme = scheme
+    module.quantization_status = QuantizationStatus.INITIALIZED
+
     if is_attention_module(module):
-        # quantized actions based on calltime status
-        _initialize_attn_scales(module)
+        assert scheme.input_activations is not None
+        for base_name in ("q", "k", "v"):
+            _initialize_quantization_parameters(
+                module,
+                base_name,
+                scheme.input_activations,
+                force_zero_point=force_zero_point,
+                scale_dtype=scale_dtype,
+            )
 
-    else:
+        # wrap attention interface
+        config = getattr(module, "config")
+        original_forward = module.forward
+        assert isinstance(config, PretrainedConfig) and hasattr(
+            config, "_attn_implementation"
+        )
 
+        def wrapped_forward(self, *args, **kwargs):
+            with patch_attr(config, "_attn_implementation", "calibrated_attention"):
+                return original_forward(*args, **kwargs)
+
+        module.forward = wrapped_forward
+        return
+
+    if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
         if scheme.input_activations is not None:
-            _initialize_scale_zero_point(
+            _initialize_quantization_parameters(
                 module,
                 "input",
                 scheme.input_activations,
@@ -97,41 +113,34 @@ def initialize_module_for_quantization(
             )
 
         if scheme.weights is not None:
-            if hasattr(module, "weight"):
-                weight_shape = None
-                if isinstance(module, torch.nn.Linear):
-                    weight_shape = module.weight.shape
-                _initialize_scale_zero_point(
-                    module,
-                    "weight",
-                    scheme.weights,
-                    weight_shape=weight_shape,
-                    force_zero_point=force_zero_point,
-                    scale_dtype=scale_dtype,
-                )
-            else:
-                _LOGGER.warning(
-                    f"module type {type(module)} targeted for weight quantization but "
-                    "has no attribute weight, skipping weight quantization "
-                    f"for {type(module)}"
-                )
+            _initialize_quantization_parameters(
+                module,
+                "weight",
+                scheme.weights,
+                force_zero_point=force_zero_point,
+                scale_dtype=scale_dtype,
+            )
 
         if scheme.output_activations is not None:
-            if not is_kv_cache_quant_scheme(scheme):
-                _initialize_scale_zero_point(
-                    module, "output", scheme.output_activations, scale_dtype=scale_dtype
-                )
-
-        module.quantization_scheme = scheme
-        module.quantization_status = QuantizationStatus.INITIALIZED
+            _initialize_quantization_parameters(
+                module,
+                "output",
+                scheme.output_activations,
+                force_zero_point=force_zero_point,
+                scale_dtype=scale_dtype,
+            )
 
         with disable_hf_hook(module):
             # wrap forward call of module to perform
             # quantized actions based on calltime status
             wrap_module_forward_quantized(module, scheme)
 
+    else:
+        raise ValueError(f"Unsupported quantization target {type(module)}")
+
 
 def is_attention_module(module: Module):
+    # can redefine to inspect source code for references to ALL_ATTENTION_FUNCTIONS
     return "attention" in module.__class__.__name__.lower() and (
         hasattr(module, "k_proj")
         or hasattr(module, "v_proj")
@@ -139,11 +148,10 @@ def is_attention_module(module: Module):
     )
 
 
-def _initialize_scale_zero_point(
+def _initialize_quantization_parameters(
     module: Module,
     base_name: str,
     quantization_args: QuantizationArgs,
-    weight_shape: Optional[torch.Size] = None,
     force_zero_point: bool = True,
     scale_dtype: Optional[torch.dtype] = None,
 ):
@@ -170,7 +178,8 @@ def _initialize_scale_zero_point(
     else:
         expected_shape = 1
 
-    if base_name == "weight" and weight_shape is not None:
+    if base_name == "weight":
+        weight_shape = getattr(module, "weight").shape
         if quantization_args.strategy == QuantizationStrategy.CHANNEL:
             # (output_channels, 1)
             expected_shape = (weight_shape[0], 1)
@@ -218,25 +227,3 @@ def _initialize_scale_zero_point(
             requires_grad=False,
         )
         register_offload_parameter(module, f"{base_name}_g_idx", init_g_idx)
-
-
-def _initialize_attn_scales(module: Module) -> None:
-    """Initlaize k_scale, v_scale for  self_attn"""
-
-    expected_shape = 1  # per tensor
-
-    param = next(module.parameters())
-    scale_dtype = param.dtype
-    device = param.device
-
-    init_scale = Parameter(
-        torch.empty(expected_shape, dtype=scale_dtype, device=device),
-        requires_grad=False,
-    )
-    register_offload_parameter(module, KVCacheScaleType.KEY.value, init_scale)
-
-    init_scale = Parameter(
-        torch.empty(expected_shape, dtype=scale_dtype, device=device),
-        requires_grad=False,
-    )
-    register_offload_parameter(module, KVCacheScaleType.VALUE.value, init_scale)
