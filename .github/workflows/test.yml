@@ -155,3 +155,11 @@ jobs:
                   name: report-${{ inputs.test_label }}.xml
                   path: test-results/report.xml
                   retention-days: 5
+
+            - name: upload coverage report
+              uses: actions/upload-artifact@v4
+              if: (success() || failure()) && inputs.code_coverage
+              with:
+                  name: coverage-results
+                  path: coverage-results/*
+                  retention-days: 5
