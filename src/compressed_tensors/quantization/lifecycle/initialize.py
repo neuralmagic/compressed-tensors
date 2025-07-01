@@ -13,10 +13,8 @@
 # limitations under the License.
 
 
-import logging
 import math
-from enum import Enum
-from typing import List, Optional
+from typing import Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
@@ -30,20 +28,19 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.utils import is_fp4, is_kv_cache_quant_scheme
+from compressed_tensors.quantization.utils import is_fp4
 from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
     register_offload_parameter,
 )
-from compressed_tensors.utils.helpers import patch_attr
 from torch.nn import Module, Parameter
-from transformers.configuration_utils import PretrainedConfig
 
 
 __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
+    "get_calibrated_locations",
 ]
 
 
@@ -77,8 +74,10 @@ def initialize_module_for_quantization(
     module.quantization_scheme = scheme
     module.quantization_status = QuantizationStatus.INITIALIZED
 
+    input, weight, output = get_calibrated_locations(scheme)
+
     if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
-        if scheme.input_activations is not None:
+        if input:
             _initialize_quantization_parameters(
                 module,
                 "input",
@@ -87,7 +86,7 @@ def initialize_module_for_quantization(
                 scale_dtype=scale_dtype,
             )
 
-        if scheme.weights is not None:
+        if weight:
             _initialize_quantization_parameters(
                 module,
                 "weight",
@@ -96,7 +95,7 @@ def initialize_module_for_quantization(
                 scale_dtype=scale_dtype,
             )
 
-        if scheme.output_activations is not None:
+        if output:
             _initialize_quantization_parameters(
                 module,
                 "output",
@@ -111,7 +110,7 @@ def initialize_module_for_quantization(
             wrap_module_forward_quantized(module, scheme)
 
     elif is_attention_module(module):
-        assert scheme.input_activations is not None
+        assert input and scheme.input_activations is not None
         for base_name in ("q", "k", "v"):
             _initialize_quantization_parameters(
                 module,
@@ -141,9 +140,6 @@ def _initialize_quantization_parameters(
     force_zero_point: bool = True,
     scale_dtype: Optional[torch.dtype] = None,
 ):
-    if quantization_args.dynamic is True:
-        return
-
     # initialize on execution device to avoid performing quantized ops on cpu
     device = get_execution_device(module)
 
@@ -196,7 +192,7 @@ def _initialize_quantization_parameters(
 
     # 4. Initializes empty scale, zero point, and g_idx parameters for the module
     # do not init scales for quantzation_args.dynamic == DynamicType.local
-    if not quantization_args.dynamic:
+    if quantization_args.dynamic is False:
         init_scale = Parameter(
             torch.empty(expected_shape, dtype=scale_dtype, device=device),
             requires_grad=False,
@@ -219,3 +215,11 @@ def _initialize_quantization_parameters(
             requires_grad=False,
         )
         register_offload_parameter(module, f"{base_name}_g_idx", init_g_idx)
+
+
+def get_calibrated_locations(scheme: QuantizationScheme) -> Tuple[bool, bool, bool]:
+    input = scheme.input_activations and scheme.input_activations.dynamic is not True
+    weight = scheme.weights is not None
+    output = scheme.output_activations and scheme.output_activations.dynamic is not True
+
+    return input, weight, output
