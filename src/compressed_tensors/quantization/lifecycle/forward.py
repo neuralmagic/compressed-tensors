@@ -111,10 +111,14 @@ def dequantize(
         elif scale.ndim == 2:
             if scale.shape[1] == 1:
                 args = QuantizationArgs(strategy=QuantizationStrategy.CHANNEL)
-            else:
+            elif scale.shape[0] == 1:
                 group_size = int(x_q.shape[1] / scale.shape[1])
                 args = QuantizationArgs(
                     strategy=QuantizationStrategy.GROUP, group_size=group_size
+                )
+            else:
+                args = QuantizationArgs(
+                    strategy=QuantizationStrategy.BLOCK, block_structure=scale.shape
                 )
         else:
             raise ValueError(
@@ -195,43 +199,57 @@ def _process_quantization(
         bs = args.block_structure
         if not (isinstance(bs, (list, tuple)) and len(bs) == 2 and all(isinstance(dim, int) for dim in bs)):
             raise ValueError(f"Invalid block_structure '{bs}'. Must be a list of two ints [rows, cols].")
-        b_h, b_w = bs
+        original_shape = x.shape
         rows, cols = x.shape[-2], x.shape[-1]
-        # ensure exact division (assumes shapes match spec)
-        n_rb = ceil(rows / b_h)
-        n_cb = ceil(cols / b_w)
+        block_height, block_width = bs
+        
+        # Ensure exact division (tensor dimensions must be divisible by block size)
+        if rows % block_height != 0:
+            raise ValueError(
+                f"Tensor height {rows} is not divisible by block_height {block_height}. "
+                f"Block quantization requires exact division."
+            )
+        if cols % block_width != 0:
+            raise ValueError(
+                f"Tensor width {cols} is not divisible by block_width {block_width}. "
+                f"Block quantization requires exact division."
+            )
+        
         # reshape into blocks
+        num_rows_blocks = rows // block_height
+        num_cols_blocks = cols // block_width
         x_blocks = x.reshape(
-            n_rb,
-            b_h,
-            n_cb,
-            b_w,
+            num_rows_blocks,
+            block_height,
+            num_cols_blocks,
+            block_width,
         ).transpose(1, 2)
+        
         # expand scale/zero_point for blocks
         sb = scale.unsqueeze(-1).unsqueeze(-1)
         zb = zero_point.unsqueeze(-1).unsqueeze(-1) if zero_point is not None else None
-        # quantize blocks
-        qb = _quantize(
-            x=x_blocks,
-            scale=sb,
-            zero_point=zb,
-            q_min=q_min,
-            q_max=q_max,
-            args=args,
-            dtype=dtype,
-            global_scale=global_scale,
-        ) if do_quantize else x_blocks
-        # dequantize if needed
+        if do_quantize:
+            # quantize blocks
+            x_blocks = _quantize(
+                x=x_blocks,
+                scale=sb,
+                zero_point=zb,
+                q_min=q_min,
+                q_max=q_max,
+                args=args,
+                dtype=dtype,
+                global_scale=global_scale,
+            )
         if do_dequantize:
-            qb = _dequantize(
-                x_q=qb,
+            # dequantize blocks
+            x_blocks = _dequantize(
+                x_q=x_blocks,
                 scale=sb,
                 zero_point=zb,
                 global_scale=global_scale,
             )
         # restore original shape
-        out = qb.transpose(1, 2).reshape(rows, cols)
-        return out
+        output = x_blocks.transpose(1, 2).reshape(original_shape)
     elif args.strategy in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP):
         n_dims = x.shape
         if len(n_dims) > 2:
