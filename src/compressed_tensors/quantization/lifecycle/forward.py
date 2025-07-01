@@ -31,6 +31,7 @@ from compressed_tensors.quantization.utils import (
 )
 from compressed_tensors.utils import safe_permute
 from torch.nn import Module
+from transformers import AttentionInterface
 
 
 __all__ = [
