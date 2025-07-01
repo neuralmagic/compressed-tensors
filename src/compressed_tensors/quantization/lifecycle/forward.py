@@ -18,6 +18,9 @@ from typing import Optional
 
 import torch
 from compressed_tensors.quantization.quant_args import (
+    FP4_E2M1_DATA,
+    FP8_E8M0_DATA,
+    FP8_E4M3_DATA,
     DynamicType,
     QuantizationArgs,
     QuantizationStrategy,
@@ -36,7 +39,6 @@ from compressed_tensors.quantization.utils import (
 from compressed_tensors.utils import safe_permute
 from torch.nn import Module
 from torchao.prototype.mx_formats.constants import F8E4M3_MAX
-
 
 __all__ = [
     "quantize",
@@ -416,22 +418,17 @@ def _quantize(
 
     if args.is_mx:
         # https://github.com/pytorch/ao/blob/994a4ba6c869854fcaa6ca7e118fcbd75e6c28cc/torchao/prototype/mx_formats/mx_tensor.py#L94
-        from torchao.prototype.mx_formats.constants import (
-            E8M0_EXPONENT_BIAS,
-            F4_E2M1_MAX,
-        )
-
         data_hp = x
         exponent = scale
         descale_fp = torch.where(
             exponent == 0,
             1.0,
-            torch.exp2(E8M0_EXPONENT_BIAS - exponent.to(torch.float32)),
+            torch.exp2(FP8_E8M0_DATA.bias - exponent.to(torch.float32)),
         )
         if is_mxfp8(quantization_args=args):
-            max_pos = F8E4M3_MAX
+            max_pos = FP8_E4M3_DATA.max
         elif is_mxfp4(quantization_args=args):
-            max_pos = F4_E2M1_MAX
+            max_pos = FP4_E2M1_DATA.max
         else:
             raise ValueError(
                 f"Unsupported MX quantization args {args}. Expected mxfp4 or mxfp8."
@@ -461,13 +458,9 @@ def _quantize(
 
 def get_fp_scale(scale_e8m0):
     # https://github.com/pytorch/ao/blob/994a4ba6c869854fcaa6ca7e118fcbd75e6c28cc/torchao/prototype/mx_formats/mx_tensor.py#L337
-    from torchao.prototype.mx_formats.constants import (
-        E8M0_EXPONENT_BIAS,
-        E8M0_EXPONENT_NAN_VAL,
-    )
 
     scale_e8m0 = scale_e8m0.view(torch.uint8)
-    s_offset = scale_e8m0.to(torch.int16) - E8M0_EXPONENT_BIAS
+    s_offset = scale_e8m0.to(torch.int16) - FP8_E8M0_DATA.bias
     # TODO(later): it would be nice if there was a way to do the 2^x operation
     # in PyTorch without creating a tensor of twos
     two = torch.full(s_offset.size(), 2.0, device=scale_e8m0.device)
@@ -477,7 +470,7 @@ def get_fp_scale(scale_e8m0):
     s_fp = torch.pow(two, s_offset)
 
     # If a block exponent was 255, set values of that block to NaN
-    s_fp = torch.where(scale_e8m0 != E8M0_EXPONENT_NAN_VAL, s_fp, float("nan"))
+    s_fp = torch.where(scale_e8m0 != FP8_E8M0_DATA.nan, s_fp, float("nan"))
 
     return s_fp
 

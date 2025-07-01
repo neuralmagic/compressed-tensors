@@ -81,6 +81,16 @@ class FP8_E4M3_DATA(FloatArgs):
 FP8_DTYPE = torch.float8_e4m3fn
 
 
+class FP8_E8M0_DATA(FloatArgs):
+    exponent = 8
+    mantissa = 0
+    bits = 8
+    max = 2**127
+    min = 2 ** (-127)
+    bias = 127
+    nan = 255
+
+
 class QuantizationType(str, Enum):
     """
     Enum storing quantization type options
