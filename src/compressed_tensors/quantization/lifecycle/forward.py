@@ -195,19 +195,9 @@ def _process_quantization(
 
     # blockwise FP8: quantize per 2D block, supports block_structure for static block quant
     if args.strategy == QuantizationStrategy.BLOCK:
-        # x: [*, H, W] or [H, W]
-        bs = args.block_structure
-        if not (
-            isinstance(bs, (list, tuple))
-            and len(bs) == 2
-            and all(isinstance(dim, int) for dim in bs)
-        ):
-            raise ValueError(
-                f"Invalid block_structure '{bs}'. Must be a list of two ints [rows, cols]."
-            )
         original_shape = x.shape
         rows, cols = x.shape[-2], x.shape[-1]
-        block_height, block_width = bs
+        block_height, block_width = args.block_structure
 
         # Ensure exact division (tensor dimensions must be divisible by block size)
         if rows % block_height != 0:
