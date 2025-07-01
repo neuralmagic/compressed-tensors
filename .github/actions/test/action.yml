@@ -48,8 +48,8 @@ runs:
       run: |
           source ${{ inputs.venv }}/bin/activate
           rm -rf src
-
-          if [[ "{$ENABLE_COVERAGE}" == "true" ]]; then
+          echo "ENABLE_COVERAGE: ${ENABLE_COVERAGE}"
+          if [[ "${ENABLE_COVERAGE}" == "true" ]]; then
             echo "::group::Installing code coverage requirements via pip"
             uv pip install bashlex https://github.com/neuralmagic/pytest-nm-releng/archive/v0.4.0.tar.gz
             uv pip install coverage pytest-cov
@@ -66,7 +66,7 @@ runs:
           echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
           echo "::endgroup::"
 
-          if [[ $ENABLE_COVERAGE ]]; then
+          if [[ "${ENABLE_COVERAGE}" == "true" ]]; then
             echo "::group::consolidating coverage reports"
             mkdir -p coverage-results
             mv tests/.coverage coverage-results/ || echo ".coverage file not found"
