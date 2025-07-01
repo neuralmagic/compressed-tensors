@@ -243,6 +243,33 @@ FP8_DYNAMIC = dict(
     ),
 )
 
+# FP8 attention quantization
+FP8_ATTN = dict(
+    targets=["re:.*self_attn$"],
+    input_activations=QuantizationArgs(
+        num_bits=8,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.TOKEN,
+        symmetric=True,
+        dynamic=False,
+        observer=None,
+    ),
+)
+
+# FP4 attention quantization
+NVFP4_ATTN = dict(
+    targets=["re:.*self_attn$"],
+    input_activations=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.TENSOR_GROUP,
+        symmetric=True,
+        dynamic=DynamicType.LOCAL,
+        group_size=16,
+    ),
+)
+
+
 PRESET_SCHEMES = {
     # Unquantized (no-op)
     "UNQUANTIZED": UNQUANTIZED,
@@ -259,4 +286,7 @@ PRESET_SCHEMES = {
     "FP8_DYNAMIC": FP8_DYNAMIC,
     "NVFP4A16": NVFP4A16,
     "NVFP4": NVFP4,
+    # Attention activation schemes
+    "FP8_ATTN": FP8_ATTN,
+    "NVFP4_ATTN": NVFP4_ATTN,
 }
