@@ -190,14 +190,15 @@ def compute_dynamic_scales_and_zp(
             ),
         )
     else:
+        supported_strategies = (
+            QuantizationStrategy.TOKEN,
+            QuantizationStrategy.TENSOR,
+            QuantizationStrategy.TENSOR_GROUP,
+            QuantizationStrategy.GROUP,
+        )
         raise ValueError(
             "Dynamic quantization is only supported for ",
-            f"{(
-                QuantizationStrategy.TOKEN,
-                QuantizationStrategy.TENSOR,
-                QuantizationStrategy.TENSOR_GROUP,
-                QuantizationStrategy.GROUP,
-            )}",
+            f"{supported_strategies}",
         )
 
     if not reduce_dims:
