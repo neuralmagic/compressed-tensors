@@ -152,11 +152,7 @@ def apply_quantization_config(
     # list of submodules to ignore
     ignored_submodules = defaultdict(list)
     # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in iter_named_quantizable_modules(
-        model,
-        include_children=True,
-        include_attn=True,
-    ):  # child modules and attention modules
+    for name, submodule in model.named_modules():  # child modules and attention modules
         # potentially fix module name to remove FSDP wrapper prefix
         name = fix_fsdp_module_name(name)
         if matches := find_name_or_class_matches(name, submodule, config.ignore):

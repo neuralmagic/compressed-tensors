@@ -31,9 +31,10 @@ import contextlib
 import warnings
 from functools import wraps
 from operator import attrgetter
-from typing import Any, Callable, Dict, Iterable, Literal, Optional, Union
+from typing import Any, Callable, Dict, Iterable, Literal, Optional, Tuple, Union
 
 import torch
+from compressed_tensors.utils import patch_attr
 
 
 try:
@@ -83,6 +84,8 @@ __all__ = [
     "register_offload_module",
     "delete_offload_module",
     "offloaded_dispatch",
+    "disable_offloading",
+    "remove_dispatch",
 ]
 
 
@@ -168,22 +171,22 @@ def update_parameter_data(
 
 def get_execution_device(module: torch.nn.Module) -> torch.device:
     """
-    Get the device which inputs should be moved to before module execution
+    Get the device which inputs should be moved to before module execution.
+    Assume that modules execute in the same order as returned by `model.modules()`
 
     :param module: module to check, may be offloaded
     :return: onload device of module
     """
-    if has_offloaded_params(module):
-        return module._hf_hook.execution_device
+    for submodule in module.modules():
+        if has_offloaded_params(submodule):
+            return submodule._hf_hook.execution_device
 
-    first_param = next(module.parameters(), None)
-    if first_param is None:
-        warnings.warn(
-            f"Unable able to infer execution device of {module}, falling back to CPU"
-        )
-        return torch.device("cpu")
+        param = next(submodule.parameters(recurse=False), None)
+        if param is not None:
+            return param.device
 
-    return first_param.device
+    warnings.warn(f"Unable to get execution device of {module}, falling back to CPU")
+    return torch.device("cpu")
 
 
 def register_offload_parameter(
@@ -204,9 +207,24 @@ def register_offload_parameter(
     has_onload = any(p.device != torch.device("meta") for p in module.parameters())
     module.register_parameter(name, parameter)
 
+    # do everything AlignDevicesHook.init_hook does
+    # https://github.com/huggingface/accelerate/blob/main/src/accelerate/hooks.py#L281
     if has_offloaded_params(module):
-        weights_map = module._hf_hook.weights_map
-        offload_to_weights_map(weights_map, name, parameter.data, offload_device)
+        hook: AlignDevicesHook = module._hf_hook
+        assert hook.weights_map is not None
+
+        # append to original_devices
+        hook.original_devices[name] = parameter.device
+
+        # append to weights map
+        offload_to_weights_map(hook.weights_map, name, parameter.data, offload_device)
+
+        # append to tied_params_map
+        offloaded = hook.weights_map[name]
+        if hook.tied_params_map is not None:
+            hook.tied_params_map[offloaded.data_ptr()] = {}  # (1)
+
+        # perform offloading
         if not has_onload:
             set_module_tensor_to_device(module, name, "meta")
 
@@ -214,7 +232,7 @@ def register_offload_parameter(
 def update_offload_parameter(
     module: torch.nn.Module,
     name: str,
-    data: Optional[torch.Tensor],
+    data: torch.Tensor,
     offload_device: Optional[Union[torch.device, Literal["disk"]]] = None,
 ):
     """
@@ -227,7 +245,7 @@ def update_offload_parameter(
     :param offload_device: device on which weight will be offloaded to. If None is
         provided, then infer device from parameters on module
     """
-    param = getattr(module, name)
+    param: torch.nn.Parameter = getattr(module, name)
     if param.data.shape != data.shape:
         warnings.warn(
             f"Shape of parameter being updated {param.data.shape} does not match shape "
@@ -235,7 +253,7 @@ def update_offload_parameter(
         )
 
     # copy data into onloaded parameter if applicable
-    if param.device != torch.device("meta"):
+    if param.device != torch.device("meta") and data is not param.data:
         param.data.copy_(data)
 
     # update offload dict
@@ -420,7 +438,6 @@ def register_offload_module(base: torch.nn.Module, name: str, module: torch.nn.M
         hook: AlignDevicesHook = base._hf_hook
         assert hook.offload
         assert hook.weights_map is not None
-        assert hook.tied_params_map is not None
 
         # offloading kwargs for submodule
         place_submodules = False
@@ -435,7 +452,8 @@ def register_offload_module(base: torch.nn.Module, name: str, module: torch.nn.M
             module, include_buffers=offload_buffers, recurse=place_submodules
         ):
             offloaded = param.to(offload_device)
-            hook.tied_params_map[offloaded.data_ptr()] = {}  # (1)
+            if hook.tied_params_map is not None:
+                hook.tied_params_map[offloaded.data_ptr()] = {}  # (1)
             offload_to_weights_map(hook.weights_map, f"{name}.{param_name}", offloaded)
 
             # if the parent places submodules, offload here
@@ -462,9 +480,6 @@ def register_offload_module(base: torch.nn.Module, name: str, module: torch.nn.M
             add_hook_to_module(module, submodule_hook)
 
     base.register_module(name, module)
-
-    # (1): Since we cannot know which pointers are shared when we add parameters in an
-    # online way, assume that all pointers are shared. This comes at no runtime cost
 
 
 def delete_offload_module(base: torch.nn.Module, name: str):
@@ -500,8 +515,13 @@ def offloaded_dispatch(
     if offload_device == "disk":
         raise NotImplementedError("Disk offloading is not currently supported")
 
+    # remove any existing hooks
+    remove_dispatch(module)
+
     # create weights map
-    weights_map = OffloadedWeightsLoader(state_dict=module.state_dict(), device="cpu")
+    state_dict = module.state_dict()
+    state_dict = {key: val.to(offload_device) for key, val in state_dict.items()}
+    weights_map = OffloadedWeightsLoader(state_dict=state_dict, device=offload_device)
 
     # create tied params map
     tied_params = find_tied_parameters(module)
@@ -519,7 +539,64 @@ def offloaded_dispatch(
         weights_map=weights_map,
         tied_params_map=tied_params_map,
     )
+
+    # when saving a model, `PretrainedModel.save_pretrained` will only
+    # onload weights if the following requirements are met
+    # if (
+    #     hasattr(self, "hf_device_map")
+    #     and len(set(self.hf_device_map.values())) > 1
+    #     and ("cpu" in self.hf_device_map.values()
+    #          or "disk" in self.hf_device_map.values())
+    # ):
+    # because this function always offloads, disregard actual devices and
+    # always use `cpu` and `cuda:0` to guarantee this condition passes
+    setattr(module, "hf_device_map", {"fake_offload": "cpu", "fake_exec": "cuda:0"})
+
     return module
+
+
+def remove_dispatch(module: torch.nn.Module) -> torch.nn.Module:
+    """
+    Remove any existing dispatches from module
+
+    :param module: module which may be dispatched with hf hooks
+    :return: module without dispatch
+    """
+    remove_hook_from_module(module, recurse=True)
+    if hasattr(module, "hf_device_map"):
+        delattr(module, "hf_device_map")
+
+    return module
+
+
+@contextlib.contextmanager
+def disable_offloading():
+    """
+    Keep modules onloaded and disable offloading until this context exits.
+    Affects modules which have been hooked with accelerate's `AlignDevicesHook`
+    """
+    original_pre_forward = AlignDevicesHook.pre_forward
+    onloaded_modules: Dict[torch.nn.Module, Tuple[AlignDevicesHook, bool]] = dict()
+
+    # onload once and disable any future onloading/offloading steps
+    def keep_onload_pre_forward(self: AlignDevicesHook, module, *args, **kwargs):
+        ret = original_pre_forward(self, module, *args, **kwargs)
+        if module not in onloaded_modules:
+            onloaded_modules[module] = (self, self.offload)
+            self.offload = False
+        return ret
+
+    # use the patched pre_forward function within the context
+    with patch_attr(AlignDevicesHook, "pre_forward", keep_onload_pre_forward):
+        yield
+
+    # manually offload all modules that were onloaded
+    # update any parameters which may have changed
+    for module, (hook, offload) in onloaded_modules.items():
+        hook.offload = offload
+        for name, param in module.named_parameters(recurse=False):
+            update_offload_parameter(module, name, param.data)
+        hook.post_forward(module, None)
 
 
 """ Upstreamed Functions """
@@ -589,3 +666,7 @@ def align_module_device(
 
     else:
         yield
+
+
+# (1): Since we cannot know which pointers are shared when we add parameters in an
+# online way, assume that all pointers are shared. This has virtually no runtime cost
