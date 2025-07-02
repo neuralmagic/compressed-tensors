@@ -51,6 +51,8 @@ __all__ = [
     "generate_gparam",
     "is_fp4",
     "is_mxfp4",
+    "is_mxfp8",
+    "is_mx",
 ]
 
 # target the self_attn layer
@@ -74,6 +76,18 @@ def is_mxfp4(quantization_args: QuantizationArgs):
         and quantization_args.type == QuantizationType.FLOAT
         and quantization_args.is_mx
     )
+
+
+def is_mxfp8(quantization_args: QuantizationArgs):
+    return (
+        quantization_args.num_bits == 8
+        and quantization_args.type == QuantizationType.FLOAT
+        and quantization_args.is_mx
+    )
+
+
+def is_mx(quantization_args: QuantizationArgs):
+    return quantization_args.is_mx
 
 
 def calculate_qparams(
@@ -117,7 +131,7 @@ def calculate_qparams(
             scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
             scales = torch.clamp(scales, max=FP8_E4M3_DATA.max, min=FP8_E4M3_DATA.min)
             scales = scales.to(FP8_E4M3_DATA.dtype)
-        elif is_mxfp4(quantization_args=quantization_args):
+        elif is_mx(quantization_args=quantization_args):
             assert (
                 global_scale is None
             ), f"Global scale not used for MXFP4, but got {global_scale}"
@@ -134,7 +148,16 @@ def calculate_qparams(
             #     data_lp: The targeted low precision data, in high precision container
             #         (requires cast to low precision data type).
             max_abs = max_val_pos
-            max_pos = FP4_E2M1_DATA.max
+
+            if is_mxfp8(quantization_args=quantization_args):
+                max_pos = FP8_E4M3_DATA.max
+            elif is_mxfp4(quantization_args=quantization_args):
+                max_pos = FP4_E2M1_DATA.max
+            else:
+                raise AssertionError(
+                    f"unsupported element dtype {quantization_args.type} for MX quantization. Supported types are FP4 and FP8."
+                )
+
             descale = max_abs / max_pos
             # TODO: nan/inf needs to be set for any value
             # of nan/inf in input not just amax.

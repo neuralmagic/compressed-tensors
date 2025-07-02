@@ -329,7 +329,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
-        if self.is_mx:
+        if self.is_mx and self.num_bits == 4:
             # For MXFP4, both data and scale are stored as torch.uint8
             return torch.uint8
         elif self.type == QuantizationType.FLOAT:

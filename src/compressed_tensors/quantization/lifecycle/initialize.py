@@ -34,6 +34,7 @@ from compressed_tensors.quantization.utils import (
     is_fp4,
     is_kv_cache_quant_scheme,
     is_mxfp4,
+    is_mxfp8,
 )
 from compressed_tensors.utils import (
     disable_hf_hook,
@@ -190,7 +191,9 @@ def _initialize_scale_zero_point(
 
     if is_fp4(quantization_args=quantization_args):
         scale_dtype = zp_dtype = FP8_E4M3_DATA.dtype
-    elif is_mxfp4(quantization_args=quantization_args):
+    elif is_mxfp4(quantization_args=quantization_args) or is_mxfp8(
+        quantization_args=quantization_args
+    ):
         scale_dtype = zp_dtype = torch.uint8
     else:
         # TODO: consider erroring out in the future as if the dtype if not one of these,
