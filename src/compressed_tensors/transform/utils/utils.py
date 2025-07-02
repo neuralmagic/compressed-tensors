@@ -27,17 +27,28 @@ def get_matrix_size(module: torch.nn.Module, location: TransformLocation) -> int
     :param location: location on module
     :return: size of matrix
     """
-    assert isinstance(module, torch.nn.Linear)
-    if location in ("input", TransformLocation.WEIGHT_INPUT):
-        return module.in_features
-    else:
-        return module.out_features
+    if isinstance(module, torch.nn.Linear):
+        if location in ("input", TransformLocation.WEIGHT_INPUT):
+            return module.in_features
+        else:
+            return module.out_features
+    elif isinstance(module, torch.nn.Embedding):
+        if location in ("input", TransformLocation.WEIGHT_INPUT):
+            return module.num_embeddings
+        else:
+            return module.embedding_dim
+
+    raise ValueError(
+        f"Unsupported module type {type(module)}, "
+        "should be either Linear or Embedding."
+    )
 
 
 def apply_transform_weight(
-    weight: torch.Tensor,
+    transform_weight: torch.Tensor,
     value: torch.Tensor,
     location: TransformLocation,
+    is_linear: bool = True,
 ) -> torch.Tensor:
     """
     Using the transform location, determine how to apply the transform weight to the
@@ -69,23 +80,36 @@ def apply_transform_weight(
                 = y U
                 = yh
 
-    :param weight: transform weight to apply
-    :param value: value to apply weight to
-    :param location: determines how weight should be applied
-    :return: value after transform weight has been applied
+    :param transform_weight: transform weight to apply
+    :param value: value to apply transform_weight to
+    :param location: determines how transform_weight should be applied
+    :param is_linear: if value belongs to the weights of a Linear module
+        This is needed because torch uses convention:
+        Linear(in_features,out_features) has weight shape (out_features, in_features)
+        But other modules (e.g. torch.nn.Embedding) don't:
+        Embedding(num_embeddings, embedding_dim) has weight shape
+         (num_embeddings, embedding_dim)
+    :return: value after transform_weight has been applied
     """
 
     if location == TransformLocation.INPUT:
-        return value @ weight
+        return value @ transform_weight
 
     elif location == TransformLocation.WEIGHT_INPUT:
-        return value @ weight.T
+        if is_linear:
+            return value @ transform_weight.T
+        else:
+            # TODO is this ever needed?
+            raise NotImplementedError()
 
     elif location == TransformLocation.WEIGHT_OUTPUT:
-        return weight.T @ value
+        if is_linear:
+            return transform_weight.T @ value
+        else:
+            return value @ transform_weight
 
     elif location == TransformLocation.OUTPUT:
-        return value @ weight
+        return value @ transform_weight
 
     else:
         raise NotImplementedError(f"{location} has not been implemented yet")

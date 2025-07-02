@@ -115,8 +115,8 @@ class TransformFactory(RegistryMixin, ABC):
             TransformLocation.WEIGHT_INPUT,
             TransformLocation.WEIGHT_OUTPUT,
         ):
-            assert isinstance(module, torch.nn.Linear)
-            assert module.bias is None
+            assert isinstance(module, (torch.nn.Linear, torch.nn.Embedding))
+            assert not hasattr(module, "bias") or module.bias is None
 
             with torch.no_grad(), align_module_device(module):
                 update_offload_parameter(module, "weight", transform(module.weight))

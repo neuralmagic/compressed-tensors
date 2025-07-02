@@ -51,7 +51,8 @@ class HadamardFactory(TransformFactory):
         :param module: parent module that transform will be applied to
         :param args: defines how the transform will be applied to the module
         """
-        assert isinstance(module, Linear)
+        is_linear = isinstance(module, Linear)
+        assert hasattr(module, "weight")
         size = get_matrix_size(module, args.location)
         dtype = module.weight.dtype
         device = get_offloaded_device(module)
@@ -59,7 +60,7 @@ class HadamardFactory(TransformFactory):
 
         weight = self.weights.get(size, dtype, device, construct_device=exec_device)
         perm = self.perms[weight] if self.scheme.randomize else None
-        return HadamardTransform(weight, perm, args)
+        return HadamardTransform(weight, perm, args, is_linear)
 
     def _create_weight(
         self,
@@ -80,12 +81,17 @@ class HadamardFactory(TransformFactory):
 
 class HadamardTransform(TransformBase):
     def __init__(
-        self, weight: Parameter, perm: Union[Parameter, None], args: TransformArgs
+        self,
+        weight: Parameter,
+        perm: Union[Parameter, None],
+        args: TransformArgs,
+        is_linear: bool,
     ):
         super().__init__()
         self.weight = weight
         self.perm = perm
         self.args = args
+        self.is_linear = is_linear
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -96,4 +102,4 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
-        return apply_transform_weight(weight, value, self.args.location)
+        return apply_transform_weight(weight, value, self.args.location, self.is_linear)

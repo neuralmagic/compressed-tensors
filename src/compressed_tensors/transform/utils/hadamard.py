@@ -51,7 +51,9 @@ def deterministic_hadamard_matrix(
 
     log2 = int(math.log2(size))
     if size != 2**log2:
-        raise ValueError("Cannot construct deterministic hadamard of size != 2^n")
+        raise ValueError(
+            f"Cannot construct deterministic hadamard of size {size} != 2^n"
+        )
 
     H = torch.tensor([[1]], dtype=dtype, device=device)
 
