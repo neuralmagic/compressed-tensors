@@ -82,6 +82,7 @@ class NVFP4PackedCompressor(BaseQuantizationCompressor):
         compressed_dict = {}
         weight_packed = pack_fp4_to_uint8(quantized_weight)
         if device is not None:
+            breakpoint()
             weight_packed = weight_packed.to(device)
         compressed_dict["weight_packed"] = weight_packed
         return compressed_dict

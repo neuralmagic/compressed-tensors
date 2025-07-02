@@ -25,6 +25,8 @@ from safetensors import safe_open
 from torch import Tensor
 from tqdm import tqdm
 
+from torch.nn import Module
+
 
 __all__ = ["BaseSparseCompressor"]
 
@@ -68,6 +70,7 @@ class BaseSparseCompressor(BaseCompressor):
         model_state: Dict[str, Tensor],
         compression_targets: Optional[Set[str]] = None,
         show_progress: bool = False,
+        module: Optional[Module] = None,
     ) -> Dict[str, Tensor]:
         """
         Compresses a dense state dict using bitmask compression
@@ -93,7 +96,10 @@ class BaseSparseCompressor(BaseCompressor):
             if prefix.endswith(".weight"):
                 prefix = prefix[: -(len(".weight"))]
 
-            compression_data = self.compress_weight(prefix, value)
+            compression_data = self.compress_weight(
+                prefix, value, module=module
+            )
+
             for key in compression_data.keys():
                 if key in compressed_dict:
                     _LOGGER.warn(

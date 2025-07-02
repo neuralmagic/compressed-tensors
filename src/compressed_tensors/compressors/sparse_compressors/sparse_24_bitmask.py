@@ -52,12 +52,22 @@ class Sparse24BitMaskCompressor(BaseSparseCompressor):
             "bitmask",
         )
 
-    def compress_weight(self, name, value):
+    def compress_weight(self, name, value, *, module=None):
         bitmask_tensor = Sparse24BitMaskTensor.from_dense(
             value, self.config.sparsity_structure
         )
-        bitmask_dict = bitmask_tensor.dict(name_prefix=name, device="cpu")
-        return bitmask_dict
+        if value.device.type == "meta":
+            if module is None:
+                raise ValueError("compress_weight requires module argument when is_meta=True")
+            # Create empty parameter matching compressed shape
+            empty_weight = torch.empty_like(bitmask_tensor.compressed, device="meta")
+            module.weight = torch.nn.Parameter(empty_weight, requires_grad=False)
+
+        # Normal flow: return compression dict
+        return bitmask_tensor.dict(
+            name_prefix=name,
+            device="meta" if value.device.type == "meta" else "cpu",
+        )
 
     def decompress_weight(self, weight_data):
         data = Sparse24BitMaskTensor.from_compressed_data(**weight_data)
@@ -90,9 +100,14 @@ class Sparse24BitMaskTensor:
         :return: instantiated compressed tensor
         """
         shape = list(tensor.shape)
-        compressed, bitmask = sparse24_bitmask_compress(
-            tensor.cpu(), sparsity_structure=sparsity_structure
-        )
+        if tensor.device.type == "meta":
+            compressed, bitmask = sparse24_bitmask_compress(
+                tensor, sparsity_structure=sparsity_structure
+            )
+        else:
+            compressed, bitmask = sparse24_bitmask_compress(
+                tensor.cpu(), sparsity_structure=sparsity_structure
+            )
         return Sparse24BitMaskTensor(
             shape=shape,
             compressed=compressed,
@@ -168,6 +183,13 @@ def sparse24_bitmask_compress(
     assert (
         SparsityStructure(sparsity_structure) == SparsityStructure.TWO_FOUR
     ), "Only 2:4 sparsity is supported"
+
+    if tensor.device.type == "meta":
+        num_rows, num_cols = tensor.shape
+        compressed_values = torch.empty((num_rows, num_cols // 2), dtype=tensor.dtype, device="meta")
+        packed_cols = (num_cols + 7) // 8
+        bitmasks_packed = torch.empty((num_rows, packed_cols), dtype=torch.uint8, device="meta")
+        return compressed_values, bitmasks_packed
 
     bytemasks = get_24_bytemasks(tensor=tensor)
 
