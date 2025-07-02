@@ -699,8 +699,7 @@ class ModelCompressor:
             params_device = next(module.parameters()).device
             device = "cpu" if has_offloaded_params(module) else params_device
             delattr(module, param_name)
-            #requires_grad = data.dtype in (torch.float16, torch.float32, torch.bfloat16)
-            requires_grad = torch.is_floating_point(data)
+            requires_grad = data.dtype in (torch.float16, torch.float32, torch.bfloat16)
 
             param = torch.nn.Parameter(data.to(device), requires_grad=requires_grad)
             register_offload_parameter(module, param_name, param)
