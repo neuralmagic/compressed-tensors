@@ -26,7 +26,6 @@ from torch import Tensor
 from tqdm import tqdm
 
 
-
 __all__ = ["BaseSparseCompressor"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
