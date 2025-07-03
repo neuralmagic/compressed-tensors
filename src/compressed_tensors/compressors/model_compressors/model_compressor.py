@@ -407,7 +407,7 @@ class ModelCompressor:
                         state_dict,
                         names_to_scheme=module_to_scheme,
                         show_progress=False,
-                        save_device=exec_device,
+                        compression_device=exec_device,
                     )
 
                 # sparsity second
@@ -416,7 +416,6 @@ class ModelCompressor:
                         state_dict,
                         compression_targets=sparse_compression_targets,
                         show_progress=False,
-                        module=module,
                     )
 
                 # remove any existing parameters
@@ -700,7 +699,6 @@ class ModelCompressor:
             device = "cpu" if has_offloaded_params(module) else params_device
             delattr(module, param_name)
             requires_grad = data.dtype in (torch.float16, torch.float32, torch.bfloat16)
-
             param = torch.nn.Parameter(data.to(device), requires_grad=requires_grad)
             register_offload_parameter(module, param_name, param)
 
@@ -718,6 +716,7 @@ class ModelCompressor:
             'data' is the updated param data
         :param model: The model whose weights are to be updated.
         """
+
         for mod_path, data in tqdm(dense_weight_generator, desc="Decompressing model"):
             module = operator.attrgetter(mod_path)(model)
 

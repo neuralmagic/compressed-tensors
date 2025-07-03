@@ -52,17 +52,10 @@ class Sparse24BitMaskCompressor(BaseSparseCompressor):
             "bitmask",
         )
 
-    def compress_weight(self, name, value, *, module=None):
+    def compress_weight(self, name, value):
         bitmask_tensor = Sparse24BitMaskTensor.from_dense(
             value, self.config.sparsity_structure
         )
-        if value.device.type == "meta":
-            if module is None:
-                raise ValueError("compress_weight requires module argument when is_meta=True")
-            # Create empty parameter matching compressed shape
-            empty_weight = torch.empty_like(bitmask_tensor.compressed, device="meta")
-            module.weight = torch.nn.Parameter(empty_weight, requires_grad=False)
-
         # Normal flow: return compression dict
         return bitmask_tensor.dict(
             name_prefix=name,

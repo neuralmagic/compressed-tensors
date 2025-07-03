@@ -70,7 +70,6 @@ class BaseSparseCompressor(BaseCompressor):
         model_state: Dict[str, Tensor],
         compression_targets: Optional[Set[str]] = None,
         show_progress: bool = False,
-        module: Optional[Module] = None,
     ) -> Dict[str, Tensor]:
         """
         Compresses a dense state dict using bitmask compression
@@ -96,9 +95,7 @@ class BaseSparseCompressor(BaseCompressor):
             if prefix.endswith(".weight"):
                 prefix = prefix[: -(len(".weight"))]
 
-            compression_data = self.compress_weight(
-                prefix, value, module=module
-            )
+            compression_data = self.compress_weight(prefix, value)
 
             for key in compression_data.keys():
                 if key in compressed_dict:

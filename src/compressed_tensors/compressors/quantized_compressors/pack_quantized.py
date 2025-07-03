@@ -241,9 +241,7 @@ def pack_to_int32(
 
     # Use int32 here
     reshaped = value.view(rows, num_groups, pack_factor).to(torch.int32)
-
     bit_shifts = torch.arange(pack_factor, device=device, dtype=torch.int32) * num_bits
-
     packed = (reshaped << bit_shifts).sum(dim=2, dtype=torch.int32)
 
     if packed_dim == 0:
