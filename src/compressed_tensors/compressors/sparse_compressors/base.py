@@ -25,7 +25,6 @@ from safetensors import safe_open
 from torch import Tensor
 from tqdm import tqdm
 
-from torch.nn import Module
 
 
 __all__ = ["BaseSparseCompressor"]
@@ -96,7 +95,6 @@ class BaseSparseCompressor(BaseCompressor):
                 prefix = prefix[: -(len(".weight"))]
 
             compression_data = self.compress_weight(prefix, value)
-
             for key in compression_data.keys():
                 if key in compressed_dict:
                     _LOGGER.warn(

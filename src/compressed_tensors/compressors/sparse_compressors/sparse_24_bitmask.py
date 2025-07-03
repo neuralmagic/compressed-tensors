@@ -56,7 +56,6 @@ class Sparse24BitMaskCompressor(BaseSparseCompressor):
         bitmask_tensor = Sparse24BitMaskTensor.from_dense(
             value, self.config.sparsity_structure
         )
-        # Normal flow: return compression dict
         return bitmask_tensor.dict(
             name_prefix=name,
             device="meta" if value.device.type == "meta" else "cpu",

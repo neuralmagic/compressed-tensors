@@ -46,7 +46,7 @@ class BitmaskCompressor(BaseSparseCompressor):
         """
         return ("shape", "compressed", "bitmask", "row_offsets")
 
-    def compress_weight(self, name, value, **kwargs):
+    def compress_weight(self, name, value):
         bitmask_tensor = BitmaskTensor.from_dense(value)
         bitmask_dict = bitmask_tensor.dict(name_prefix=name, device="cpu")
         return bitmask_dict
