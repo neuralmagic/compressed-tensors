@@ -197,7 +197,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             "Observers constructor excluding quantization range or symmetry"
         ),
     )
-    # For FP4 and FP8, OCP MX standard
+    # Whether the quantization is for MXFP4 or MXFP8.
+    # Ref: https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf
     is_mx: Optional[bool] = False
 
     @field_validator("type", mode="before")

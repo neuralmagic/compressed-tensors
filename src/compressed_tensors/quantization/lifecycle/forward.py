@@ -19,8 +19,8 @@ from typing import Optional
 import torch
 from compressed_tensors.quantization.quant_args import (
     FP4_E2M1_DATA,
-    FP8_E8M0_DATA,
     FP8_E4M3_DATA,
+    FP8_E8M0_DATA,
     DynamicType,
     QuantizationArgs,
     QuantizationStrategy,
@@ -38,6 +38,7 @@ from compressed_tensors.quantization.utils import (
 )
 from compressed_tensors.utils import safe_permute
 from torch.nn import Module
+
 
 __all__ = [
     "quantize",
@@ -416,7 +417,7 @@ def _quantize(
         scale = scale.to(global_scale.dtype) / global_scale
 
     if args.is_mx:
-        # https://github.com/pytorch/ao/blob/994a4ba6c869854fcaa6ca7e118fcbd75e6c28cc/torchao/prototype/mx_formats/mx_tensor.py#L94
+        # Reference: https://github.com/pytorch/ao/blob/main/torchao/prototype/mx_formats/mx_tensor.py
         data_hp = x
         exponent = scale
         descale_fp = torch.where(
@@ -456,17 +457,12 @@ def _quantize(
 
 
 def get_fp_scale(scale_e8m0):
-    # https://github.com/pytorch/ao/blob/994a4ba6c869854fcaa6ca7e118fcbd75e6c28cc/torchao/prototype/mx_formats/mx_tensor.py#L337
+    # Converts a scale tensor in E8M0 format to a floating point scale.
+    # Reference: https://github.com/pytorch/ao/blob/main/torchao/prototype/mx_formats/mx_tensor.py
 
     scale_e8m0 = scale_e8m0.view(torch.uint8)
     s_offset = scale_e8m0.to(torch.int16) - FP8_E8M0_DATA.bias
-    # TODO(later): it would be nice if there was a way to do the 2^x operation
-    # in PyTorch without creating a tensor of twos
-    two = torch.full(s_offset.size(), 2.0, device=scale_e8m0.device)
-    # pow(two, s_offset) can be out of range of floating point formats.
-    # TODO(later): handle this for float16 if we decide to support float16
-    # scales.
-    s_fp = torch.pow(two, s_offset)
+    s_fp = torch.pow(2.0, s_offset.to(torch.float))
 
     # If a block exponent was 255, set values of that block to NaN
     s_fp = torch.where(scale_e8m0 != FP8_E8M0_DATA.nan, s_fp, float("nan"))
@@ -490,7 +486,6 @@ def _dequantize(
         scale = scale.to(global_scale.dtype) / global_scale
 
     if args.is_mx:
-        # https://github.com/pytorch/ao/blob/994a4ba6c869854fcaa6ca7e118fcbd75e6c28cc/torchao/prototype/mx_formats/mx_tensor.py#L94
         scale = get_fp_scale(scale)
 
     dequant_value = x_q.to(scale.dtype)

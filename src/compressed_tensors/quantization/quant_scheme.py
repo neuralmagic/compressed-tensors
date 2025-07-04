@@ -229,7 +229,7 @@ INT8_W4A8 = dict(
     ),
 )
 
-# FP8 weights and FP8 activations quantization
+# MXFP8 weights and MXFP8 activations quantization
 MXFP8 = dict(
     weights=QuantizationArgs(
         num_bits=8,
