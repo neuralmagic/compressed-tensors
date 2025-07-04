@@ -485,7 +485,7 @@ def _dequantize(
     if global_scale is not None:
         scale = scale.to(global_scale.dtype) / global_scale
 
-    if args.is_mx:
+    if args and args.is_mx:
         scale = get_fp_scale(scale)
 
     dequant_value = x_q.to(scale.dtype)
