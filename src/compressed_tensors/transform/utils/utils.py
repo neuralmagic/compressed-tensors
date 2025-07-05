@@ -28,7 +28,7 @@ def get_matrix_size(module: torch.nn.Module, location: TransformLocation) -> int
     :return: size of matrix
     """
     if isinstance(module, torch.nn.Linear):
-        if location in ("input", TransformLocation.WEIGHT_INPUT):
+        if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
             return module.in_features
         else:
             return module.out_features
