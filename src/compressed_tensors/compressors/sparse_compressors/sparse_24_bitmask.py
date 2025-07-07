@@ -176,7 +176,7 @@ def sparse24_bitmask_compress(
         SparsityStructure(sparsity_structure) == SparsityStructure.TWO_FOUR
     ), "Only 2:4 sparsity is supported"
 
-    if tensor.device.type == "meta":
+    if tensor.is_meta:
         num_rows, num_cols = tensor.shape
         compressed_values = torch.empty((num_rows, num_cols // 2), dtype=tensor.dtype, device="meta")
         packed_cols = (num_cols + 7) // 8
