@@ -62,7 +62,6 @@ runs:
 
           echo "::group::running tests"
           echo "PYTEST_ADDOPTS set to: ${PYTEST_ADDOPTS}"
-          echo "pwd: $(pwd)"
 
           SUCCESS=0
           pytest tests --junitxml=test-results/report.xml -o junit_suite_name="${{ inputs.suitename }}" || SUCCESS=$?
@@ -71,11 +70,10 @@ runs:
 
           if [[ "${ENABLE_COVERAGE}" == "true" ]]; then
             echo "::group::consolidating coverage reports"
-            echo "cover files: $(find .. -iname 'cover*')"
             mkdir -p coverage-results
-            mv tests/.coverage coverage-results/ || echo ".coverage file not found"
-            mv tests/coverage-html coverage-results/ || echo "coverage-html folder not found"
-            mv tests/coverage.json coverage-results/ || echo "coverage.json file not found"
+            mv .coverage coverage-results/ || echo ".coverage file not found"
+            mv coverage-html coverage-results/ || echo "coverage-html folder not found"
+            mv coverage.json coverage-results/ || echo "coverage.json file not found"
             echo "::endgroup::"
           fi
           
