@@ -61,6 +61,7 @@ runs:
           fi
 
           echo "::group::running tests"
+          echo "PYTEST_ADDOPTS set to: ${PYTEST_ADDOPTS}"
           SUCCESS=0
           pytest tests --junitxml=test-results/report.xml -o junit_suite_name="${{ inputs.suitename }}" || SUCCESS=$?
           echo "status=${SUCCESS}" >> "$GITHUB_OUTPUT"
