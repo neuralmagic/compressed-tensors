@@ -21,6 +21,7 @@ from typing import OrderedDict as OrderedDictType
 from typing import Set, Union
 
 import torch
+from compressed_tensors import InternalModule
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.lifecycle.compressed import (
     compress_quantized_weights,
@@ -322,6 +323,9 @@ def find_name_or_class_matches(
         2. matches on regex patterns
         3. matches on module names
     """
+    if isinstance(module, InternalModule):
+        return []
+
     targets = sorted(targets, key=lambda x: ("re:" in x, x))
     if isinstance(targets, Iterable):
         matches = _find_matches(name, targets) + _find_matches(
