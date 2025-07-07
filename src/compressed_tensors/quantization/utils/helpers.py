@@ -36,14 +36,11 @@ __all__ = [
     "is_module_quantized",
     "is_model_quantized",
     "module_type",
-    "calculate_compression_ratio",
     "get_torch_bit_depth",
     "can_quantize",
     "parse_out_kv_cache_args",
     "KV_CACHE_TARGETS",
     "is_kv_cache_quant_scheme",
-    "iter_named_leaf_modules",
-    "iter_named_quantizable_modules",
     "compute_dynamic_scales_and_zp",
     "calculate_range",
     "calculate_qparams",
@@ -276,12 +273,7 @@ def is_model_quantized(model: Module) -> bool:
     :param model: pytorch model
     :return: True if model is quantized, False otherwise
     """
-
-    for _, submodule in iter_named_leaf_modules(model):
-        if is_module_quantized(submodule):
-            return True
-
-    return False
+    return any(is_module_quantized(submodule) for submodule in model.modules())
 
 
 def module_type(module: Module) -> str:
@@ -292,74 +284,6 @@ def module_type(module: Module) -> str:
     :return: module type as a string
     """
     return type(module).__name__
-
-
-def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None, None]:
-    """
-    Yields modules that do not have any submodules except observers. The observers
-    themselves are not yielded
-    :param model: model to get leaf modules of
-    :returns: generator tuple of (name, leaf_submodule)
-    """
-    for name, submodule in model.named_modules():
-        children = list(submodule.children())
-        # TODO: verify if an observer would ever be attached in this case/remove check
-        if len(children) == 0 and "observer" in name:
-            yield name, submodule
-        else:
-            if len(children) > 0:
-                named_children, children = zip(*list(submodule.named_children()))
-            has_non_observer_children = False
-            for i in range(len(children)):
-                child_name = named_children[i]
-
-                if "observer" not in child_name:
-                    has_non_observer_children = True
-
-            if not has_non_observer_children:
-                yield name, submodule
-
-
-def iter_named_quantizable_modules(
-    model: Module,
-    include_children: bool = True,
-    include_attn: bool = False,
-    include_mlp: bool = False,
-) -> Generator[Tuple[str, Module], None, None]:
-    """
-    Yield name and submodule of
-    - leaf modules, set by include_children
-    - attention modyles, set by include_attn
-
-    :param model: model to get leaf modules of
-    :param include_children: flag to get the leaf modules
-    :param inlcude_attn: flag to get the attention modules
-    :returns: generator tuple of (name, submodule)
-    """
-    for name, submodule in model.named_modules():
-        # TODO: verify if an observer would ever be attached in this case/remove check
-        if include_children:
-            children = list(submodule.children())
-            if len(children) == 0 and "observer" not in name:
-                yield name, submodule
-            else:
-                if len(children) > 0:
-                    named_children, children = zip(*list(submodule.named_children()))
-                has_non_observer_children = False
-                for i in range(len(children)):
-                    child_name = named_children[i]
-
-                    if "observer" not in child_name:
-                        has_non_observer_children = True
-
-                if not has_non_observer_children:
-                    yield name, submodule
-        if include_attn:
-            if name.endswith("self_attn"):
-                yield name, submodule
-        if include_mlp:
-            if name.endswith("mlp"):
-                yield name, submodule
 
 
 def get_torch_bit_depth(value: torch.Tensor) -> int:
@@ -395,34 +319,6 @@ def can_quantize(value: torch.Tensor, quant_args: "QuantizationArgs") -> bool:  
         )
 
     return bit_depth > quant_args.num_bits
-
-
-def calculate_compression_ratio(model: Module) -> float:
-    """
-    Calculates the quantization compression ratio of a pytorch model, based on the
-    number of bits needed to represent the total weights in compressed form. Does not
-    take into account activation quantizatons.
-
-    :param model: pytorch module to calculate compression ratio for
-    :return: compression ratio of the whole model
-    """
-    total_compressed = 0.0
-    total_uncompressed = 0.0
-    for name, submodule in tqdm(
-        iter_named_leaf_modules(model),
-        desc="Calculating quantization compression ratio",
-    ):
-        for parameter in model.parameters():
-            uncompressed_bits = get_torch_bit_depth(parameter)
-            compressed_bits = uncompressed_bits
-            if is_module_quantized(submodule) and submodule.quantization_scheme.weights:
-                compressed_bits = submodule.quantization_scheme.weights.num_bits
-
-            num_weights = parameter.numel()
-            total_compressed += compressed_bits * num_weights
-            total_uncompressed += uncompressed_bits * num_weights
-
-    return total_uncompressed / total_compressed
 
 
 def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
