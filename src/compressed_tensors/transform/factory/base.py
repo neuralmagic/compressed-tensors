@@ -26,6 +26,7 @@ from compressed_tensors.transform import (
 )
 from compressed_tensors.utils import (
     align_module_device,
+    delete_offload_module,
     has_offloaded_params,
     patch_attr,
     register_offload_module,
@@ -99,10 +100,10 @@ class TransformFactory(RegistryMixin, ABC):
         # create transform as submodule
         transform_name = f"{self.name}_{args.location.value}"
         transform = self.create_transform(module, args)
+        register_offload_module(module, transform_name, transform)
 
         # register input transformation hook
         if args.location == TransformLocation.INPUT:
-            register_offload_module(module, transform_name, transform)
 
             def input_hook(_, args):
                 input = args[0]
@@ -118,6 +119,7 @@ class TransformFactory(RegistryMixin, ABC):
             assert isinstance(module, torch.nn.Linear)
             assert module.bias is None
 
+            # fuse transform into weight
             with torch.no_grad(), align_module_device(module):
                 update_offload_parameter(module, "weight", transform(module.weight))
 
@@ -128,9 +130,11 @@ class TransformFactory(RegistryMixin, ABC):
                     raise ValueError("Offloaded training is not supported")
                 P.register_parametrization(module, "weight", transform)
 
+            # transform is no longer needed (unfusing is not supported)
+            delete_offload_module(module, transform_name)
+
         # register output transformation hook
         elif args.location == TransformLocation.OUTPUT:
-            register_offload_module(module, transform_name, transform)
 
             def output_hook(_, _input, output):
                 return transform(output)
