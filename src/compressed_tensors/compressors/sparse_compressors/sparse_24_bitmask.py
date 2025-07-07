@@ -92,7 +92,7 @@ class Sparse24BitMaskTensor:
         :return: instantiated compressed tensor
         """
         shape = list(tensor.shape)
-        if tensor.device.type == "meta":
+        if tensor.is_meta:
             compressed, bitmask = sparse24_bitmask_compress(
                 tensor, sparsity_structure=sparsity_structure
             )
