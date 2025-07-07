@@ -58,7 +58,7 @@ class Sparse24BitMaskCompressor(BaseSparseCompressor):
         )
         return bitmask_tensor.dict(
             name_prefix=name,
-            device="meta" if value.device.type == "meta" else "cpu",
+            device="meta" if value.is_meta else "cpu",
         )
 
     def decompress_weight(self, weight_data):
