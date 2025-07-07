@@ -20,10 +20,12 @@ from compressed_tensors.transform import TransformArgs
 class TransformableModel(torch.nn.Module):
     def __init__(self, *sizes):
         super().__init__()
-        self.fcs = torch.nn.ModuleList([])
-        self.fcs.append(torch.nn.Linear(sizes[0], sizes[1], bias=False))
-        for index in range(1, len(sizes) - 1):
-            self.fcs.append(torch.nn.Linear(sizes[index], sizes[index + 1], bias=False))
+        self.fcs = torch.nn.ModuleList(
+            [
+                torch.nn.Linear(sizes[index], sizes[index + 1], bias=False)
+                for index in range(0, len(sizes) - 1)
+            ]
+        )
 
     def forward(self, x):
         for layer in self.fcs:
