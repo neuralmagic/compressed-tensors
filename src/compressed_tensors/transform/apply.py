@@ -20,6 +20,13 @@ __all__ = ["apply_transform_config"]
 
 
 def apply_transform_config(model: torch.nn.Module, config: TransformConfig):
+    """
+    Apply a transform config to a model. Weight transforms are fused into weights, while
+    activation transforms are attached as submodules and trigger via pytorch hooks
+
+    :param model: model to apply config to
+    :param config: transform config to apply
+    """
     for name, scheme in config.config_groups.items():
         factory = TransformFactory.from_scheme(scheme, name=name)
         factory.apply_to_model(model)
