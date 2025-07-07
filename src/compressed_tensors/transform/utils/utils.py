@@ -34,7 +34,7 @@ def get_matrix_size(module: torch.nn.Module, location: TransformLocation) -> int
         else:
             return module.out_features
     elif isinstance(module, torch.nn.Embedding):
-        if location in ("input", TransformLocation.WEIGHT_INPUT):
+        if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
             return module.num_embeddings
         else:
             return module.embedding_dim
@@ -99,6 +99,7 @@ def apply_transform_weight(
 
     elif location == TransformLocation.WEIGHT_INPUT:
         if module_type is torch.nn.Linear:
+            # equivalent to (transform_weight @ value.T).T
             return value @ transform_weight.T
         else:
             raise NotImplementedError(
@@ -108,6 +109,7 @@ def apply_transform_weight(
 
     elif location == TransformLocation.WEIGHT_OUTPUT:
         if module_type is torch.nn.Linear:
+            # equivalent to (value.T @ transform_weight).T
             return transform_weight.T @ value
         elif module_type is torch.nn.Embedding:
             return value @ transform_weight

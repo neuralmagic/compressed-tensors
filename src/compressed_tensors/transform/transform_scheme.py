@@ -40,3 +40,5 @@ class TransformScheme(BaseModel):
     apply: List[TransformArgs] = Field(default_factory=list)
     randomize: bool = Field(default=False)
     requires_grad: bool = Field(default=False)
+    # TODO infer head_dim, better data model
+    head_dim: int = -1

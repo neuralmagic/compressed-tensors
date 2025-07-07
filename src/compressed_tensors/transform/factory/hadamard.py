@@ -25,7 +25,7 @@ from compressed_tensors.transform.utils.utils import (
 from compressed_tensors.utils import get_execution_device, get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
 from torch import Tensor, device, dtype
-from torch.nn import Linear, Module, Parameter
+from torch.nn import Module, Parameter
 
 
 @TransformFactory.register("hadamard")
@@ -69,7 +69,16 @@ class HadamardFactory(TransformFactory):
         construct_device: device,
     ) -> Parameter:
         # construct on execution device, cache on offload device
-        data = deterministic_hadamard_matrix(size, dtype, construct_device)
+        if self.scheme.head_dim < 0 or self.scheme.head_dim == size:
+            data = deterministic_hadamard_matrix(size, dtype, construct_device)
+        else:
+            assert size % self.scheme.head_dim == 0
+            data = torch.kron(
+                torch.eye(size // self.scheme.head_dim, dtype=dtype),
+                deterministic_hadamard_matrix(
+                    self.scheme.head_dim, dtype, construct_device
+                ),
+            )
         data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
@@ -101,6 +110,11 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
+        # NOTE: SpinQuant code up-converts to float64 for application
+        # of transform, then down-converts
         return apply_transform_weight(
-            weight, value, self.args.location, self.module_type
-        )
+            weight.to(torch.float64),
+            value.to(torch.float64),
+            self.args.location,
+            self.module_type,
+        ).to(weight.dtype)
