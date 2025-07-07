@@ -55,7 +55,8 @@ class HadamardFactory(TransformFactory):
         device = get_offloaded_device(module)
         exec_device = get_execution_device(module)
 
-        weight = self.weights.get(size, dtype, device, construct_device=exec_device)
+        factory_kwargs = {"construct_device": exec_device}
+        weight = self.weights.get(size, dtype, device, factory_kwargs=factory_kwargs)
         return HadamardTransform(weight, args)
 
     def _create_weight(
