@@ -55,7 +55,7 @@ runs:
             pip install coverage pytest-cov
 
             # Adding Code coverage to the tests
-            nmre-generate-coverage-flags --package "compressed-tensors" --output-file ".coverage_flags.sh"
+            nmre-generate-coverage-flags --package "compressed_tensors" --output-file ".coverage_flags.sh"
             source .coverage_flags.sh
             echo "::endgroup::"
           fi
