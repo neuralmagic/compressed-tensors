@@ -14,6 +14,7 @@
 
 from typing import Optional, Union
 
+import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
 from compressed_tensors.transform.utils.hadamard import deterministic_hadamard_matrix
