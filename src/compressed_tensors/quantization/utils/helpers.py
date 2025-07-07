@@ -26,6 +26,7 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationType,
 )
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.utils import deprecated
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
 from tqdm import tqdm
@@ -41,6 +42,8 @@ __all__ = [
     "parse_out_kv_cache_args",
     "KV_CACHE_TARGETS",
     "is_kv_cache_quant_scheme",
+    "iter_named_leaf_modules",
+    "iter_named_quantizable_modules",
     "compute_dynamic_scales_and_zp",
     "calculate_range",
     "calculate_qparams",
@@ -284,6 +287,83 @@ def module_type(module: Module) -> str:
     :return: module type as a string
     """
     return type(module).__name__
+
+
+@deprecated(
+    message="This function will be removed in a future release. "
+    "Please use `model.named_modules()` and filter by "
+    "compressed_tensors.InternalModule if neceessary"
+)
+def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None, None]:
+    """
+    Yields modules that do not have any submodules except observers. The observers
+    themselves are not yielded
+    :param model: model to get leaf modules of
+    :returns: generator tuple of (name, leaf_submodule)
+    """
+    for name, submodule in model.named_modules():
+        children = list(submodule.children())
+        # TODO: verify if an observer would ever be attached in this case/remove check
+        if len(children) == 0 and "observer" in name:
+            yield name, submodule
+        else:
+            if len(children) > 0:
+                named_children, children = zip(*list(submodule.named_children()))
+            has_non_observer_children = False
+            for i in range(len(children)):
+                child_name = named_children[i]
+
+                if "observer" not in child_name:
+                    has_non_observer_children = True
+
+            if not has_non_observer_children:
+                yield name, submodule
+
+
+@deprecated(
+    message="This function will be removed in a future release. "
+    "Please use `model.named_modules()` and filter by "
+    "compressed_tensors.InternalModule if neceessary"
+)
+def iter_named_quantizable_modules(
+    model: Module,
+    include_children: bool = True,
+    include_attn: bool = False,
+    include_mlp: bool = False,
+) -> Generator[Tuple[str, Module], None, None]:
+    """
+    Yield name and submodule of
+    - leaf modules, set by include_children
+    - attention modyles, set by include_attn
+    :param model: model to get leaf modules of
+    :param include_children: flag to get the leaf modules
+    :param inlcude_attn: flag to get the attention modules
+    :returns: generator tuple of (name, submodule)
+    """
+    for name, submodule in model.named_modules():
+        # TODO: verify if an observer would ever be attached in this case/remove check
+        if include_children:
+            children = list(submodule.children())
+            if len(children) == 0 and "observer" not in name:
+                yield name, submodule
+            else:
+                if len(children) > 0:
+                    named_children, children = zip(*list(submodule.named_children()))
+                has_non_observer_children = False
+                for i in range(len(children)):
+                    child_name = named_children[i]
+
+                    if "observer" not in child_name:
+                        has_non_observer_children = True
+
+                if not has_non_observer_children:
+                    yield name, submodule
+        if include_attn:
+            if name.endswith("self_attn"):
+                yield name, submodule
+        if include_mlp:
+            if name.endswith("mlp"):
+                yield name, submodule
 
 
 def get_torch_bit_depth(value: torch.Tensor) -> int:
