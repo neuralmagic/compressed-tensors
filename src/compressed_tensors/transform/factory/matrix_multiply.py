@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Optional, Type
 
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
@@ -59,7 +59,7 @@ class RandomMatrixFactory(TransformFactory):
         if args.inverse:
             weight = self.inverses[weight]
 
-        return RandomMatrixTransform(weight, args)
+        return RandomMatrixTransform(weight, args, type(module))
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         data = torch.rand(
@@ -73,17 +73,22 @@ class RandomMatrixFactory(TransformFactory):
 
 
 class RandomMatrixTransform(TransformBase):
-    def __init__(self, weight: Tensor, args: TransformArgs):
+    def __init__(self, weight: Tensor, args: TransformArgs, module_type: Type):
         super().__init__()
         self.weight = weight  # is an inverse if args.inverse
         self.args = args
+        self.module_type = module_type
 
     def forward(self, value: Tensor) -> Parameter:
-        return apply_transform_weight(self.weight, value, self.args.location)
+        return apply_transform_weight(
+            self.weight, value, self.args.location, self.module_type
+        )
 
     def right_inverse(self, value: Tensor) -> Tensor:
         inverse = high_precision_invert(self.weight)
-        return apply_transform_weight(inverse, value, self.args.location)
+        return apply_transform_weight(
+            inverse, value, self.args.location, self.module_type
+        )
 
 
 def high_precision_invert(weight: Tensor) -> Tensor:

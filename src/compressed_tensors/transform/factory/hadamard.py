@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union
+from typing import Optional, Union, Type
 
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
@@ -51,7 +51,6 @@ class HadamardFactory(TransformFactory):
         :param module: parent module that transform will be applied to
         :param args: defines how the transform will be applied to the module
         """
-        is_linear = isinstance(module, Linear)
         assert hasattr(module, "weight")
         size = get_matrix_size(module, args.location)
         dtype = module.weight.dtype
@@ -60,7 +59,7 @@ class HadamardFactory(TransformFactory):
 
         weight = self.weights.get(size, dtype, device, construct_device=exec_device)
         perm = self.perms[weight] if self.scheme.randomize else None
-        return HadamardTransform(weight, perm, args, is_linear)
+        return HadamardTransform(weight, perm, args, type(module))
 
     def _create_weight(
         self,
@@ -85,13 +84,13 @@ class HadamardTransform(TransformBase):
         weight: Parameter,
         perm: Union[Parameter, None],
         args: TransformArgs,
-        is_linear: bool,
+        module_type: Type,
     ):
         super().__init__()
         self.weight = weight
         self.perm = perm
         self.args = args
-        self.is_linear = is_linear
+        self.module_type = module_type
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -102,4 +101,6 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
-        return apply_transform_weight(weight, value, self.args.location, self.is_linear)
+        return apply_transform_weight(
+            weight, value, self.args.location, self.module_type
+        )
