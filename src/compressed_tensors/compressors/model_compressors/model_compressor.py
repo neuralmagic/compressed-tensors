@@ -384,6 +384,8 @@ class ModelCompressor:
         this method is more memory-efficient than `self.compress`
 
         :param model: model containing parameters to compress
+        :param is_meta: whether the model is on the meta device, in which case
+            we do not need move parameters to CPU
         """
         module_to_scheme = map_module_to_scheme(model)
         sparse_compression_targets: Set[str] = expand_target_names(
@@ -488,9 +490,7 @@ class ModelCompressor:
                 # replace with decompressed parameters
                 for name, value in state_dict.items():
                     name = name.removeprefix(f"{prefix}.")
-                    # skipping save if we're just registering the model on meta device
-                    if exec_device != "meta":
-                        value = value.to(exec_device)
+                    value = value.to(exec_device)
                     param = torch.nn.Parameter(value, requires_grad=False)
                     register_offload_parameter(module, name, param, offload_device)
 
