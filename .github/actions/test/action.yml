@@ -71,7 +71,7 @@ runs:
 
           if [[ "${ENABLE_COVERAGE}" == "true" ]]; then
             echo "::group::consolidating coverage reports"
-            echo "$(find . -name '*cover*'\;)"
+            echo "cover files: $(find .. -iname 'cover*')"
             mkdir -p coverage-results
             mv tests/.coverage coverage-results/ || echo ".coverage file not found"
             mv tests/coverage-html coverage-results/ || echo "coverage-html folder not found"
