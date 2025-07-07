@@ -378,14 +378,12 @@ class ModelCompressor:
 
     # ----- model memory compression/decompression pathways ----- #
 
-    def compress_model(self, model: Module, is_meta: bool = False):
+    def compress_model(self, model: Module):
         """
         Compress a model in memory. Because the model structure is modified in place,
         this method is more memory-efficient than `self.compress`
 
         :param model: model containing parameters to compress
-        :param is_meta: whether the model is on the meta device, in which case
-            we do not need move parameters to CPU
         """
         module_to_scheme = map_module_to_scheme(model)
         sparse_compression_targets: Set[str] = expand_target_names(
@@ -395,9 +393,13 @@ class ModelCompressor:
         )
 
         for prefix, module in tqdm(model.named_modules(), desc="Compressing model"):
+
             if prefix in module_to_scheme or prefix in sparse_compression_targets:
+                module_device = get_execution_device(module)
+                is_meta = (module_device == torch.device("meta"))
+
                 exec_device = "meta" if is_meta else "cpu"
-                onloading_device = "meta" if is_meta else get_execution_device(module)
+                onloading_device = "meta" if is_meta else module_device
 
                 # in the future, support compression on same device
                 with align_module_device(module, execution_device=exec_device):
