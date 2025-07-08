@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 import torch
 from compressed_tensors.transform import TransformLocation
 
@@ -19,7 +21,11 @@ from compressed_tensors.transform import TransformLocation
 __all__ = ["get_matrix_size", "apply_transform_weight"]
 
 
-def get_matrix_size(module: torch.nn.Module, location: TransformLocation) -> int:
+def get_matrix_size(
+    module: torch.nn.Module,
+    location: TransformLocation,
+    num_heads: Optional[int] = None,
+) -> int:
     """
     Determine the size of a matrix given its location on the module
 
@@ -28,17 +34,36 @@ def get_matrix_size(module: torch.nn.Module, location: TransformLocation) -> int
     :return: size of matrix
     """
     assert isinstance(module, torch.nn.Linear)
+
     if location in ("input", TransformLocation.WEIGHT_INPUT):
-        return module.in_features
+        size = module.in_features
     else:
-        return module.out_features
+        size = module.out_features
+
+    if num_heads is not None:
+        assert size % num_heads == 0
+        size = size // num_heads
+
+    return size
 
 
 def apply_transform_weight(
     weight: torch.Tensor,
     value: torch.Tensor,
     location: TransformLocation,
+    num_heads: Optional[int] = None,
 ) -> torch.Tensor:
+    if num_heads is not None:
+        weight = weight.repeat((num_heads, num_heads))
+
+    return apply_transform_weight_linear(weight, value, location)
+
+
+def apply_transform_weight_linear(
+    weight: torch.Tensor,
+    value: torch.Tensor,
+    location: TransformLocation,
+):
     """
     Using the transform location, determine how to apply the transform weight to the
     given value. For more info on input and output transforms, see `TransformLocation`
@@ -74,7 +99,6 @@ def apply_transform_weight(
     :param location: determines how weight should be applied
     :return: value after transform weight has been applied
     """
-
     if location == TransformLocation.INPUT:
         return value @ weight
 
