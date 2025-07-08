@@ -59,9 +59,7 @@ class RandomMatrixFactory(TransformFactory):
         if args.inverse:
             weight = self.inverses[weight]
 
-        transform = RandomMatrixTransform(weight, args)
-        self.transforms.append(transform)
-        return transform
+        return RandomMatrixTransform(weight, args)
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         # TODO: verify that weight is invertible (has non-zero determinant)
@@ -72,6 +70,7 @@ class RandomMatrixFactory(TransformFactory):
 
     def _create_inverse(self, weight: Parameter) -> Parameter:
         data = high_precision_invert(weight.data)
+        data = data.contiguous()  # ensure proper serialization
         return Parameter(data, requires_grad=False)
 
 

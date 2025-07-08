@@ -103,9 +103,17 @@ class TransformFactory(RegistryMixin, ABC):
         :param module: target module to apply transforms to
         :param args: defines how the transform will be applied to the target module
         """
+        if has_offloaded_params(module):
+            if module._hf_hook.place_submodules:
+                raise NotImplementedError(
+                    "Applying transforms to offloaded submodules with "
+                    "`place_submodules=True` is not supported"
+                )
+
         # create transform as submodule
         transform_name = f"{self.name}_{args.location.value}"
         transform = self.create_transform(module, args)
+        self.transforms.append(transform)
         register_offload_module(module, transform_name, transform)
 
         # register input transformation hook
@@ -136,8 +144,9 @@ class TransformFactory(RegistryMixin, ABC):
                     raise ValueError("Offloaded training is not supported")
                 P.register_parametrization(module, "weight", transform)
 
-            # transform is no longer needed (unfusing is not supported)
-            delete_offload_module(module, transform_name)
+            else:
+                # transform is no longer needed (unfusing is not supported)
+                delete_offload_module(module, transform_name)
 
         # register output transformation hook
         elif args.location == TransformLocation.OUTPUT:
@@ -165,13 +174,20 @@ class TransformFactory(RegistryMixin, ABC):
         ptr_to_keys: dict[int, List[Tuple[TransformBase, str]]] = defaultdict(list)
         for transform in self.transforms:
             for name, param in transform.named_parameters(recurse=False):
+                # NOTE: previously asserted that parent._hf_hook.place_submodules=False
+                if has_offloaded_params(transform):
+                    param = transform._hf_hook.weights_map[name]
                 ptr_to_keys[param.data_ptr()].append((transform, name))
 
         # populate `_dynamic_tied_weights_keys` if there is more than one key
+        # and ensure that they share tensors
         for shared_keys in ptr_to_keys.values():
             if len(shared_keys) > 1:
+                tensor = getattr(shared_keys[0][0], shared_keys[0][1])
+
                 for transform, name in shared_keys:
                     transform._dynamic_tied_weights_keys.append(name)
+                    setattr(transform, name, tensor)
 
 
 class TransformBase(Module, ABC):

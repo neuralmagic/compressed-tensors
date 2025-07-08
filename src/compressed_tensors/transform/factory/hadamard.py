@@ -61,9 +61,7 @@ class HadamardFactory(TransformFactory):
         weight = self.weights.get(size, dtype, device, factory_kwargs=factory_kwargs)
         perm = self.perms[weight] if self.scheme.randomize else None
 
-        transform = HadamardTransform(weight, perm, args)
-        self.transforms.append(transform)
-        return transform
+        return HadamardTransform(weight, perm, args)
 
     def _create_weight(
         self,
