@@ -33,8 +33,8 @@ class TransformLocation(str, Enum):
     | `WEIGHT_INPUT`  | offline     | weight        | `prev.WEIGHT_OUTPUT`, `prev.OUTPUT`, `this.INPUT`        |  # noqa: E501
     | `WEIGHT_OUTPUT` | offline     | weight        | `this.OUTPUT`, `next.INPUT`, `next.WEIGHT_INPUT`         |  # noqa: E501
     | `OUTPUT`        | online      | activations   | `this.WEIGHT_OUTPUT`, `next.INPUT`, `next.WEIGHT_INPUT`  |  # noqa: E501
-    | `K_CACHE`       | online      | key_values    | `q_proj.Q_ATTN`                                          |  # noqa: E501
-    | `Q_ATTN`        | online      | query_values  | `k_proj.K_CACHE`                                         |  # noqa: E501
+    | `ATTN_Q`        | online      | query_states  | `this.ATTN_K`                                            |  # noqa: E501
+    | `ATTN_K`        | online      | key_states    | `this.Q_ATTN`                                            |  # noqa: E501
     | -------------------------------------------------------------------------------------------------------- |  # noqa: E501
     """
 
@@ -42,8 +42,9 @@ class TransformLocation(str, Enum):
     WEIGHT_INPUT = "weight_input"
     WEIGHT_OUTPUT = "weight_output"
     OUTPUT = "output"
-    K_CACHE = "k_cache"
-    Q_ATTN = "q_attn"
+    ATTN_Q = "attn_q"
+    ATTN_K = "attn_k"
+    # ATTN_V = "attn_v"
 
 
 class TransformArgs(BaseModel):
