@@ -22,6 +22,7 @@ from compressed_tensors.transform import (
     apply_transform_config,
 )
 from compressed_tensors.utils import offloaded_dispatch
+from tests.test_transform.conftest import MockAttention
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
@@ -87,3 +88,77 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
 @pytest.mark.parametrize("randomized", (True, False))
 def test_correctness_model_offload(type, randomized, model_apply):
     test_correctness_model(type, randomized, model_apply, offload=True)
+
+
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("randomized", (True, False))
+@pytest.mark.parametrize("head_dim", (16, 32))
+def test_correctness_heads(type, randomized, head_dim, offload=False):
+    hidden_size = 64
+
+    model = torch.nn.ModuleDict(
+        {
+            "v_proj": torch.nn.Linear(hidden_size, hidden_size, bias=False),
+            "o_proj": torch.nn.Linear(hidden_size, hidden_size, bias=False),
+        }
+    )
+
+    input = torch.rand(17, 5, hidden_size)
+    true_output = model.o_proj(model.v_proj(input))
+
+    config = TransformConfig(
+        config_groups={
+            "": TransformScheme(
+                type=type,
+                randomized=randomized,
+                head_dim=head_dim,
+                apply=[
+                    TransformArgs(targets="v_proj", location="weight_output"),
+                    TransformArgs(
+                        targets="o_proj", location="weight_input", inverse=True
+                    ),
+                ],
+            )
+        }
+    )
+    apply_transform_config(model, config)
+
+    output = model.o_proj(model.v_proj(input))
+    assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
+
+
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("randomized", (True, False))
+@pytest.mark.parametrize("head_dim", (8,))  # (8, 16))
+def test_correctness_attention_heads(type, randomized, head_dim, offload=False):
+    hidden_size = 4096
+    num_attention_heads = 32
+
+    attention = MockAttention(
+        hidden_size=hidden_size,
+        num_attention_heads=num_attention_heads,
+        num_key_value_heads=head_dim,
+    )
+
+    input = torch.rand(17, 5, hidden_size)
+    true_output = attention(input)
+
+    config = TransformConfig(
+        config_groups={
+            "": TransformScheme(
+                type=type,
+                randomized=randomized,
+                head_dim=head_dim,
+                apply=[
+                    TransformArgs(targets="v_proj", location="weight_output"),
+                    TransformArgs(
+                        targets="o_proj", location="weight_input", inverse=True
+                    ),
+                ],
+            )
+        }
+    )
+    apply_transform_config(attention, config)
+
+    output = attention(input)
+    assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)

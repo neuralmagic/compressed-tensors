@@ -52,8 +52,7 @@ class HadamardFactory(TransformFactory):
         :param args: defines how the transform will be applied to the module
         """
         assert isinstance(module, Linear)
-        num_heads = self.scheme.num_heads
-        size = get_matrix_size(module, args.location, num_heads)
+        size = get_matrix_size(module, args.location, self.scheme.head_dim)
         dtype = module.weight.dtype
         device = get_offloaded_device(module)
         exec_device = get_execution_device(module)
@@ -61,7 +60,7 @@ class HadamardFactory(TransformFactory):
         factory_kwargs = {"construct_device": exec_device}
         weight = self.weights.get(size, dtype, device, factory_kwargs=factory_kwargs)
         perm = self.perms[weight] if self.scheme.randomize else None
-        return HadamardTransform(weight, perm, args, num_heads)
+        return HadamardTransform(weight, perm, args)
 
     def _create_weight(
         self,
@@ -86,13 +85,11 @@ class HadamardTransform(TransformBase):
         weight: Parameter,
         perm: Optional[Parameter],
         args: TransformArgs,
-        num_heads: Optional[int],
     ):
         super().__init__()
         self.weight = weight
         self.perm = perm
         self.args = args
-        self.num_heads = num_heads
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -103,4 +100,4 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
-        return apply_transform_weight(weight, value, self.args.location, self.num_heads)
+        return apply_transform_weight(weight, value, self.args.location)

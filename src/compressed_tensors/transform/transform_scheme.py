@@ -40,4 +40,4 @@ class TransformScheme(BaseModel):
     apply: List[TransformArgs] = Field(default_factory=list)
     randomize: bool = Field(default=False)
     requires_grad: bool = Field(default=False)
-    num_heads: Optional[int] = Field(default=None)
+    head_dim: Optional[int] = Field(default=None)

@@ -24,38 +24,36 @@ __all__ = ["get_matrix_size", "apply_transform_weight"]
 def get_matrix_size(
     module: torch.nn.Module,
     location: TransformLocation,
-    num_heads: Optional[int] = None,
+    head_dim: Optional[int] = None,
 ) -> int:
     """
     Determine the size of a matrix given its location on the module
 
     :param module: module that matrix will be applied to
     :param location: location on module
+    :TODO head_dim:
     :return: size of matrix
     """
     assert isinstance(module, torch.nn.Linear)
 
-    if location in ("input", TransformLocation.WEIGHT_INPUT):
+    if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
         size = module.in_features
     else:
         size = module.out_features
 
-    if num_heads is not None:
-        assert size % num_heads == 0
-        size = size // num_heads
+    if head_dim is not None:
+        assert size % head_dim == 0
+        return head_dim
 
-    return size
+    else:
+        return size
 
 
 def apply_transform_weight(
     weight: torch.Tensor,
     value: torch.Tensor,
     location: TransformLocation,
-    num_heads: Optional[int] = None,
 ) -> torch.Tensor:
-    if num_heads is not None:
-        weight = weight.repeat((num_heads, num_heads))
-
     return apply_transform_weight_linear(weight, value, location)
 
 
@@ -99,17 +97,31 @@ def apply_transform_weight_linear(
     :param location: determines how weight should be applied
     :return: value after transform weight has been applied
     """
+    value_shape = value.shape
+    weight_size = weight.shape[0]
+    assert weight.shape[0] == weight.shape[1]
+
     if location == TransformLocation.INPUT:
-        return value @ weight
+        num_heads = value_shape[1] // weight_size
+        value = value.reshape(value_shape[0], num_heads, weight_size)
+        ret = value @ weight
 
     elif location == TransformLocation.WEIGHT_INPUT:
-        return value @ weight.T
+        num_heads = value_shape[1] // weight_size
+        value = value.reshape(value_shape[0], num_heads, weight_size)
+        ret = value @ weight.T
 
     elif location == TransformLocation.WEIGHT_OUTPUT:
-        return weight.T @ value
+        num_heads = value_shape[0] // weight_size
+        value = value.reshape(num_heads, weight_size, value_shape[1])
+        ret = weight.T @ value
 
     elif location == TransformLocation.OUTPUT:
-        return value @ weight
+        num_heads = value_shape[1] // weight_size
+        value = value.reshape(value_shape[0], num_heads, weight_size)
+        ret = value @ weight
 
     else:
         raise NotImplementedError(f"{location} has not been implemented yet")
+
+    return ret.reshape(value_shape)
