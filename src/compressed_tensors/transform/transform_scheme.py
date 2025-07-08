@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
+from typing import List, Optional
 
 from compressed_tensors.transform import TransformArgs
 from pydantic import BaseModel, Field
@@ -40,5 +40,5 @@ class TransformScheme(BaseModel):
     apply: List[TransformArgs] = Field(default_factory=list)
     randomize: bool = Field(default=False)
     requires_grad: bool = Field(default=False)
-    # TODO infer head_dim, better data model
-    head_dim: int = -1
+    # TODO infer num_heads
+    num_heads: Optional[int] = None

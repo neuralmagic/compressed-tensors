@@ -69,12 +69,12 @@ class HadamardFactory(TransformFactory):
         construct_device: device,
     ) -> Parameter:
         # construct on execution device, cache on offload device
-        if self.scheme.head_dim < 0 or self.scheme.head_dim == size:
+        if self.scheme.num_heads is None or self.scheme.num_heads <= 1:
             data = deterministic_hadamard_matrix(size, dtype, construct_device)
         else:
-            assert size % self.scheme.head_dim == 0
+            assert size % self.scheme.num_heads == 0
             data = torch.kron(
-                torch.eye(size // self.scheme.head_dim, dtype=dtype),
+                torch.eye(self.scheme.num_heads, dtype=dtype),
                 deterministic_hadamard_matrix(
                     self.scheme.head_dim, dtype, construct_device
                 ),
