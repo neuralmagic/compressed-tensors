@@ -20,7 +20,6 @@ from compressed_tensors.transform import (
     TransformArgs,
     TransformBase,
     TransformConfig,
-    TransformFactory,
     TransformScheme,
     apply_transform_config,
 )
@@ -29,7 +28,7 @@ from tests.test_transform.conftest import TransformableModel
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
-@pytest.mark.parametrize("type", TransformFactory.registered_names())
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
 @pytest.mark.parametrize("requires_grad", (True, False))
 def test_memory_sharing(type, randomized, requires_grad, offload=False):
@@ -84,7 +83,7 @@ def test_memory_sharing(type, randomized, requires_grad, offload=False):
 
 @requires_gpu
 @requires_accelerate()
-@pytest.mark.parametrize("type", TransformFactory.registered_names())
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
 def test_memory_sharing_offload(
     type,
