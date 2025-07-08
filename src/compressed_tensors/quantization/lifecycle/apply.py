@@ -322,9 +322,9 @@ def find_name_or_class_matches(
         2. matches on regex patterns
         3. matches on module names
     """
-    from compressed_tensors import UntargetableModule
+    from compressed_tensors import InternalModule
 
-    if isinstance(module, UntargetableModule):
+    if isinstance(module, InternalModule):
         return []
 
     targets = sorted(targets, key=lambda x: ("re:" in x, x))

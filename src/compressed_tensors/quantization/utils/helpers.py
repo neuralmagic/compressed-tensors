@@ -292,7 +292,7 @@ def module_type(module: Module) -> str:
 @deprecated(
     message="This function will be removed in a future release. "
     "Please use `model.named_modules()` and filter by "
-    "compressed_tensors.UntargetableModule if neceessary"
+    "compressed_tensors.InternalModule if neceessary"
 )
 def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None, None]:
     """
@@ -323,7 +323,7 @@ def iter_named_leaf_modules(model: Module) -> Generator[Tuple[str, Module], None
 @deprecated(
     message="This function will be removed in a future release. "
     "Please use `model.named_modules()` and filter by "
-    "compressed_tensors.UntargetableModule if neceessary"
+    "compressed_tensors.InternalModule if neceessary"
 )
 def iter_named_quantizable_modules(
     model: Module,

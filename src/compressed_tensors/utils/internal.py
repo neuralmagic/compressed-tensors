@@ -15,10 +15,10 @@
 import torch
 
 
-__all__ = ["UntargetableModule"]
+__all__ = ["InternalModule"]
 
 
-class UntargetableModule(torch.nn.Module):
+class InternalModule(torch.nn.Module):
     """
     Abstract base class for modules which are not a part of the the model definition.
     `torch.nn.Module`s which inherit from this class will not be targeted by configs
