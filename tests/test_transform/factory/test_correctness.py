@@ -129,7 +129,7 @@ def test_correctness_heads(type, randomized, head_dim, offload=False):
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
-@pytest.mark.parametrize("head_dim", (8,))  # (8, 16))
+@pytest.mark.parametrize("head_dim", (8, 16))
 def test_correctness_attention_heads(type, randomized, head_dim, offload=False):
     hidden_size = 4096
     num_attention_heads = 32
