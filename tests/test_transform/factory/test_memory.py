@@ -29,15 +29,10 @@ from tests.test_transform.conftest import TransformableModel
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
-def scheme_kwargs():
-    all_types = TransformFactory.registered_names()
-    base = [{"type": type} for type in all_types]
-    randomized = [{"type": type, "randomize": True} for type in all_types]
-    return base + randomized
-
-
-@pytest.mark.parametrize("scheme_kwargs", scheme_kwargs())
-def test_memory_sharing(scheme_kwargs, offload=False):
+@pytest.mark.parametrize("type", TransformFactory.registered_names())
+@pytest.mark.parametrize("randomized", (True, False))
+@pytest.mark.parametrize("requires_grad", (True, False))
+def test_memory_sharing(type, randomized, requires_grad, offload=False):
     # load model (maybe with offloading)
     model = TransformableModel(2, 2, 4, 4, 8, 8)
     if offload:
@@ -47,7 +42,9 @@ def test_memory_sharing(scheme_kwargs, offload=False):
     config = TransformConfig(
         config_groups={
             "": TransformScheme(
-                **scheme_kwargs,
+                type=type,
+                randomzied=randomized,
+                requires_grad=requires_grad,
                 apply=[
                     TransformArgs(targets="Linear", location="input"),
                     TransformArgs(targets="Linear", location="output"),
@@ -87,12 +84,10 @@ def test_memory_sharing(scheme_kwargs, offload=False):
 
 @requires_gpu
 @requires_accelerate()
-@pytest.mark.parametrize("scheme_kwargs", scheme_kwargs())
-def test_memory_sharing_offload(scheme_kwargs):
-    test_memory_sharing(scheme_kwargs, offload=True)
-
-
-@pytest.mark.parametrize("scheme_kwargs", scheme_kwargs())
-def test_memory_sharing_training(scheme_kwargs):
-    scheme_kwargs["requires_grad"] = True
-    test_memory_sharing(scheme_kwargs, offload=False)
+@pytest.mark.parametrize("type", TransformFactory.registered_names())
+@pytest.mark.parametrize("randomized", (True, False))
+def test_memory_sharing_offload(
+    type,
+    randomized,
+):
+    test_memory_sharing(type, randomized, requires_grad=False, offload=True)
