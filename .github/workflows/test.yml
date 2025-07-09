@@ -158,7 +158,7 @@ jobs:
 
             - name: upload coverage report
               uses: actions/upload-artifact@v4
-              if: (success() || failure()) && inputs.code_coverage
+              if: (success() || failure()) && ${{ inputs.code_coverage == 'true' }}
               with:
                   name: coverage-results
                   path: coverage-results/*
