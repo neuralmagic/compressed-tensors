@@ -70,6 +70,8 @@ jobs:
         permissions:
             contents: 'read'
             id-token: 'write'
+        environment:
+            coverage_url: ${{ steps.coverage.outputs.page_url }}
 
         steps:
 
@@ -157,9 +159,13 @@ jobs:
                   retention-days: 5
 
             - name: upload coverage report
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-pages-artifact@v3
               if: (success() || failure()) && ${{ inputs.code_coverage == 'true' }}
               with:
-                  name: coverage-results
-                  path: coverage-results/*
+                  path: coverage-results
                   retention-days: 5
+
+            - name: deploy to Github Pages
+              id: coverage
+              uses: actions/deploy-pages@v4
+              if: ${{ inputs.code_coverage == 'true' }}
