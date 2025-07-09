@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Type
 import torch
 from compressed_tensors.transform import TransformLocation
 
@@ -27,17 +28,28 @@ def get_matrix_size(module: torch.nn.Module, location: TransformLocation) -> int
     :param location: location on module
     :return: size of matrix
     """
-    assert isinstance(module, torch.nn.Linear)
-    if location in ("input", TransformLocation.WEIGHT_INPUT):
-        return module.in_features
-    else:
-        return module.out_features
+    if isinstance(module, torch.nn.Linear):
+        if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
+            return module.in_features
+        else:
+            return module.out_features
+    elif isinstance(module, torch.nn.Embedding):
+        if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
+            return module.num_embeddings
+        else:
+            return module.embedding_dim
+
+    raise ValueError(
+        f"Unsupported module type {type(module)}, "
+        "should be either Linear or Embedding."
+    )
 
 
 def apply_transform_weight(
-    weight: torch.Tensor,
+    transform_weight: torch.Tensor,
     value: torch.Tensor,
     location: TransformLocation,
+    module_type: Type,
 ) -> torch.Tensor:
     """
     Using the transform location, determine how to apply the transform weight to the
@@ -69,23 +81,46 @@ def apply_transform_weight(
                 = y U
                 = yh
 
-    :param weight: transform weight to apply
-    :param value: value to apply weight to
-    :param location: determines how weight should be applied
-    :return: value after transform weight has been applied
+    :param transform_weight: transform weight to apply
+    :param value: value to apply transform_weight to
+    :param location: determines how transform_weight should be applied
+    :param model_type: result of type(module), passed in to determine application of
+        weight transform. This is needed because torch uses convention:
+        - torch.nn.Linear(in_features,out_features) has weight shape
+            (out_features, in_features)
+        - torch.nn.Embedding(num_embeddings, embedding_dim) has weight shape
+            (num_embeddings, embedding_dim)
+        The transform has to account for Linear's transposed weights
+    :return: value after transform_weight has been applied
     """
 
     if location == TransformLocation.INPUT:
-        return value @ weight
+        return value @ transform_weight
 
     elif location == TransformLocation.WEIGHT_INPUT:
-        return value @ weight.T
+        if module_type is torch.nn.Linear:
+            # equivalent to (transform_weight @ value.T).T
+            return value @ transform_weight.T
+        else:
+            raise NotImplementedError(
+                f"{TransformLocation.WEIGHT_INPUT} transform not "
+                f"implemented for module type {module_type}"
+            )
 
     elif location == TransformLocation.WEIGHT_OUTPUT:
-        return weight.T @ value
+        if module_type is torch.nn.Linear:
+            # equivalent to (value.T @ transform_weight).T
+            return transform_weight.T @ value
+        elif module_type is torch.nn.Embedding:
+            return value @ transform_weight
+        else:
+            raise NotImplementedError(
+                f"{TransformLocation.WEIGHT_OUTPUT} transform not "
+                f"implemented for module type {module_type}"
+            )
 
     elif location == TransformLocation.OUTPUT:
-        return value @ weight
+        return value @ transform_weight
 
     else:
         raise NotImplementedError(f"{location} has not been implemented yet")

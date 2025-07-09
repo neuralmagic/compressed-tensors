@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union
+from typing import Optional, Union, Type
 
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
@@ -25,7 +25,7 @@ from compressed_tensors.transform.utils.utils import (
 from compressed_tensors.utils import get_execution_device, get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
 from torch import Tensor, device, dtype
-from torch.nn import Linear, Module, Parameter
+from torch.nn import Module, Parameter
 
 
 @TransformFactory.register("hadamard")
@@ -51,7 +51,7 @@ class HadamardFactory(TransformFactory):
         :param module: parent module that transform will be applied to
         :param args: defines how the transform will be applied to the module
         """
-        assert isinstance(module, Linear)
+        assert hasattr(module, "weight")
         size = get_matrix_size(module, args.location)
         dtype = module.weight.dtype
         device = get_offloaded_device(module)
@@ -60,7 +60,7 @@ class HadamardFactory(TransformFactory):
         factory_kwargs = {"construct_device": exec_device}
         weight = self.weights.get(size, dtype, device, factory_kwargs=factory_kwargs)
         perm = self.perms[weight] if self.scheme.randomize else None
-        return HadamardTransform(weight, perm, args)
+        return HadamardTransform(weight, perm, args, type(module))
 
     def _create_weight(
         self,
@@ -70,7 +70,16 @@ class HadamardFactory(TransformFactory):
         construct_device: device,
     ) -> Parameter:
         # construct on execution device, cache on offload device
-        data = deterministic_hadamard_matrix(size, dtype, construct_device)
+        if self.scheme.num_heads is None or self.scheme.num_heads <= 1:
+            data = deterministic_hadamard_matrix(size, dtype, construct_device)
+        else:
+            assert size % self.scheme.num_heads == 0
+            data = torch.kron(
+                torch.eye(self.scheme.num_heads, dtype=dtype),
+                deterministic_hadamard_matrix(
+                    self.scheme.head_dim, dtype, construct_device
+                ),
+            )
         data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
@@ -81,12 +90,17 @@ class HadamardFactory(TransformFactory):
 
 class HadamardTransform(TransformBase):
     def __init__(
-        self, weight: Parameter, perm: Union[Parameter, None], args: TransformArgs
+        self,
+        weight: Parameter,
+        perm: Union[Parameter, None],
+        args: TransformArgs,
+        module_type: Type,
     ):
         super().__init__()
         self.weight = weight
         self.perm = perm
         self.args = args
+        self.module_type = module_type
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -97,4 +111,11 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
-        return apply_transform_weight(weight, value, self.args.location)
+        # NOTE: SpinQuant code up-converts to float64 for application
+        # of transform, then down-converts
+        return apply_transform_weight(
+            weight.to(torch.float64),
+            value.to(torch.float64),
+            self.args.location,
+            self.module_type,
+        ).to(weight.dtype)
