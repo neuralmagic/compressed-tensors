@@ -28,10 +28,11 @@ from tests.testing_utils import requires_accelerate, requires_gpu
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_linear(type, randomized):
+@pytest.mark.parametrize("head_dim", (None, 2, 4))
+def test_correctness_linear(type, randomized, head_dim):
     size = (4, 8)
     module = torch.nn.Linear(*size, bias=True)
-    scheme = TransformScheme(type=type, randomized=randomized)
+    scheme = TransformScheme(type=type, randomized=randomized, head_dim=head_dim)
     factory = TransformFactory.from_scheme(scheme, name="")
 
     input_tfm = factory.create_transform(
@@ -88,43 +89,6 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
 @pytest.mark.parametrize("randomized", (True, False))
 def test_correctness_model_offload(type, randomized, model_apply):
     test_correctness_model(type, randomized, model_apply, offload=True)
-
-
-@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
-@pytest.mark.parametrize("head_dim", (16, 32))
-def test_correctness_heads(type, randomized, head_dim):
-    hidden_size = 64
-
-    model = torch.nn.ModuleDict(
-        {
-            "v_proj": torch.nn.Linear(hidden_size, hidden_size, bias=False),
-            "o_proj": torch.nn.Linear(hidden_size, hidden_size, bias=False),
-        }
-    )
-
-    input = torch.rand(17, 5, hidden_size)
-    true_output = model.o_proj(model.v_proj(input))
-
-    config = TransformConfig(
-        config_groups={
-            "": TransformScheme(
-                type=type,
-                randomized=randomized,
-                head_dim=head_dim,
-                apply=[
-                    TransformArgs(targets="v_proj", location="weight_output"),
-                    TransformArgs(
-                        targets="o_proj", location="weight_input", inverse=True
-                    ),
-                ],
-            )
-        }
-    )
-    apply_transform_config(model, config)
-
-    output = model.o_proj(model.v_proj(input))
-    assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
