@@ -60,7 +60,7 @@ class HadamardFactory(TransformFactory):
         factory_kwargs = {"construct_device": exec_device}
         weight = self.weights.get(size, dtype, device, factory_kwargs=factory_kwargs)
         perm = self.perms[weight] if self.scheme.randomize else None
-        return HadamardTransform(weight, perm, args)
+        return HadamardTransform(weight, perm, args, type(module))
 
     def _create_weight(
         self,
@@ -85,11 +85,13 @@ class HadamardTransform(TransformBase):
         weight: Parameter,
         perm: Optional[Parameter],
         args: TransformArgs,
+        module_type: type[torch.nn.Module],
     ):
         super().__init__()
         self.weight = weight
         self.perm = perm
         self.args = args
+        self.module_type = module_type
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -100,4 +102,6 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
-        return apply_transform_weight(weight, value, self.args.location)
+        return apply_transform_weight(
+            weight, value, self.args.location, self.module_type
+        )

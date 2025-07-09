@@ -47,7 +47,7 @@ def test_correctness_linear(type, randomized):
         module, TransformArgs(targets="Linear", location="output", inverse=True)
     )
 
-    input = torch.rand((17, size[0]))
+    input = torch.rand((17, 5, size[0]))
     true_output = input @ module.weight.T
     input_transformed = input_tfm(input)
     weight_transformed = w_out_tfm(w_in_tfm(module.weight))
@@ -64,7 +64,7 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
         model = offloaded_dispatch(model, torch.device("cuda"))
 
     # get output
-    input = torch.rand((17, model.fcs[0].in_features))
+    input = torch.rand((17, 5, model.fcs[0].in_features))
     if offload:
         input = input.to(torch.device("cuda"))
     true_output = model(input)

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Optional, Tuple, Callable
 
 import torch
 from compressed_tensors.transform import TransformLocation
@@ -42,7 +42,8 @@ def get_matrix_size(
         size = module.out_features
 
     if head_dim is not None:
-        assert size % head_dim == 0
+        if size % head_dim != 0:
+            raise ValueError("Cannot ")
         return head_dim
 
     else:
@@ -53,18 +54,35 @@ def apply_transform_weight(
     weight: torch.Tensor,
     value: torch.Tensor,
     location: TransformLocation,
+    module_type: type[torch.nn.Module],
 ) -> torch.Tensor:
-    return apply_transform_weight_linear(weight, value, location)
+    if module_type == torch.nn.Linear:
+        fn, axis = get_linear_transform_fn(module_type, location)
+
+    else:
+        raise NotImplementedError(
+            f"Applying transforms to {module_type} is not supported"
+        )
+    
+    assert weight.shape[0] == weight.shape[1]
+    head_dim = weight.shape[0]
+    num_heads = value.shape[axis] // head_dim
+
+    value = value.unflatten(axis, (num_heads, head_dim))
+    value = fn(weight, value)
+    value = value.flatten(axis - 1, axis)
+
+    return value
 
 
-def apply_transform_weight_linear(
-    weight: torch.Tensor,
-    value: torch.Tensor,
+def get_linear_transform_fn(
+    module_type: type[torch.nn.Module],
     location: TransformLocation,
-):
+) -> Tuple[Callable[[torch.Tensor, torch.Tensor], torch.Tensor], int]:
     """
     Using the transform location, determine how to apply the transform weight to the
-    given value. For more info on input and output transforms, see `TransformLocation`
+    given value wrt linear weights. For more info on input and output transforms,
+    see `TransformLocation`
 
     The following explains how weights should be applied to values according to location
 
@@ -97,31 +115,28 @@ def apply_transform_weight_linear(
     :param location: determines how weight should be applied
     :return: value after transform weight has been applied
     """
-    value_shape = value.shape
-    weight_size = weight.shape[0]
-    assert weight.shape[0] == weight.shape[1]
+    fn = axis = None
 
-    if location == TransformLocation.INPUT:
-        num_heads = value_shape[1] // weight_size
-        value = value.reshape(value_shape[0], num_heads, weight_size)
-        ret = value @ weight
+    if module_type == torch.nn.Linear:
+        if location == TransformLocation.INPUT:
+            fn = lambda weight, value: value @ weight
+            axis = -1
 
-    elif location == TransformLocation.WEIGHT_INPUT:
-        num_heads = value_shape[1] // weight_size
-        value = value.reshape(value_shape[0], num_heads, weight_size)
-        ret = value @ weight.T
+        elif location == TransformLocation.WEIGHT_INPUT:
+            fn = lambda weight, value: value @ weight.T
+            axis = -1
 
-    elif location == TransformLocation.WEIGHT_OUTPUT:
-        num_heads = value_shape[0] // weight_size
-        value = value.reshape(num_heads, weight_size, value_shape[1])
-        ret = weight.T @ value
+        elif location == TransformLocation.WEIGHT_OUTPUT:
+            fn = lambda weight, value: weight.T @ value
+            axis = -2
 
-    elif location == TransformLocation.OUTPUT:
-        num_heads = value_shape[1] // weight_size
-        value = value.reshape(value_shape[0], num_heads, weight_size)
-        ret = value @ weight
+        elif location == TransformLocation.OUTPUT:
+            fn = lambda weight, value: value @ weight
+            axis = -1
+    
+    if fn is None:
+        raise NotImplementedError(
+            f"Applying transforms to {module_type} {location} is not supported"
+        )
 
-    else:
-        raise NotImplementedError(f"{location} has not been implemented yet")
-
-    return ret.reshape(value_shape)
+    return fn, axis
