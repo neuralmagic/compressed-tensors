@@ -59,6 +59,14 @@ def apply_transform_weight(
     location: TransformLocation,
     module_type: type[torch.nn.Module],
 ) -> torch.Tensor:
+    """
+    :param weight: transform weight to apply
+    :param value: value to apply weight to
+    :param location: determines how weight should be applied
+    :param model_type: result of type(module), passed in to determine application of
+        weight transform
+    :return: value after weight has been applied
+    """
     fn, axis = _get_transform_method(module_type, location)
 
     assert weight.shape[0] == weight.shape[1]
