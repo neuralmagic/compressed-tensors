@@ -70,8 +70,6 @@ jobs:
         permissions:
             contents: 'read'
             id-token: 'write'
-        environment:
-            coverage_url: ${{ steps.coverage.outputs.page_url }}
 
         steps:
 
