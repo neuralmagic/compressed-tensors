@@ -53,7 +53,7 @@ jobs:
             python: ${{ matrix.test_config.python }}
             timeout: ${{ matrix.test_config.timeout }}
             whl: ${{ needs.BUILD.outputs.whl }}
-            code_coverage: ${{ matrix.test_config.code_coverage || 'false' }}
+            code_coverage: ${{ matrix.test_config.code_coverage || false }}
         secrets: inherit
 
     UPLOAD:
