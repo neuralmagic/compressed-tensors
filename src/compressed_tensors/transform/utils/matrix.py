@@ -65,15 +65,9 @@ def apply_transform_weight(
     head_dim = weight.shape[0]
     num_heads = value.shape[axis] // head_dim
 
-    value_dtype = value.dtype
-    value = value.to(torch.float64)
-    weight = weight.to(torch.float64)
-
     value = value.unflatten(axis, (num_heads, head_dim))
     value = fn(weight, value)
     value = value.flatten(axis - 1, axis)
-
-    value = value.to(value_dtype)
 
     return value
 
