@@ -50,7 +50,7 @@ class RandomMatrixFactory(TransformFactory):
         :param module: parent module that transform will be applied to
         :param args: defines how the transform will be applied to the module
         """
-        assert isinstance(module, Linear)
+        assert hasattr(module, "weight")
         size = get_transform_size(module, args.location, self.scheme.head_dim)
         dtype = module.weight.dtype
         device = get_offloaded_device(module)
