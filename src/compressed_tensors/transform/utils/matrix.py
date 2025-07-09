@@ -59,7 +59,7 @@ def apply_transform_weight(
     location: TransformLocation,
     module_type: type[torch.nn.Module],
 ) -> torch.Tensor:
-    fn, axis = get_linear_transform_fn(module_type, location)
+    fn, axis = _get_transform_method(module_type, location)
 
     assert weight.shape[0] == weight.shape[1]
     head_dim = weight.shape[0]
@@ -72,7 +72,7 @@ def apply_transform_weight(
     return value
 
 
-def get_linear_transform_fn(
+def _get_transform_method(
     module_type: type[torch.nn.Module],
     location: TransformLocation,
 ) -> Tuple[Callable[[torch.Tensor, torch.Tensor], torch.Tensor], int]:
