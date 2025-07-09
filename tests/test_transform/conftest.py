@@ -44,15 +44,20 @@ class MockAttention(torch.nn.Module):
         self.num_key_value_groups = num_attention_heads // num_key_value_heads
         self.head_dim = hidden_size // num_attention_heads
         self.scaling = self.head_dim**-0.5
+        assert hidden_size >= num_attention_heads * self.head_dim
 
-        self.q_proj = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+        self.q_proj = torch.nn.Linear(
+            hidden_size, num_attention_heads * self.head_dim, bias=False
+        )
         self.k_proj = torch.nn.Linear(
             hidden_size, num_key_value_heads * self.head_dim, bias=False
         )
         self.v_proj = torch.nn.Linear(
             hidden_size, num_key_value_heads * self.head_dim, bias=False
         )
-        self.o_proj = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+        self.o_proj = torch.nn.Linear(
+            num_attention_heads * self.head_dim, hidden_size, bias=False
+        )
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         batch_size, seq_len, hidden_size = hidden_states.shape

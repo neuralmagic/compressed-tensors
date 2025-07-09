@@ -12,42 +12,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple, Callable
+from typing import Callable, Optional, Tuple
 
 import torch
 from compressed_tensors.transform import TransformLocation
 
 
-__all__ = ["get_matrix_size", "apply_transform_weight"]
+__all__ = ["get_transform_size", "apply_transform_weight"]
 
 
-def get_matrix_size(
+def get_transform_size(
     module: torch.nn.Module,
     location: TransformLocation,
     head_dim: Optional[int] = None,
 ) -> int:
     """
-    Determine the size of a matrix given its location on the module
+    Determine the size of a transform matrix given its location on the module
 
     :param module: module that matrix will be applied to
     :param location: location on module
-    :TODO head_dim:
+    :param head_dim: size of head when transform is applied to mha
     :return: size of matrix
     """
-    assert isinstance(module, torch.nn.Linear)
-
-    if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
-        size = module.in_features
+    if isinstance(module, torch.nn.Linear):
+        if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
+            size = module.in_features
+        else:
+            size = module.out_features
     else:
-        size = module.out_features
+        raise NotImplementedError(f"Transforms on {type(module)} are not supported")
 
     if head_dim is not None:
         if size % head_dim != 0:
-            raise ValueError("Cannot ")
-        return head_dim
+            raise ValueError(
+                f"{head_dim} must divide {size} for {type(module)} at {location}"
+            )
 
-    else:
-        return size
+        size = head_dim
+
+    return size
 
 
 def apply_transform_weight(
@@ -56,21 +59,21 @@ def apply_transform_weight(
     location: TransformLocation,
     module_type: type[torch.nn.Module],
 ) -> torch.Tensor:
-    if module_type == torch.nn.Linear:
-        fn, axis = get_linear_transform_fn(module_type, location)
+    fn, axis = get_linear_transform_fn(module_type, location)
 
-    else:
-        raise NotImplementedError(
-            f"Applying transforms to {module_type} is not supported"
-        )
-    
     assert weight.shape[0] == weight.shape[1]
     head_dim = weight.shape[0]
     num_heads = value.shape[axis] // head_dim
 
+    value_dtype = value.dtype
+    value = value.to(torch.float64)
+    weight = weight.to(torch.float64)
+
     value = value.unflatten(axis, (num_heads, head_dim))
     value = fn(weight, value)
     value = value.flatten(axis - 1, axis)
+
+    value = value.to(value_dtype)
 
     return value
 
@@ -133,7 +136,7 @@ def get_linear_transform_fn(
         elif location == TransformLocation.OUTPUT:
             fn = lambda weight, value: value @ weight
             axis = -1
-    
+
     if fn is None:
         raise NotImplementedError(
             f"Applying transforms to {module_type} {location} is not supported"

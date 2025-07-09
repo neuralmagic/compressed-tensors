@@ -20,7 +20,7 @@ from compressed_tensors.transform.factory.base import TransformBase, TransformFa
 from compressed_tensors.transform.utils.hadamard import deterministic_hadamard_matrix
 from compressed_tensors.transform.utils.matrix import (
     apply_transform_weight,
-    get_matrix_size,
+    get_transform_size,
 )
 from compressed_tensors.utils import get_execution_device, get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
@@ -52,7 +52,7 @@ class HadamardFactory(TransformFactory):
         :param args: defines how the transform will be applied to the module
         """
         assert isinstance(module, Linear)
-        size = get_matrix_size(module, args.location, self.scheme.head_dim)
+        size = get_transform_size(module, args.location, self.scheme.head_dim)
         dtype = module.weight.dtype
         device = get_offloaded_device(module)
         exec_device = get_execution_device(module)

@@ -93,7 +93,7 @@ def test_correctness_model_offload(type, randomized, model_apply):
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
 @pytest.mark.parametrize("head_dim", (16, 32))
-def test_correctness_heads(type, randomized, head_dim, offload=False):
+def test_correctness_heads(type, randomized, head_dim):
     hidden_size = 64
 
     model = torch.nn.ModuleDict(
@@ -129,10 +129,10 @@ def test_correctness_heads(type, randomized, head_dim, offload=False):
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
-@pytest.mark.parametrize("head_dim", (8, 16))
-def test_correctness_attention_heads(type, randomized, head_dim, offload=False):
-    hidden_size = 4096
-    num_attention_heads = 32
+@pytest.mark.parametrize("head_dim", (4, 8))
+def test_correctness_attention_heads(type, randomized, head_dim):
+    hidden_size = 64
+    num_attention_heads = 8
 
     attention = MockAttention(
         hidden_size=hidden_size,
