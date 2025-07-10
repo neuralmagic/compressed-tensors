@@ -138,6 +138,11 @@ jobs:
                   suitename: test-${{ inputs.python }}-${{ inputs.test_label }}
                   code_coverage: ${{ inputs.code_coverage }}
 
+            - name: extra info for summary
+              if: ${{ inputs.code_coverage }}
+              run: |
+                  echo "EXTRA='Code Coverage: https://neuralmagic.github.io/compressed-tensors/'" >> $GITHUB_ENV
+
             - name: summary
               uses: neuralmagic/nm-actions/actions/summary-test@v1.13.0
               if: success() || failure()
@@ -147,6 +152,7 @@ jobs:
                   python: ${{ inputs.python }}
                   whl: ${{ inputs.whl }}
                   test_status: ${{ steps.test.outputs.status }}
+                  extra: ${{ env.EXTRA }}
 
             - name: copy results to GCP
               run: |
