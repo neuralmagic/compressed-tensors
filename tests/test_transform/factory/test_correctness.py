@@ -22,7 +22,6 @@ from compressed_tensors.transform import (
     apply_transform_config,
 )
 from compressed_tensors.utils import offloaded_dispatch
-from tests.test_transform.conftest import scheme_kwargs
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 

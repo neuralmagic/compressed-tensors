@@ -145,14 +145,9 @@ class TransformFactory(RegistryMixin, ABC):
                     raise ValueError("Offloaded training is not supported")
                 P.register_parametrization(module, "weight", transform)
 
-<<<<<<< HEAD
             else:
                 # transform is no longer needed (unfusing is not supported)
                 delete_offload_module(module, transform_name)
-=======
-            # transform is no longer needed (unfusing is not supported)
-            delete_offload_module(module, transform_name)
->>>>>>> origin
 
         # register output transformation hook
         elif args.location == TransformLocation.OUTPUT:
@@ -166,7 +161,6 @@ class TransformFactory(RegistryMixin, ABC):
         else:
             raise NotImplementedError()
 
-<<<<<<< HEAD
     def _update_tied_weights(self):
         """
         Populate the `_dynamic_tied_weights_keys` attribute of transforms,
@@ -195,8 +189,6 @@ class TransformFactory(RegistryMixin, ABC):
                 for transform, name in shared_keys:
                     transform._dynamic_tied_weights_keys.append(name)
                     setattr(transform, name, tensor)
-=======
->>>>>>> origin
 
 class TransformBase(InternalModule, ABC):
     """
