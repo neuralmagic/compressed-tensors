@@ -22,15 +22,17 @@ from compressed_tensors.transform import (
     apply_transform_config,
 )
 from compressed_tensors.utils import offloaded_dispatch
+from tests.test_transform.conftest import MockAttention
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_linear(type, randomized):
+@pytest.mark.parametrize("head_dim", (None, 2, 4))
+def test_correctness_linear(type, randomized, head_dim):
     size = (4, 8)
     module = torch.nn.Linear(*size, bias=True)
-    scheme = TransformScheme(type=type, randomized=randomized)
+    scheme = TransformScheme(type=type, randomized=randomized, head_dim=head_dim)
     factory = TransformFactory.from_scheme(scheme, name="")
 
     input_tfm = factory.create_transform(
@@ -46,7 +48,7 @@ def test_correctness_linear(type, randomized):
         module, TransformArgs(targets="Linear", location="output", inverse=True)
     )
 
-    input = torch.rand((17, size[0]))
+    input = torch.rand((17, 5, size[0]))
     true_output = input @ module.weight.T
     input_transformed = input_tfm(input)
     weight_transformed = w_out_tfm(w_in_tfm(module.weight))
@@ -63,7 +65,7 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
         model = offloaded_dispatch(model, torch.device("cuda"))
 
     # get output
-    input = torch.rand((17, model.fcs[0].in_features))
+    input = torch.rand((17, 5, model.fcs[0].in_features))
     if offload:
         input = input.to(torch.device("cuda"))
     true_output = model(input)
@@ -87,3 +89,40 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
 @pytest.mark.parametrize("randomized", (True, False))
 def test_correctness_model_offload(type, randomized, model_apply):
     test_correctness_model(type, randomized, model_apply, offload=True)
+
+
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("randomized", (True, False))
+@pytest.mark.parametrize("head_dim", (4, 8))
+def test_correctness_attention_heads(type, randomized, head_dim):
+    hidden_size = 64
+    num_attention_heads = 8
+
+    attention = MockAttention(
+        hidden_size=hidden_size,
+        num_attention_heads=num_attention_heads,
+        num_key_value_heads=head_dim,
+    )
+
+    input = torch.rand(17, 5, hidden_size)
+    true_output = attention(input)
+
+    config = TransformConfig(
+        config_groups={
+            "": TransformScheme(
+                type=type,
+                randomized=randomized,
+                head_dim=head_dim,
+                apply=[
+                    TransformArgs(targets="v_proj", location="weight_output"),
+                    TransformArgs(
+                        targets="o_proj", location="weight_input", inverse=True
+                    ),
+                ],
+            )
+        }
+    )
+    apply_transform_config(attention, config)
+
+    output = attention(input)
+    assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
