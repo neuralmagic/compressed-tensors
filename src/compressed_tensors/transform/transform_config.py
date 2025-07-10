@@ -15,7 +15,7 @@
 from typing import Dict
 
 from compressed_tensors.transform import TransformArgs, TransformScheme
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 __all__ = ["TransformConfig"]
@@ -31,6 +31,7 @@ class TransformConfig(BaseModel):
     """
 
     config_groups: Dict[str, TransformScheme]
+    model_config = ConfigDict(extra="forbid")
 
 
 # quip / quip sharp

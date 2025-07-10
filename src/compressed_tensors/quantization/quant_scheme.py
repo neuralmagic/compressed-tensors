@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from compressed_tensors.quantization.quant_args import (
     DynamicType,
@@ -21,7 +21,7 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationStrategy,
     QuantizationType,
 )
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 __all__ = [
@@ -47,6 +47,7 @@ class QuantizationScheme(BaseModel):
     weights: Optional[QuantizationArgs] = None
     input_activations: Optional[QuantizationArgs] = None
     output_activations: Optional[QuantizationArgs] = None
+    model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
     def validate_model_after(model: "QuantizationScheme") -> "QuantizationScheme":

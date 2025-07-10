@@ -26,7 +26,7 @@ from compressed_tensors.quantization.utils import (
     module_type,
     parse_out_kv_cache_args,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from torch.nn import Module
 
 
@@ -142,6 +142,7 @@ class QuantizationConfig(BaseModel):
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
+    model_config = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context):
         """

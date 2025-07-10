@@ -15,7 +15,7 @@
 from typing import List
 
 from compressed_tensors.transform import TransformArgs
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 __all__ = ["TransformScheme"]
@@ -40,3 +40,4 @@ class TransformScheme(BaseModel):
     apply: List[TransformArgs] = Field(default_factory=list)
     randomize: bool = Field(default=False)
     requires_grad: bool = Field(default=False)
+    model_config = ConfigDict(extra="forbid")
