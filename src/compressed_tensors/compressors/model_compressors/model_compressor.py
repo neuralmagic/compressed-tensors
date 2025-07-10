@@ -421,7 +421,7 @@ class ModelCompressor:
 
                 # remove any existing parameters
                 offload_device = get_offloaded_device(module)
-                for name, _ in list(module.named_parameters()):
+                for name, _ in list(module.named_parameters(recurse=False)):
                     delete_offload_parameter(module, name)
 
                 # replace with compressed parameters
