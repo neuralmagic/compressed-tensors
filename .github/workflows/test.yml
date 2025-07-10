@@ -162,9 +162,9 @@ jobs:
 
             - name: upload coverage report
               uses: actions/upload-pages-artifact@v3
-              if: (success() || failure()) && ${{ inputs.code_coverage }}
+              if: ${{ inputs.code_coverage }}
               with:
-                  path: coverage-results
+                  path: coverage-html
                   retention-days: 5
 
             - name: deploy to Github Pages
