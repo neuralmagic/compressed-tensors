@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.utils.parametrize as P
+from compressed_tensors import InternalModule
 from compressed_tensors.quantization.lifecycle import is_target  # TODO: move to utils
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
@@ -144,9 +145,14 @@ class TransformFactory(RegistryMixin, ABC):
                     raise ValueError("Offloaded training is not supported")
                 P.register_parametrization(module, "weight", transform)
 
+<<<<<<< HEAD
             else:
                 # transform is no longer needed (unfusing is not supported)
                 delete_offload_module(module, transform_name)
+=======
+            # transform is no longer needed (unfusing is not supported)
+            delete_offload_module(module, transform_name)
+>>>>>>> origin
 
         # register output transformation hook
         elif args.location == TransformLocation.OUTPUT:
@@ -160,6 +166,7 @@ class TransformFactory(RegistryMixin, ABC):
         else:
             raise NotImplementedError()
 
+<<<<<<< HEAD
     def _update_tied_weights(self):
         """
         Populate the `_dynamic_tied_weights_keys` attribute of transforms,
@@ -188,9 +195,10 @@ class TransformFactory(RegistryMixin, ABC):
                 for transform, name in shared_keys:
                     transform._dynamic_tied_weights_keys.append(name)
                     setattr(transform, name, tensor)
+=======
+>>>>>>> origin
 
-
-class TransformBase(Module, ABC):
+class TransformBase(InternalModule, ABC):
     """
     Represents the application of a transform accord to TransformArgs
     """

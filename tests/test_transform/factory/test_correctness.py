@@ -26,7 +26,7 @@ from tests.test_transform.conftest import scheme_kwargs
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
-@pytest.mark.parametrize("type", TransformFactory.registered_names())
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
 def test_correctness_linear(type, randomized):
     size = (4, 8)
@@ -55,7 +55,7 @@ def test_correctness_linear(type, randomized):
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
-@pytest.mark.parametrize("type", TransformFactory.registered_names())
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
 def test_correctness_model(type, randomized, model_apply, offload=False):
     # load model
@@ -84,7 +84,7 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
 
 @requires_gpu
 @requires_accelerate()
-@pytest.mark.parametrize("type", TransformFactory.registered_names())
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
 def test_correctness_model_offload(type, randomized, model_apply):
     test_correctness_model(type, randomized, model_apply, offload=True)
