@@ -39,6 +39,11 @@ def get_transform_size(
             size = module.in_features
         else:
             size = module.out_features
+    elif isinstance(module, torch.nn.Embedding):
+        if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
+            size = module.num_embeddings
+        else:
+            size = module.embedding_dim
     else:
         raise NotImplementedError(f"Transforms on {type(module)} are not supported")
 
@@ -64,7 +69,12 @@ def apply_transform_weight(
     :param value: value to apply weight to
     :param location: determines how weight should be applied
     :param model_type: result of type(module), passed in to determine application of
-        weight transform
+        weight transform. This is needed because torch uses convention:
+        - torch.nn.Linear(in_features,out_features) has weight shape
+            (out_features, in_features)
+        - torch.nn.Embedding(num_embeddings, embedding_dim) has weight shape
+            (num_embeddings, embedding_dim)
+        The transform has to account for Linear's transposed weights
     :return: value after weight has been applied
     """
     fn, axis = _get_transform_method(module_type, location)
@@ -134,6 +144,24 @@ def _get_transform_method(
         elif location == TransformLocation.WEIGHT_OUTPUT:
             fn = lambda weight, value: weight.T @ value
             axis = -2
+
+        elif location == TransformLocation.OUTPUT:
+            fn = lambda weight, value: value @ weight
+            axis = -1
+
+    # similar derivation to torch.nn.Linear, but `y = (x W)`
+    if module_type == torch.nn.Embedding:
+        if location == TransformLocation.INPUT:
+            fn = lambda weight, value: value @ weight
+            axis = -1
+
+        elif location == TransformLocation.WEIGHT_INPUT:
+            fn = lambda weight, value: weight @ value
+            axis = -1
+
+        elif location == TransformLocation.WEIGHT_OUTPUT:
+            fn = lambda weight, value: value @ weight
+            axis = -1
 
         elif location == TransformLocation.OUTPUT:
             fn = lambda weight, value: value @ weight

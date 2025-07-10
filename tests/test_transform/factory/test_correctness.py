@@ -31,7 +31,7 @@ from tests.testing_utils import requires_accelerate, requires_gpu
 @pytest.mark.parametrize("head_dim", (None, 2, 4))
 def test_correctness_linear(type, randomized, head_dim):
     size = (4, 8)
-    module = torch.nn.Linear(*size, bias=True)
+    module = torch.nn.Linear(*size, bias=False)
     scheme = TransformScheme(type=type, randomized=randomized, head_dim=head_dim)
     factory = TransformFactory.from_scheme(scheme, name="")
 
@@ -53,6 +53,38 @@ def test_correctness_linear(type, randomized, head_dim):
     input_transformed = input_tfm(input)
     weight_transformed = w_out_tfm(w_in_tfm(module.weight))
     output = output_tfm(input_transformed @ weight_transformed.T)
+    assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
+
+
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("randomized", (True, False))
+@pytest.mark.parametrize("embed_loc", ("weight_output", "output"))
+@pytest.mark.parametrize("linear_loc", ("input", "weight_input"))
+def test_correctness_embedding(type, randomized, embed_loc, linear_loc):
+    model = torch.nn.Sequential(
+        torch.nn.Embedding(2, 4),
+        torch.nn.Linear(4, 8, bias=False),
+    )
+
+    input = torch.randint(high=1, low=0, size=(17, 5, 2))
+    true_output = model(input)
+
+    config = TransformConfig(
+        config_groups={
+            "": TransformScheme(
+                type=type,
+                randomized=randomized,
+                apply=[
+                    TransformArgs(targets="Embedding", location=embed_loc),
+                    TransformArgs(targets="Linear", location=linear_loc, inverse=True),
+                ],
+            )
+        }
+    )
+    apply_transform_config(model, config)
+
+    # compare outputs
+    output = model(input)
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
