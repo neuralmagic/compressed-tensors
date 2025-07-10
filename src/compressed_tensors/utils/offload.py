@@ -78,7 +78,6 @@ __all__ = [
     "delete_offload_parameter",
     "has_offloaded_params",
     "disable_hf_hook",
-    "disable_offload",
     "align_modules",
     "align_module_device",
     "register_offload_module",
@@ -388,23 +387,6 @@ def delete_from_weights_map(
 
 @check_accelerate(fallback=contextlib.nullcontext())
 @contextlib.contextmanager
-def disable_offload(module: torch.nn.Module):
-    """
-    Context manager to disable module onloading and offloading. Parameters will stay on
-    their current device
-
-    :param module: module to disable offloading for
-    """
-    if has_offloaded_params(module):
-        module._hf_hook.offload = False
-        yield
-        module._hf_hook.offload = True
-    else:
-        yield
-
-
-@check_accelerate(fallback=contextlib.nullcontext())
-@contextlib.contextmanager
 def align_modules(
     modules: Union[torch.nn.Module, Iterable[torch.nn.Module]],
     execution_device: Optional[torch.device] = None,
@@ -419,9 +401,9 @@ def align_modules(
     modules = (modules,) if isinstance(modules, torch.nn.Module) else modules
 
     with contextlib.ExitStack() as stack:
+        stack.enter_context(disable_offloading())
         for module in modules:
             stack.enter_context(align_module_device(module, execution_device))
-            stack.enter_context(disable_offload(module))  # disable redundant onloading
         yield
 
 
