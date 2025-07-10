@@ -19,7 +19,7 @@ from typing import Any, Dict, Optional, Union
 import torch
 from compressed_tensors.utils import Aliasable
 from compressed_tensors.utils.helpers import deprecated
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 __all__ = [
@@ -186,6 +186,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             "Observers constructor excluding quantization range or symmetry"
         ),
     )
+    model_config = ConfigDict(extra="forbid")
 
     @field_validator("type", mode="before")
     def validate_type(cls, value) -> QuantizationType:

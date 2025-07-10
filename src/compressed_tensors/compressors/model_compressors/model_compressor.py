@@ -393,7 +393,7 @@ class ModelCompressor:
 
             if prefix in module_to_scheme or prefix in sparse_compression_targets:
                 module_device = get_execution_device(module).type
-                is_meta = (module_device == "meta")
+                is_meta = module_device == "meta"
 
                 exec_device = "meta" if is_meta else "cpu"
                 onloading_device = "meta" if is_meta else module_device

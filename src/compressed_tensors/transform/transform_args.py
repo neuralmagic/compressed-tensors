@@ -15,7 +15,7 @@
 from enum import Enum
 from typing import List
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 __all__ = ["TransformArgs", "TransformLocation"]
@@ -61,6 +61,7 @@ class TransformArgs(BaseModel):
     location: TransformLocation
     inverse: bool = Field(default=False)
     ignore: List[str] = Field(default_factory=list)
+    model_config = ConfigDict(extra="forbid")
 
     @field_validator("targets", "ignore", mode="before")
     @classmethod
