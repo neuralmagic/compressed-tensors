@@ -20,12 +20,12 @@ from compressed_tensors.transform import (
     apply_transform_config,
 )
 from compressed_tensors.utils import offloaded_dispatch
-from tests.test_transform.conftest import scheme_kwargs
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
-@pytest.mark.parametrize("scheme_kwargs", scheme_kwargs())
-def test_serialization(scheme_kwargs, model_apply, tmp_path, offload=False):
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("randomize", (True, False))
+def test_serialization(type, randomize, model_apply, tmp_path, offload=False):
     # get model, maybe offload
     model, apply = model_apply
     if offload:
@@ -33,7 +33,7 @@ def test_serialization(scheme_kwargs, model_apply, tmp_path, offload=False):
 
     # apply transforms to model
     config = TransformConfig(
-        config_groups={"": TransformScheme(**scheme_kwargs, apply=apply)}
+        config_groups={"": TransformScheme(type=type, randomize=randomize, apply=apply)}
     )
     apply_transform_config(model, config)
 
@@ -43,8 +43,12 @@ def test_serialization(scheme_kwargs, model_apply, tmp_path, offload=False):
     # TODO: reload model
 
 
+@pytest.mark.skip(reason="Requires changes in upstream transformers")
+# https://github.com/huggingface/transformers/pull/39280
+# https://github.com/huggingface/transformers/pull/39263
 @requires_gpu
 @requires_accelerate()
-@pytest.mark.parametrize("scheme_kwargs", scheme_kwargs())
-def test_serialization_offload(scheme_kwargs, model_apply, tmp_path):
-    test_serialization(scheme_kwargs, model_apply, tmp_path, offload=True)
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("randomize", (True, False))
+def test_serialization_offload(type, randomize, model_apply, tmp_path):
+    test_serialization(type, randomize, model_apply, tmp_path, offload=True)

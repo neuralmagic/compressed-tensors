@@ -26,11 +26,11 @@ from tests.testing_utils import requires_accelerate, requires_gpu
 
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_linear(type, randomized):
+@pytest.mark.parametrize("randomize", (True, False))
+def test_correctness_linear(type, randomize):
     size = (4, 8)
     module = torch.nn.Linear(*size, bias=True)
-    scheme = TransformScheme(type=type, randomized=randomized)
+    scheme = TransformScheme(type=type, randomize=randomize)
     factory = TransformFactory.from_scheme(scheme, name="")
 
     input_tfm = factory.create_transform(
@@ -55,8 +55,8 @@ def test_correctness_linear(type, randomized):
 
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_model(type, randomized, model_apply, offload=False):
+@pytest.mark.parametrize("randomize", (True, False))
+def test_correctness_model(type, randomize, model_apply, offload=False):
     # load model
     model = model_apply[0]
     if offload:
@@ -71,7 +71,7 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
     # apply transforms
     config = TransformConfig(
         config_groups={
-            "": TransformScheme(type=type, randomized=randomized, apply=model_apply[1])
+            "": TransformScheme(type=type, randomize=randomize, apply=model_apply[1])
         }
     )
     apply_transform_config(model, config)
@@ -84,6 +84,6 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
 @requires_gpu
 @requires_accelerate()
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_model_offload(type, randomized, model_apply):
-    test_correctness_model(type, randomized, model_apply, offload=True)
+@pytest.mark.parametrize("randomize", (True, False))
+def test_correctness_model_offload(type, randomize, model_apply):
+    test_correctness_model(type, randomize, model_apply, offload=True)
