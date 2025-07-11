@@ -21,6 +21,9 @@ from compressed_tensors.transform import TransformLocation
 __all__ = ["get_transform_size", "apply_transform_weight"]
 
 
+TRANSFORM_PRECISION = torch.float64
+
+
 def get_transform_size(
     module: torch.nn.Module,
     location: TransformLocation,
@@ -77,14 +80,24 @@ def apply_transform_weight(
         The transform has to account for Linear's transposed weights
     :return: value after weight has been applied
     """
+    # get function used to apply transform
     fn, axis = _get_transform_method(module_type, location)
 
-    assert weight.shape[0] == weight.shape[1]
+    # reshape for head_dim
     head_dim = weight.shape[0]
     num_heads = value.shape[axis] // head_dim
-
     value = value.unflatten(axis, (num_heads, head_dim))
-    value = fn(weight, value)
+
+    # cast to transform precision
+    value_dtype = value.dtype
+
+    # apply transform
+    value = fn(weight.to(TRANSFORM_PRECISION), value.to(TRANSFORM_PRECISION))
+
+    # [undo] cast to transform precision
+    value = value.to(value_dtype)
+
+    # [undo] reshape for head_dim
     value = value.flatten(axis - 1, axis)
 
     return value
