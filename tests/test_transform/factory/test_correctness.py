@@ -57,10 +57,10 @@ def test_correctness_linear(type, randomized, head_dim):
 
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
+@pytest.mark.parametrize("randomize", (True, False))
 @pytest.mark.parametrize("embed_loc", ("weight_output", "output"))
 @pytest.mark.parametrize("linear_loc", ("input", "weight_input"))
-def test_correctness_embedding(type, randomized, embed_loc, linear_loc):
+def test_correctness_embedding(type, randomize, embed_loc, linear_loc):
     model = torch.nn.Sequential(
         torch.nn.Embedding(2, 4),
         torch.nn.Linear(4, 8, bias=False),
@@ -73,7 +73,7 @@ def test_correctness_embedding(type, randomized, embed_loc, linear_loc):
         config_groups={
             "": TransformScheme(
                 type=type,
-                randomized=randomized,
+                randomize=randomize,
                 apply=[
                     TransformArgs(targets="Embedding", location=embed_loc),
                     TransformArgs(targets="Linear", location=linear_loc, inverse=True),
@@ -89,8 +89,8 @@ def test_correctness_embedding(type, randomized, embed_loc, linear_loc):
 
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_model(type, randomized, model_apply, offload=False):
+@pytest.mark.parametrize("randomize", (True, False))
+def test_correctness_model(type, randomize, model_apply, offload=False):
     # load model
     model = model_apply[0]
     if offload:
@@ -105,7 +105,7 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
     # apply transforms
     config = TransformConfig(
         config_groups={
-            "": TransformScheme(type=type, randomized=randomized, apply=model_apply[1])
+            "": TransformScheme(type=type, randomize=randomize, apply=model_apply[1])
         }
     )
     apply_transform_config(model, config)
@@ -115,18 +115,10 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
-@requires_gpu
-@requires_accelerate()
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_model_offload(type, randomized, model_apply):
-    test_correctness_model(type, randomized, model_apply, offload=True)
-
-
-@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
+@pytest.mark.parametrize("randomize", (True, False))
 @pytest.mark.parametrize("head_dim", (4, 8))
-def test_correctness_attention_heads(type, randomized, head_dim):
+def test_correctness_attention_heads(type, randomize, head_dim):
     hidden_size = 64
     num_attention_heads = 8
 
@@ -143,7 +135,7 @@ def test_correctness_attention_heads(type, randomized, head_dim):
         config_groups={
             "": TransformScheme(
                 type=type,
-                randomized=randomized,
+                randomize=randomize,
                 head_dim=head_dim,
                 apply=[
                     TransformArgs(targets="v_proj", location="weight_output"),
@@ -158,3 +150,11 @@ def test_correctness_attention_heads(type, randomized, head_dim):
 
     output = attention(input)
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
+
+
+@requires_gpu
+@requires_accelerate()
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("randomize", (True, False))
+def test_correctness_model_offload(type, randomize, model_apply):
+    test_correctness_model(type, randomize, model_apply, offload=True)
