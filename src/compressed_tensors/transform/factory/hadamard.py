@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union
+from typing import Optional
 
+import math
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
@@ -92,6 +93,7 @@ class HadamardTransform(TransformBase):
         self.perm = perm
         self.args = args
         self.module_type = module_type
+        self._scale = math.sqrt(weight.size(0))
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -104,4 +106,4 @@ class HadamardTransform(TransformBase):
 
         return apply_transform_weight(
             weight, value, self.args.location, self.module_type
-        )
+        ) / self._scale
