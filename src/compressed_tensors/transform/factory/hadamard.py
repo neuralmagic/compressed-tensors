@@ -93,7 +93,7 @@ class HadamardTransform(TransformBase):
         self.perm = perm
         self.args = args
         self.module_type = module_type
-        self._scale = math.sqrt(weight.size(0))
+        self._scale = torch.tensor(weight.size(0), dtype=torch.float64).sqrt()
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -104,6 +104,9 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
-        return apply_transform_weight(
+        tmp = apply_transform_weight(
             weight, value, self.args.location, self.module_type
-        ) / self._scale
+        )
+        
+        
+        return (tmp.to(torch.float64) / self._scale).to(tmp.dtype)
