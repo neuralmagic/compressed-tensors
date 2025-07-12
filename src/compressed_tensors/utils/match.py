@@ -52,7 +52,7 @@ def match_named_modules(
     for name, module in model.named_modules():
         for target in targets:
             if is_match(name, module, target):
-                unmatched_targets -= target
+                unmatched_targets -= {target}
 
                 if not any(is_match(name, module, ign) for ign in ignore):
                     yield name, module
@@ -86,7 +86,7 @@ def match_named_parameters(
             param_fqn = f"{module_name}.{param_name}"
             for target in targets:
                 if match_name(param_fqn, target):
-                    unmatched_targets -= target
+                    unmatched_targets -= {target}
 
                     if not any(match_name(param_fqn, ign) for ign in ignore):
                         yield param_fqn, module, param
