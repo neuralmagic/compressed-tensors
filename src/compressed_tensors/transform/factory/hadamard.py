@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 from typing import Optional
 
-import math
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
@@ -104,6 +104,7 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
-        return apply_transform_weight(
-            weight, value, self.args.location, self.module_type
-        ) / self._scale
+        return (
+            apply_transform_weight(weight, value, self.args.location, self.module_type)
+            / self._scale
+        )
