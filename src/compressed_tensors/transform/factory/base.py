@@ -112,7 +112,7 @@ class TransformFactory(RegistryMixin, ABC):
                 )
 
         # create transform as submodule
-        transform_name = f"{self.name}_{args.location.value}"
+        transform_name = f"{self.name}_{args.location}"
         transform = self.create_transform(module, args)
         self.transforms.append(transform)
         register_offload_module(module, transform_name, transform)
