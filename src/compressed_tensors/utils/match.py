@@ -14,6 +14,7 @@
 
 import logging
 import re
+from collections import OrderedDict
 from collections.abc import Generator
 from typing import Iterable, Tuple
 
@@ -26,6 +27,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 __all__ = [
     "match_named_modules",
     "match_named_parameters",
+    "match_modules_set",
     "is_match",
     "match_name",
     "match_class",
@@ -37,7 +39,7 @@ def match_named_modules(
     targets: Iterable[str] = tuple(),
     ignore: Iterable[str] = tuple(),
     warn_on_fail: bool = False,
-) -> Generator[Tuple[str, torch.nn.Module], None, None]:
+) -> Generator[Tuple[str, torch.nn.Module]]:
     """
     Yields names and modules which match `targets` but do not match `ignore`.
     Values are returned in order of `model.named_modules()`
@@ -96,6 +98,69 @@ def match_named_parameters(
             _LOGGER.warning(
                 f"Could not match `{target}` in instance of {model.__class__.__name__}"
             )
+
+
+def match_modules_set(
+    model: torch.nn.Module,
+    targets: Iterable[str],
+    ignore: Iterable[str],
+) -> Generator[Iterable[torch.nn.Module]]:
+    """
+    Yields modules grouped with the same order and size as `targets`.
+    Values are returned in order of `model.named_modules()`
+
+    For example, the following targets would yield module belonging to the following layers:
+    ```python3
+    match_modules_set(model, ["q_proj", "k_proj", "v_proj"]) == (
+        (
+            `model.layers.0.self_attn.q_proj`,
+            `model.layers.0.self_attn.k_proj`,
+            `model.layers.0.self_attn.v_proj`,
+        ),
+        (
+            `model.layers.1.self_attn.q_proj`,
+            `model.layers.1.self_attn.k_proj`,
+            `model.layers.1.self_attn.v_proj`,
+        ),
+        ...
+        (
+            `model.layers.32.self_attn.q_proj`,
+            `model.layers.32.self_attn.k_proj`,
+            `model.layers.32.self_attn.v_proj`,
+        ),
+    )
+    ```
+
+    This can be used to match layers to their corresponding downstream counterparts.
+    For example, matching layer norms to their subsequent linear layers
+    ```python3
+    for norm, q, k, v in match_modules_set(model, (norm_tgt, q_tgt, k_tgt, v_tgt)):
+        fuse_norm_linears(norm, [q, k, v])
+
+    :param model: model containing modules to match against
+    :param targets: target strings, potentially containing "re:" prefixes
+    :param ignore: targets to ignore, potentially containing "re:" prefixes
+    """
+    matches = dict.fromkeys(targets, None)
+    for name, module in model.named_modules():
+        # match until we get a full set
+        for target in targets:
+            if is_match(name, module, target) and not any(
+                is_match(name, module, ign) for ign in ignore
+            ):
+                if matches[target] is not None:
+                    raise ValueError(f"Matched a {target} twice before completing set")
+                matches[target] = module
+
+        # once we have a full set, yield and reset
+        if all(matches[target] is not None for target in targets):
+            yield [matches[target] for target in targets]  # ensure correct ordering
+            matches = dict.fromkeys(targets, None)
+
+    # check that none are left over
+    unmatched_keys = [match for match, value in matches.items() if value is None]
+    if len(unmatched_keys):
+        raise ValueError(f"Unable to match targets into set: {unmatched_keys}")
 
 
 def is_match(name: str, module: torch.nn.Module, target: str) -> bool:
