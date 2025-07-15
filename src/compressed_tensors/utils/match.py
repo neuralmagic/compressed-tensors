@@ -158,7 +158,7 @@ def match_modules_set(
             matches = dict.fromkeys(targets, None)
 
     # check that none are left over
-    unmatched_keys = [match for match, value in matches.items() if value is None]
+    unmatched_keys = [match for match, value in matches.items() if value is not None]
     if len(unmatched_keys):
         raise ValueError(f"Unable to match targets into set: {unmatched_keys}")
 
