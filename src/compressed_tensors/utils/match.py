@@ -36,7 +36,7 @@ __all__ = [
 
 def match_named_modules(
     model: torch.nn.Module,
-    targets: Iterable[str] = tuple(),
+    targets: Iterable[str],
     ignore: Iterable[str] = tuple(),
     warn_on_fail: bool = False,
 ) -> Generator[Tuple[str, torch.nn.Module]]:
@@ -69,7 +69,7 @@ def match_named_modules(
 def match_named_parameters(
     model: torch.nn.Module,
     targets: Iterable[str],
-    ignore: Iterable[str],
+    ignore: Iterable[str] = tuple(),
     warn_on_fail: bool = False,
 ) -> Generator[Tuple[str, torch.nn.Module, torch.nn.Parameter]]:
     """
@@ -103,7 +103,7 @@ def match_named_parameters(
 def match_modules_set(
     model: torch.nn.Module,
     targets: Iterable[str],
-    ignore: Iterable[str],
+    ignore: Iterable[str] = tuple(),
 ) -> Generator[Iterable[torch.nn.Module]]:
     """
     Yields modules grouped with the same order and size as `targets`.
