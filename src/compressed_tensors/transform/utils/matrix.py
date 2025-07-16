@@ -39,6 +39,11 @@ def get_transform_size(
             size = module.in_features
         else:
             size = module.out_features
+    elif isinstance(module, torch.nn.Embedding):
+        if location in (TransformLocation.INPUT, TransformLocation.WEIGHT_INPUT):
+            size = module.num_embeddings
+        else:
+            size = module.embedding_dim
     else:
         raise NotImplementedError(f"Transforms on {type(module)} are not supported")
 
@@ -105,10 +110,29 @@ def apply_transform_weight(
             return _multihead_matmul(value, transform_weight)
 
         elif location == TransformLocation.WEIGHT_INPUT:
+            # equivalent to (transform_weight @ value.T).T
             return _multihead_matmul(value, transform_weight.T)
 
         elif location == TransformLocation.WEIGHT_OUTPUT:
+            # equivalent to (value.T @ transform_weight).T
             return _multihead_matmul(transform_weight.T, value)
+
+        elif location == TransformLocation.OUTPUT:
+            return _multihead_matmul(value, transform_weight)
+
+    # similar derivation to torch.nn.Linear, but `y = (x W)`
+    elif module_type == torch.nn.Embedding:
+        if location == TransformLocation.INPUT:
+            return _multihead_matmul(value, transform_weight)
+
+        elif location == TransformLocation.WEIGHT_INPUT:
+            return _multihead_matmul(
+                transform_weight,
+                value,
+            )
+
+        elif location == TransformLocation.WEIGHT_OUTPUT:
+            return _multihead_matmul(value, transform_weight)
 
         elif location == TransformLocation.OUTPUT:
             return _multihead_matmul(value, transform_weight)
