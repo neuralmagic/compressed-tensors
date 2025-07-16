@@ -23,10 +23,14 @@ from compressed_tensors.transform.utils.matrix import (
     apply_transform_weight,
     get_transform_size,
 )
-from compressed_tensors.utils import get_execution_device, get_offloaded_device
+from compressed_tensors.utils import (
+    get_execution_device,
+    get_offloaded_device,
+    match_modules_set,
+)
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
 from torch import Tensor, device, dtype
-from torch.nn import Linear, Module, Parameter
+from torch.nn import Module, Parameter
 
 
 @TransformFactory.register("hadamard")
