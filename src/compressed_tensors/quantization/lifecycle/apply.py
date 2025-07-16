@@ -22,6 +22,7 @@ from typing import Set, Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
+from compressed_tensors.modeling.attention import enable_compressed_attention
 from compressed_tensors.quantization.lifecycle.compressed import (
     compress_quantized_weights,
 )
@@ -188,6 +189,9 @@ def apply_quantization_config(
                 "not found in the model: "
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
+
+    # enable attention calibration/ quantization
+    enable_compressed_attention(model)
 
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)

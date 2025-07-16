@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import torch
+from compressed_tensors.modeling.attention import enable_compressed_attention
 from compressed_tensors.transform import TransformConfig, TransformFactory
 
 
@@ -30,3 +31,5 @@ def apply_transform_config(model: torch.nn.Module, config: TransformConfig):
     for name, scheme in config.config_groups.items():
         factory = TransformFactory.from_scheme(scheme, name=name)
         factory.apply_to_model(model)
+
+    enable_compressed_attention(model)
