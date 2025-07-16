@@ -392,8 +392,8 @@ class ModelCompressor:
         for prefix, module in tqdm(model.named_modules(), desc="Compressing model"):
 
             if prefix in module_to_scheme or prefix in sparse_compression_targets:
-                module_device = get_execution_device(module).type
-                is_meta = module_device == "meta"
+                module_device = get_execution_device(module)
+                is_meta = (module_device.type == "meta")
 
                 exec_device = "meta" if is_meta else "cpu"
                 onloading_device = "meta" if is_meta else module_device
@@ -747,12 +747,16 @@ class ModelCompressor:
 
 def map_module_to_scheme(model: Module) -> Dict[str, QuantizationScheme]:
     """
-    Returns a dictionary which maps quantized module names to their quantization schemes
+    Returns a dictionary which maps quantized module names to their quantization
+    schemes. Only includes modules with weight quantization
     """
     return {
         fix_fsdp_module_name(name): module.quantization_scheme
         for name, module in model.named_modules()
-        if is_module_quantized(module)
+        if (
+            hasattr(module, "quantization_scheme") and
+            module.quantization_scheme.weights is not None
+        )
     }
 
 

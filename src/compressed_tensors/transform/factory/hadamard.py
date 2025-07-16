@@ -15,6 +15,7 @@
 import math
 from typing import Optional
 
+import math
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
@@ -26,7 +27,6 @@ from compressed_tensors.transform.utils.matrix import (
 from compressed_tensors.utils import (
     get_execution_device,
     get_offloaded_device,
-    match_modules_set,
 )
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
 from torch import Tensor, device, dtype
@@ -107,8 +107,7 @@ class HadamardTransform(TransformBase):
 
         if self.args.inverse:
             weight = weight.T
-
-        return (
-            apply_transform_weight(weight, value, self.args.location, self.module_type)
-            / self._scale
-        )
+ 
+        return apply_transform_weight(
+            weight, value, self.args.location, self.module_type
+        ) / self._scale
