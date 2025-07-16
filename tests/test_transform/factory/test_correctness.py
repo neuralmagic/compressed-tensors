@@ -91,14 +91,17 @@ def test_correctness_embedding(type, randomized, embed_loc, linear_loc):
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_model(type, randomized, model_apply, offload=False):
+@pytest.mark.parametrize("input_batch_size", (1, 5, 17))
+def test_correctness_model(
+    type, randomized, input_batch_size, model_apply, offload=False
+):
     # load model
     model = model_apply[0]
     if offload:
         model = offloaded_dispatch(model, torch.device("cuda"))
 
     # get output
-    input = torch.rand((17, 5, model.fcs[0].in_features))
+    input = torch.rand((input_batch_size, 5, model.fcs[0].in_features))
     if offload:
         input = input.to(torch.device("cuda"))
     true_output = model(input)
@@ -120,14 +123,18 @@ def test_correctness_model(type, randomized, model_apply, offload=False):
 @requires_accelerate()
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
-def test_correctness_model_offload(type, randomized, model_apply):
-    test_correctness_model(type, randomized, model_apply, offload=True)
+@pytest.mark.parametrize("input_batch_size", (1, 5, 17))
+def test_correctness_model_offload(type, randomized, input_batch_size, model_apply):
+    test_correctness_model(
+        type, randomized, input_batch_size, model_apply, offload=True
+    )
 
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
 @pytest.mark.parametrize("head_dim", (4, 8))
-def test_correctness_attention_heads(type, randomized, head_dim):
+@pytest.mark.parametrize("input_batch_size", (1, 5, 17))
+def test_correctness_attention_heads(type, randomized, head_dim, input_batch_size):
     hidden_size = 64
     num_attention_heads = 8
 
@@ -137,7 +144,7 @@ def test_correctness_attention_heads(type, randomized, head_dim):
         num_key_value_heads=head_dim,
     )
 
-    input = torch.rand(17, 5, hidden_size)
+    input = torch.rand(input_batch_size, 5, hidden_size)
     true_output = attention(input)
 
     config = TransformConfig(
