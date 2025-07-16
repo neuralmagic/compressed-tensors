@@ -14,7 +14,6 @@
 
 import logging
 import re
-from collections import OrderedDict
 from collections.abc import Generator
 from typing import Iterable, Tuple
 
@@ -153,7 +152,7 @@ def match_modules_set(
                 matches[target] = module
 
         # once we have a full set, yield and reset
-        if all(matches[target] is not None for target in targets):
+        if targets and all((matches[target] is not None for target in targets)):
             yield [matches[target] for target in targets]  # ensure correct ordering
             matches = dict.fromkeys(targets, None)
 
@@ -176,7 +175,7 @@ def match_name(name: str, target: str) -> bool:
     regex matches or if target string exactly matches name
     """
     if target.startswith("re:"):
-        return re.match(target.removeprefix("re:"), name)
+        return re.match(target.removeprefix("re:"), name) is not None
     else:
         return target == name
 
