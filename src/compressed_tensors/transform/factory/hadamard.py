@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union
-
 import math
+from typing import Optional
+
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
 from compressed_tensors.transform.factory.base import TransformBase, TransformFactory
@@ -26,7 +26,7 @@ from compressed_tensors.transform.utils.matrix import (
 from compressed_tensors.utils import get_execution_device, get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
 from torch import Tensor, device, dtype
-from torch.nn import Linear, Module, Parameter
+from torch.nn import Module, Parameter
 
 
 @TransformFactory.register("hadamard")
@@ -93,7 +93,7 @@ class HadamardTransform(TransformBase):
         self.perm = perm
         self.args = args
         self.module_type = module_type
-        self._scale = math.sqrt(weight.size(0))
+        self._scale = torch.tensor(weight.size(0), dtype=torch.float64).sqrt()
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -103,7 +103,8 @@ class HadamardTransform(TransformBase):
 
         if self.args.inverse:
             weight = weight.T
- 
-        return apply_transform_weight(
-            weight, value, self.args.location, self.module_type
-        ) / self._scale
+
+        return (
+            apply_transform_weight(weight, value, self.args.location, self.module_type)
+            / self._scale
+        )

@@ -13,12 +13,12 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from collections import defaultdict
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.utils.parametrize as P
-from compressed_tensors import InternalModule
-from compressed_tensors.quantization.lifecycle import is_target  # TODO: move to utils
+from compressed_tensors import InternalModule, match_named_modules
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
@@ -49,10 +49,13 @@ class TransformFactory(RegistryMixin, ABC):
     :param seed: random seed used to transform weight randomization
     """
 
+    transforms: List["TransformBase"]
+
     def __init__(self, name: str, scheme: TransformScheme, seed: Optional[int] = None):
         self.name = name
         self.scheme = scheme
         self.generator = torch.Generator()
+        self.transforms = list()
         if seed is not None:
             self.generator.manual_seed(seed)
 
@@ -87,9 +90,10 @@ class TransformFactory(RegistryMixin, ABC):
         :param model: module to apply transforms to
         """
         for arg in self.scheme.apply:
-            for name, module in list(model.named_modules()):
-                if is_target(name, module, arg.targets, arg.ignore):
-                    self._apply_to_module(module, arg)
+            for _, module in match_named_modules(model, arg.targets, arg.ignore):
+                self._apply_to_module(module, arg)
+
+        self._update_tied_weights()
 
     def _apply_to_module(self, module: Module, args: TransformArgs):
         """
@@ -98,9 +102,17 @@ class TransformFactory(RegistryMixin, ABC):
         :param module: target module to apply transforms to
         :param args: defines how the transform will be applied to the target module
         """
+        if has_offloaded_params(module):
+            if module._hf_hook.place_submodules:
+                raise NotImplementedError(
+                    "Applying transforms to offloaded submodules with "
+                    "`place_submodules=True` is not supported"
+                )
+
         # create transform as submodule
         transform_name = f"{self.name}_{args.location}"
         transform = self.create_transform(module, args)
+        self.transforms.append(transform)
         register_offload_module(module, transform_name, transform)
 
         # register input transformation hook
@@ -129,8 +141,9 @@ class TransformFactory(RegistryMixin, ABC):
                     raise ValueError("Offloaded training is not supported")
                 P.register_parametrization(module, "weight", transform)
 
-            # transform is no longer needed (unfusing is not supported)
-            delete_offload_module(module, transform_name)
+            else:
+                # transform is no longer needed (unfusing is not supported)
+                delete_offload_module(module, transform_name)
 
         # register output transformation hook
         elif args.location == TransformLocation.OUTPUT:
@@ -144,6 +157,35 @@ class TransformFactory(RegistryMixin, ABC):
         else:
             raise NotImplementedError()
 
+    def _update_tied_weights(self):
+        """
+        Populate the `_dynamic_tied_weights_keys` attribute of transforms,
+        which is used by transformers to detect and remove shared pointers
+        during saving
+        """
+        # avoid issues with this method being called twice
+        for transform in self.transforms:
+            transform._dynamic_tied_weights_keys = list()
+
+        # map from data_ptrs to keys
+        ptr_to_keys: dict[int, List[Tuple[TransformBase, str]]] = defaultdict(list)
+        for transform in self.transforms:
+            for name, param in transform.named_parameters(recurse=False):
+                # NOTE: previously asserted that parent._hf_hook.place_submodules=False
+                if has_offloaded_params(transform):
+                    param = transform._hf_hook.weights_map[name]
+                ptr_to_keys[param.data_ptr()].append((transform, name))
+
+        # populate `_dynamic_tied_weights_keys` if there is more than one key
+        # and ensure that they share tensors
+        for shared_keys in ptr_to_keys.values():
+            if len(shared_keys) > 1:
+                tensor = getattr(shared_keys[0][0], shared_keys[0][1])
+
+                for transform, name in shared_keys:
+                    transform._dynamic_tied_weights_keys.append(name)
+                    setattr(transform, name, tensor)
+
 
 class TransformBase(InternalModule, ABC):
     """
@@ -152,6 +194,11 @@ class TransformBase(InternalModule, ABC):
 
     args: TransformArgs
     weight: Parameter
+    _dynamic_tied_weights_keys: List[str]
+
+    def __init__(self):
+        super().__init__()
+        self._dynamic_tied_weights_keys = list()
 
     @abstractmethod
     def forward(self, value: Tensor) -> Tensor:
