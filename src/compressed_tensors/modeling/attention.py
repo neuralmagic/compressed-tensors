@@ -29,13 +29,17 @@ from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 from transformers.models.llama.modeling_llama import eager_attention_forward
 
 
-__all__ = ["CompressedAttentionImpl", "enable_compressed_attention"]
+__all__ = [
+    "CompressedAttentionImpl",
+    "enable_compressed_attention",
+    "get_compressed_attention_impl",
+]
 
 
 COMPRESSED_ATTENTION_NAME = "compressed_attention"
 
 
-CalibHook = Callable[[Module, Tensor, Tensor, Tensor]]
+ActivationHookFn = Callable[[Module, Tensor]]
 
 
 class CompressedAttentionImpl(Module):
@@ -52,7 +56,9 @@ class CompressedAttentionImpl(Module):
 
     def __init__(self, attn_implementation: str):
         self.attn_implementation = attn_implementation
-        self.calib_hooks: OrderedDict[int, CalibHook] = OrderedDict()
+        self.query_hooks: OrderedDict[int, ActivationHookFn] = OrderedDict()
+        self.key_hooks: OrderedDict[int, ActivationHookFn] = OrderedDict()
+        self.value_hooks: OrderedDict[int, ActivationHookFn] = OrderedDict()
 
         # `eager_attention_forward` is duplicated across models by design
         # assume that llama implementation is representative of all attention functions
@@ -63,16 +69,21 @@ class CompressedAttentionImpl(Module):
             else ALL_ATTENTION_FUNCTIONS[self.attn_implementation]
         )
 
-    def register_calib_hook(self, hook: CalibHook) -> RemovableHandle:
-        """
-        Register a calibration hook which is called
-        after transforms and before quantization
+    def register_query_hook(self, hook: ActivationHookFn) -> RemovableHandle:
+        handle = RemovableHandle(self.query_hooks)
+        self.query_hooks[handle.id] = hook
 
-        :param hook: hook to be called
-        :return: removable handle
-        """
-        handle = RemovableHandle(self.calib_hooks)
-        self.calib_hooks[handle.id] = hook
+        return handle
+
+    def register_key_hook(self, hook: ActivationHookFn) -> RemovableHandle:
+        handle = RemovableHandle(self.key_hooks)
+        self.key_hooks[handle.id] = hook
+
+        return handle
+
+    def register_value_hook(self, hook: ActivationHookFn) -> RemovableHandle:
+        handle = RemovableHandle(self.value_hooks)
+        self.value_hooks[handle.id] = hook
 
         return handle
 
@@ -87,37 +98,30 @@ class CompressedAttentionImpl(Module):
         dropout: float = 0.0,
         **kwargs,
     ):
-        # 1. apply transforms
-        for submodule in module.children():
-            if isinstance(submodule, TransformBase):
-                if TransformBase.args.location == TransformLocation.ATTN_Q:
-                    query = submodule(query)
+        for hook in self.query_hooks():
+            query = hook(self, query)
 
-                if TransformBase.args.location == TransformLocation.ATTN_K:
-                    key = submodule(key)
+        for hook in self.key_hooks():
+            key = hook(self, key)
 
-                # note that, unlike qk, v_proj does not undergo RoPE before attention
-                # and can therefore be targeted directly
+        for hook in self.value_hooks():
+            value = hook(self, value)
 
         # TODO: attnq
         # 2. calibrate/ apply quantization
         # args_path = "quantization_scheme.input_activations"
-        # input_args: Optional[QuantizationArgs] = getattr_chain(module, args_path, None)  # noqa: 501
-        # if input_args is not None:
-        #     status_path = "quantization_status"
-        #     status: Optional[QuantizationStatus] = getattr(module, status_path, None)
-
-        #     # 2a. calibrate quantization
-        #     if status == QuantizationStatus.CALIBRATION:
-        #         assert len(self.calib_hooks) <= 1
-        #         for hook in self.calib_hooks.items():
-        #             hook(module, query, key, value)
-
-        #     # 2b. apply quantization
-        #     if status in (QuantizationStatus.CALIBRATION, QuantizationStatus.FROZEN):
-        #         query = forward_quantize(module, query, "q", input_args)
-        #         key = forward_quantize(module, key, "k", input_args)
-        #         value = forward_quantize(module, value, "v", input_args)
+        # status_path = "quantization_status"
+        # input_args: Optional[QuantizationArgs] = getattr_chain(
+        #     module, args_path, None
+        # )
+        # status: Optional[QuantizationStatus] = getattr(module, status_path, None)
+        # if input_args is not None and status in (
+        #     QuantizationStatus.CALIBRATION,
+        #     QuantizationStatus.FROZEN,
+        # ):
+        #     query = forward_quantize(module, query, "q", input_args)
+        #     key = forward_quantize(module, key, "k", input_args)
+        #     value = forward_quantize(module, value, "v", input_args)
 
         # 3. apply original attention function
         return self.attention_fn(
@@ -125,7 +129,7 @@ class CompressedAttentionImpl(Module):
         )
 
 
-def enable_compressed_attention(model: PreTrainedModel) -> CompressedAttentionImpl:
+def enable_compressed_attention(model: PreTrainedModel):
     """
     Enables transforms, calibration, and quantization for an attention implementation.
     This function can safetly be called multiple times on the same model.
@@ -139,4 +143,11 @@ def enable_compressed_attention(model: PreTrainedModel) -> CompressedAttentionIm
         AttentionInterface.register(COMPRESSED_ATTENTION_NAME, compressed_attention)
         model.config.attn_implementation = COMPRESSED_ATTENTION_NAME
 
+
+def get_compressed_attention_impl() -> CompressedAttentionImpl:
+    if COMPRESSED_ATTENTION_NAME not in ALL_ATTENTION_FUNCTIONS:
+        raise ValueError(
+            "Please call `enable_compressed_attention(model)` before attempting "
+            "to get singleton instance of `CompressedAttentionImpl`"
+        )
     return ALL_ATTENTION_FUNCTIONS[COMPRESSED_ATTENTION_NAME]

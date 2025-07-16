@@ -19,6 +19,7 @@ from typing import List, Optional, Tuple
 import torch
 import torch.nn.utils.parametrize as P
 from compressed_tensors import InternalModule, match_named_modules
+from compressed_tensors.modeling.attention import get_compressed_attention_impl
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
@@ -119,7 +120,7 @@ class TransformFactory(RegistryMixin, ABC):
         if args.location == TransformLocation.INPUT:
 
             def input_hook(_, args):
-                input = args[0]
+                input = args[0] if isinstance(args, tuple) else args
                 return transform(input)
 
             module.register_forward_pre_hook(input_hook, prepend=True)
@@ -153,9 +154,26 @@ class TransformFactory(RegistryMixin, ABC):
 
             module.register_forward_hook(output_hook)
 
-        # other locations such as q_attn and k_attn have not been implemented
+        # query hook registered to `CompressedAttentionImpl`
+        elif args.location in TransformLocation.ATTN_Q:
+            attention_impl = get_compressed_attention_impl()
+
+            def query_hook(_, query):
+                return transform(query)
+
+            attention_impl.register_query_hook(query_hook)
+
+        # key hook registered to `CompressedAttentionImpl`
+        elif args.location in TransformLocation.ATTN_K:
+            attention_impl = get_compressed_attention_impl()
+
+            def key_hook(_, key):
+                return transform(key)
+
+            attention_impl.register_key_hook(key_hook)
+
         else:
-            raise NotImplementedError()
+            raise ValueError()
 
     def _update_tied_weights(self):
         """

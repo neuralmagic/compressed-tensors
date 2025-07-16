@@ -145,6 +145,9 @@ def apply_quantization_config(
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
+    # enable attention calibration/ quantization
+    enable_compressed_attention(model)
+
     if run_compressed:
         from compressed_tensors.linear.compressed_linear import CompressedLinear
 
@@ -189,9 +192,6 @@ def apply_quantization_config(
                 "not found in the model: "
                 f"{set(config.ignore) - set(ignored_submodules)}"
             )
-
-    # enable attention calibration/ quantization
-    enable_compressed_attention(model)
 
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)

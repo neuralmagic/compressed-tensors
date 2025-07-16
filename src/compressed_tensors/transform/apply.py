@@ -28,8 +28,8 @@ def apply_transform_config(model: torch.nn.Module, config: TransformConfig):
     :param model: model to apply config to
     :param config: transform config to apply
     """
+    enable_compressed_attention(model)
+
     for name, scheme in config.config_groups.items():
         factory = TransformFactory.from_scheme(scheme, name=name)
         factory.apply_to_model(model)
-
-    enable_compressed_attention(model)
