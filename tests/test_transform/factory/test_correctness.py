@@ -91,14 +91,17 @@ def test_correctness_embedding(type, randomized, embed_loc, linear_loc):
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomize", (True, False))
-def test_correctness_model(type, randomize, model_apply, offload=False):
+@pytest.mark.parametrize("input_batch_size", (1, 5, 17))
+def test_correctness_model(
+    type, randomize, input_batch_size, model_apply, offload=False
+):
     # load model
     model = model_apply[0]
     if offload:
         model = offloaded_dispatch(model, torch.device("cuda"))
 
     # get output
-    input = torch.rand((17, 5, model.fcs[0].in_features))
+    input = torch.rand((input_batch_size, 5, model.fcs[0].in_features))
     if offload:
         input = input.to(torch.device("cuda"))
     true_output = model(input)
