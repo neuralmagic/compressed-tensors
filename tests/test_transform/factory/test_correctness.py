@@ -29,7 +29,8 @@ from tests.testing_utils import requires_accelerate, requires_gpu
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomized", (True, False))
 @pytest.mark.parametrize("head_dim", (None, 2, 4))
-def test_correctness_linear(type, randomized, head_dim):
+@pytest.mark.parametrize("input_batch_size", (1, 5, 17))
+def test_correctness_linear(type, randomized, head_dim, input_batch_size):
     size = (4, 8)
     module = torch.nn.Linear(*size, bias=True)
     scheme = TransformScheme(type=type, randomized=randomized, head_dim=head_dim)
@@ -48,7 +49,7 @@ def test_correctness_linear(type, randomized, head_dim):
         module, TransformArgs(targets="Linear", location="output", inverse=True)
     )
 
-    input = torch.rand((17, 5, size[0]))
+    input = torch.rand((input_batch_size, 5, size[0]))
     true_output = input @ module.weight.T
     input_transformed = input_tfm(input)
     weight_transformed = w_out_tfm(w_in_tfm(module.weight))

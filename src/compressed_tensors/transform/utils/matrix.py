@@ -120,10 +120,11 @@ def apply_transform_weight(
 
 def _multihead_matmul(A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
     """
-    Performs A @ B for two square matrices A and B that possibly have different
-    shapes, as is the case in multi-headed dimension. If shapes are different,
-    this is equivalent to converting the smaller matrix into a block-diagonal
-    matrix with the same shape as the larger matrix.
+    Performs A @ B for last two dims of two matrices A and B that possibly
+    have different shapes, as is the case in multi-headed dimension. If
+    shapes are different, this is equivalent to converting the last two dims
+    of the smaller matrix into a block-diagonal matrix with the same shape as
+    the last two dims of the larger matrix.
 
     E.g. if A is half the size of B, this function will perform
     [[A  ]  @ B
@@ -140,13 +141,13 @@ def _multihead_matmul(A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
     :param B: right-hand tensor
     :return: result
     """
-    if A.shape[0] > B.shape[0]:
-        head_dim = B.shape[0]
+    if A.shape[-1] > B.shape[-2]:
+        head_dim = B.shape[-2]
         num_heads = A.shape[-1] // head_dim
         A = A.unflatten(-1, (num_heads, head_dim))
         return (A @ B).flatten(-2, -1)
-    elif A.shape[0] < B.shape[0]:
-        head_dim = A.shape[0]
+    elif A.shape[-1] < B.shape[-2]:
+        head_dim = A.shape[-1]
         num_heads = B.shape[-2] // head_dim
         B = B.unflatten(-2, (num_heads, head_dim))
         return (A @ B).flatten(-3, -2)
