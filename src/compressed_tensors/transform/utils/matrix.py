@@ -59,47 +59,13 @@ def get_transform_size(
 
 
 def apply_transform_weight(
-    weight: torch.Tensor,
+    transform_weight: torch.Tensor,
     value: torch.Tensor,
     location: TransformLocation,
     module_type: type[torch.nn.Module],
 ) -> torch.Tensor:
     """
-    :param weight: transform weight to apply
-    :param value: value to apply weight to
-    :param location: determines how weight should be applied
-    :param model_type: result of type(module), passed in to determine application of
-        weight transform. This is needed because torch uses convention:
-        - torch.nn.Linear(in_features,out_features) has weight shape
-            (out_features, in_features)
-        - torch.nn.Embedding(num_embeddings, embedding_dim) has weight shape
-            (num_embeddings, embedding_dim)
-        The transform has to account for Linear's transposed weights
-    :return: value after weight has been applied
-    """
-    # get function used to apply transform
-    fn, axis = _get_transform_method(module_type, location)
-
-    # reshape for head_dim
-    head_dim = weight.shape[0]
-    num_heads = value.shape[axis] // head_dim
-    value = value.unflatten(axis, (num_heads, head_dim))
-
-    # apply transform
-    value = fn(weight, value)
-
-    # [undo] reshape for head_dim
-    value = value.flatten(axis - 1, axis)
-
-    return value
-
-
-def _get_transform_method(
-    module_type: type[torch.nn.Module],
-    location: TransformLocation,
-) -> Tuple[Callable[[torch.Tensor, torch.Tensor], torch.Tensor], int]:
-    """
-    Using the transform location, determine how to apply the transform weight to the
+    Using the transform location, apply the transform_weight to the
     given value wrt linear weights. For more info on input and output transforms,
     see `TransformLocation`
 
@@ -129,51 +95,89 @@ def _get_transform_method(
                 = y U
                 = yh
 
-    :param weight: transform weight to apply
-    :param value: value to apply weight to
+    :param transform_weight: transform weight to apply
+    :param value: value to apply transform_weight to
     :param location: determines how weight should be applied
-    :return: value after transform weight has been applied
+    :param model_type: result of type(module), passed in to determine application of
+        weight transform
+    :return: value after transform_weight has been applied
     """
-    fn = axis = None
+
+    assert transform_weight.shape[0] == transform_weight.shape[1]
 
     if module_type == torch.nn.Linear:
-        if location == TransformLocation.INPUT:
-            fn = lambda weight, value: value @ weight
-            axis = -1
+        if location in (
+            TransformLocation.INPUT,
+            TransformLocation.ATTN_Q,
+            TransformLocation.ATTN_K,
+        ):
+            return _multihead_matmul(value, transform_weight)
 
         elif location == TransformLocation.WEIGHT_INPUT:
-            fn = lambda weight, value: value @ weight.T
-            axis = -1
+            # equivalent to (transform_weight @ value.T).T
+            return _multihead_matmul(value, transform_weight.T)
 
         elif location == TransformLocation.WEIGHT_OUTPUT:
-            fn = lambda weight, value: weight.T @ value
-            axis = -2
+            # equivalent to (value.T @ transform_weight).T
+            return _multihead_matmul(transform_weight.T, value)
 
         elif location == TransformLocation.OUTPUT:
-            fn = lambda weight, value: value @ weight
-            axis = -1
+            return _multihead_matmul(value, transform_weight)
 
     # similar derivation to torch.nn.Linear, but `y = (x W)`
-    if module_type == torch.nn.Embedding:
+    elif module_type == torch.nn.Embedding:
         if location == TransformLocation.INPUT:
-            fn = lambda weight, value: value @ weight
-            axis = -1
+            return _multihead_matmul(value, transform_weight)
 
         elif location == TransformLocation.WEIGHT_INPUT:
-            fn = lambda weight, value: weight @ value
-            axis = -1
+            return _multihead_matmul(
+                transform_weight,
+                value,
+            )
 
         elif location == TransformLocation.WEIGHT_OUTPUT:
-            fn = lambda weight, value: value @ weight
-            axis = -1
+            return _multihead_matmul(value, transform_weight)
 
         elif location == TransformLocation.OUTPUT:
-            fn = lambda weight, value: value @ weight
-            axis = -1
+            return _multihead_matmul(value, transform_weight)
 
-    if fn is None:
-        raise NotImplementedError(
-            f"Applying transforms to {module_type} {location} is not supported"
-        )
+    raise NotImplementedError(
+        f"Applying transforms to {module_type} {location} is not supported"
+    )
 
-    return fn, axis
+
+def _multihead_matmul(A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+    """
+    Performs A @ B for last two dims of two matrices A and B that possibly
+    have different shapes, as is the case in multi-headed dimension. If
+    shapes are different, this is equivalent to converting the last two dims
+    of the smaller matrix into a block-diagonal matrix with the same shape as
+    the last two dims of the larger matrix.
+
+    E.g. if A is half the size of B, this function will perform
+    [[A  ]  @ B
+     [  A]]
+
+    If B is a third of the size of A, this function will perform
+    A @ [[B    ]
+         [  B  ]
+         [    B]]
+
+    This function will error out if the shapes are not evenly divisble
+
+    :param A: left-hand tensor
+    :param B: right-hand tensor
+    :return: result
+    """
+    if A.shape[-1] > B.shape[-2]:
+        head_dim = B.shape[-2]
+        num_heads = A.shape[-1] // head_dim
+        A = A.unflatten(-1, (num_heads, head_dim))
+        return (A @ B).flatten(-2, -1)
+    elif A.shape[-1] < B.shape[-2]:
+        head_dim = A.shape[-1]
+        num_heads = B.shape[-2] // head_dim
+        B = B.unflatten(-2, (num_heads, head_dim))
+        return (A @ B).flatten(-3, -2)
+    else:
+        return A @ B

@@ -12,62 +12,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import OrderedDict
-from typing import Callable, Optional
+from collections import OrderedDict, defaultdict
+from typing import TYPE_CHECKING, Callable, Optional
 
-from compressed_tensors.quantization import (
-    QuantizationArgs,
-    QuantizationStatus,
-    forward_quantize,
-)
-from compressed_tensors.transform import TransformBase, TransformLocation
+import torch
 from compressed_tensors.utils import getattr_chain
-from torch import Module, Tensor
 from torch.utils.hooks import RemovableHandle
 from transformers import AttentionInterface, PreTrainedModel
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 from transformers.models.llama.modeling_llama import eager_attention_forward
 
 
-__all__ = [
-    "CompressedAttentionImpl",
-    "enable_compressed_attention",
-    "get_compressed_attention_impl",
-]
+if TYPE_CHECKING:
+    from compressed_tensors.quantization import QuantizationArgs, QuantizationStatus
 
 
-COMPRESSED_ATTENTION_NAME = "compressed_attention"
+__all__ = ["CompressedAttentionImpl", "enable_compressed_attention", "call_attn_impl"]
 
 
-ActivationHookFn = Callable[[Module, Tensor]]
+ActivationHookFn = Callable[[torch.nn.Module, torch.Tensor], None]
 
 
-class CompressedAttentionImpl(Module):
+class CompressedAttentionImpl(torch.nn.Module):
     """
     Callable attention implementation which applies transforms, calibration, and
     quantization if applicable. Can be hooked with calibrations hooks in order to
     trigger quantization observers.
 
-    In the future, the idea of making attention implementions hookable Modules
-    could be upstreamed to transformers model definitions
-
     :param attn_implementation: original attention implementation to call after hooks
     """
 
-    def __init__(self, attn_implementation: str):
-        self.attn_implementation = attn_implementation
+    NAME = "compressed_attention"
+    ATTN_IMPL = "eager"
+    _ATTN_IMPLS = dict()
+
+    @classmethod
+    def from_module(cls, module: torch.nn.Module):
+        if module not in cls._ATTN_IMPLS:
+            cls._ATTN_IMPLS[module] = cls()
+        return cls._ATTN_IMPLS[module]
+
+    def __init__(self):
+        super().__init__()
         self.query_hooks: OrderedDict[int, ActivationHookFn] = OrderedDict()
         self.key_hooks: OrderedDict[int, ActivationHookFn] = OrderedDict()
         self.value_hooks: OrderedDict[int, ActivationHookFn] = OrderedDict()
-
-        # `eager_attention_forward` is duplicated across models by design
-        # assume that llama implementation is representative of all attention functions
-        # see: https://github.com/huggingface/transformers/issues/38541#issuecomment-2958567250  # noqa: 501
-        self.attention_fn: Callable = (
-            eager_attention_forward
-            if self.attn_implementation == "eager"
-            else ALL_ATTENTION_FUNCTIONS[self.attn_implementation]
-        )
 
     def register_query_hook(self, hook: ActivationHookFn) -> RemovableHandle:
         handle = RemovableHandle(self.query_hooks)
@@ -89,23 +78,31 @@ class CompressedAttentionImpl(Module):
 
     def forward(
         self,
-        module: Module,
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-        attention_mask: Optional[Tensor],
+        module: torch.nn.Module,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
         scaling: float,
         dropout: float = 0.0,
         **kwargs,
     ):
-        for hook in self.query_hooks():
-            query = hook(self, query)
+        from compressed_tensors.quantization import forward_quantize
 
-        for hook in self.key_hooks():
-            key = hook(self, key)
+        for hook in self.query_hooks.values():
+            output = hook(self, query)
+            if output is not None:
+                query = output
 
-        for hook in self.value_hooks():
-            value = hook(self, value)
+        for hook in self.key_hooks.values():
+            output = hook(self, key)
+            if output is not None:
+                key = output
+
+        for hook in self.value_hooks.values():
+            output = hook(self, value)
+            if output is not None:
+                value = output
 
         # TODO: attnq
         # 2. calibrate/ apply quantization
@@ -124,12 +121,22 @@ class CompressedAttentionImpl(Module):
         #     value = forward_quantize(module, value, "v", input_args)
 
         # 3. apply original attention function
-        return self.attention_fn(
+        # `eager_attention_forward` is duplicated across models by design
+        # assume that llama implementation is representative of all attention functions
+        # see: https://github.com/huggingface/transformers/issues/38541#issuecomment-2958567250  # noqa: 501
+
+        attention_fn: Callable = (
+            eager_attention_forward
+            # if self.ATTN_IMPL == "eager"
+            # else ALL_ATTENTION_FUNCTIONS[self.ATTN_IMPL]
+        )
+        # print(self.ATTN_IMPL)
+        return attention_fn(
             module, query, key, value, attention_mask, scaling, dropout, **kwargs
         )
 
 
-def enable_compressed_attention(model: PreTrainedModel):
+def enable_compressed_attention(model: torch.nn.Module):
     """
     Enables transforms, calibration, and quantization for an attention implementation.
     This function can safetly be called multiple times on the same model.
@@ -137,17 +144,16 @@ def enable_compressed_attention(model: PreTrainedModel):
     :param model: model to enable compressed quantization for
     :return: singleton instance of `CompressedAttentionImpl`
     """
-    attn_implementation = getattr(model.config, "attn_implementation", "eager")
-    if attn_implementation != COMPRESSED_ATTENTION_NAME:
-        compressed_attention = CompressedAttentionImpl(attn_implementation)
-        AttentionInterface.register(COMPRESSED_ATTENTION_NAME, compressed_attention)
-        model.config.attn_implementation = COMPRESSED_ATTENTION_NAME
+    if not isinstance(model, PreTrainedModel):
+        return
+
+    attn_impl = getattr(model.config, "_attn_implementation", "eager")
+
+    CompressedAttentionImpl.ATTN_IMPL = attn_impl
+    AttentionInterface.register(CompressedAttentionImpl.NAME, call_attn_impl)
+    model.config._attn_implementation = CompressedAttentionImpl.NAME
+    # model.set_attention_implementation(CompressedAttentionImpl.NAME)
 
 
-def get_compressed_attention_impl() -> CompressedAttentionImpl:
-    if COMPRESSED_ATTENTION_NAME not in ALL_ATTENTION_FUNCTIONS:
-        raise ValueError(
-            "Please call `enable_compressed_attention(model)` before attempting "
-            "to get singleton instance of `CompressedAttentionImpl`"
-        )
-    return ALL_ATTENTION_FUNCTIONS[COMPRESSED_ATTENTION_NAME]
+def call_attn_impl(module: torch.nn.Module, *args, **kwargs):
+    return CompressedAttentionImpl.from_module(module)(module, *args, **kwargs)

@@ -18,8 +18,7 @@ from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.utils.parametrize as P
-from compressed_tensors import InternalModule, match_named_modules
-from compressed_tensors.modeling.attention import get_compressed_attention_impl
+from compressed_tensors.modeling.attention import CompressedAttentionImpl
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
@@ -27,9 +26,11 @@ from compressed_tensors.transform import (
     TransformScheme,
 )
 from compressed_tensors.utils import (
+    InternalModule,
     align_module_device,
     delete_offload_module,
     has_offloaded_params,
+    match_named_modules,
     patch_attr,
     register_offload_module,
     update_offload_parameter,
@@ -112,12 +113,12 @@ class TransformFactory(RegistryMixin, ABC):
 
         # create transform as submodule
         transform_name = f"{self.name}_{args.location}"
-        transform = self.create_transform(module, args)
-        self.transforms.append(transform)
-        register_offload_module(module, transform_name, transform)
 
         # register input transformation hook
         if args.location == TransformLocation.INPUT:
+            transform = self.create_transform(module, args)
+            self.transforms.append(transform)
+            register_offload_module(module, transform_name, transform)
 
             def input_hook(_, args):
                 input = args[0] if isinstance(args, tuple) else args
@@ -130,6 +131,9 @@ class TransformFactory(RegistryMixin, ABC):
             TransformLocation.WEIGHT_INPUT,
             TransformLocation.WEIGHT_OUTPUT,
         ):
+            transform = self.create_transform(module, args)
+            register_offload_module(module, transform_name, transform)
+
             # fuse transform into weight
             assert hasattr(module, "weight")
             with torch.no_grad(), align_module_device(module):
@@ -141,6 +145,7 @@ class TransformFactory(RegistryMixin, ABC):
                 if has_offloaded_params(module):
                     raise ValueError("Offloaded training is not supported")
                 P.register_parametrization(module, "weight", transform)
+                self.transforms.append(transform)
 
             else:
                 # transform is no longer needed (unfusing is not supported)
@@ -148,6 +153,9 @@ class TransformFactory(RegistryMixin, ABC):
 
         # register output transformation hook
         elif args.location == TransformLocation.OUTPUT:
+            transform = self.create_transform(module, args)
+            self.transforms.append(transform)
+            register_offload_module(module, transform_name, transform)
 
             def output_hook(_, _input, output):
                 return transform(output)
@@ -156,7 +164,13 @@ class TransformFactory(RegistryMixin, ABC):
 
         # query hook registered to `CompressedAttentionImpl`
         elif args.location in TransformLocation.ATTN_Q:
-            attention_impl = get_compressed_attention_impl()
+            # TODO: makes name assumptions. Maybe we can target q_proj in the config
+            # then assume parent? Not sure
+            transform = self.create_transform(module.q_proj, args)
+            self.transforms.append(transform)
+            register_offload_module(module, transform_name, transform)
+
+            attention_impl = CompressedAttentionImpl.from_module(module)
 
             def query_hook(_, query):
                 return transform(query)
@@ -165,7 +179,13 @@ class TransformFactory(RegistryMixin, ABC):
 
         # key hook registered to `CompressedAttentionImpl`
         elif args.location in TransformLocation.ATTN_K:
-            attention_impl = get_compressed_attention_impl()
+            # TODO: makes name assumptions. Maybe we can target k_proj in the config
+            # then assume parent? Not sure
+            transform = self.create_transform(module.k_proj, args)
+            self.transforms.append(transform)
+            register_offload_module(module, transform_name, transform)
+
+            attention_impl = CompressedAttentionImpl.from_module(module)
 
             def key_hook(_, key):
                 return transform(key)

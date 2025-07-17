@@ -14,8 +14,13 @@
 
 import pytest
 import torch
+from compressed_tensors.modeling.attention import call_attn_impl
 from compressed_tensors.transform import TransformArgs, TransformFactory
 from transformers import PretrainedConfig, PreTrainedModel
+from transformers.models.llama.modeling_llama import (
+    LlamaAttention,
+    LlamaRotaryEmbedding,
+)
 
 
 class TransformableModel(PreTrainedModel):
@@ -34,65 +39,46 @@ class TransformableModel(PreTrainedModel):
         return x
 
 
-class MockAttention(torch.nn.Module):
+class MockAttentionModel(PreTrainedModel):
     def __init__(
-        self, hidden_size: int, num_attention_heads: int, num_key_value_heads: int
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        skip_pos_embeddings: bool = False,
+        attn_implementation: str = "eager",
     ):
-        super().__init__()
-        self.num_attention_heads = num_attention_heads
-        self.num_key_value_heads = num_key_value_heads
-
-        self.num_key_value_groups = num_attention_heads // num_key_value_heads
-        self.head_dim = hidden_size // num_attention_heads
-        self.scaling = self.head_dim**-0.5
-        assert hidden_size >= num_attention_heads * self.head_dim
-
-        self.q_proj = torch.nn.Linear(
-            hidden_size, num_attention_heads * self.head_dim, bias=False
+        config = PretrainedConfig(
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_key_value_heads=num_key_value_heads,
+            attention_dropout=0.0,
+            attention_bias=False,
+            max_position_embeddings=128,
+            rope_theta=500000.0,
+            _attn_implementation_internal=attn_implementation,
+            _attn_implementation_autoset=False,
         )
-        self.k_proj = torch.nn.Linear(
-            hidden_size, num_key_value_heads * self.head_dim, bias=False
-        )
-        self.v_proj = torch.nn.Linear(
-            hidden_size, num_key_value_heads * self.head_dim, bias=False
-        )
-        self.o_proj = torch.nn.Linear(
-            num_attention_heads * self.head_dim, hidden_size, bias=False
-        )
+        super().__init__(config)
+        self.rotary_emb = LlamaRotaryEmbedding(config=config)
+        self.attn = LlamaAttention(config, layer_idx=0)
+        self.skip_pos_embeddings = skip_pos_embeddings
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        batch_size, seq_len, hidden_size = hidden_states.shape
-        hidden_shape = (batch_size, seq_len, -1, self.head_dim)
+        assert hidden_states.size(1) <= self.config.max_position_embeddings
 
-        query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-        key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-        value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        if not self.skip_pos_embeddings:
+            position_ids = torch.arange(hidden_states.size(1)).unsqueeze(0)
+            position_embeddings = self.rotary_emb(hidden_states, position_ids)
+        else:
+            zeros = torch.zeros(hidden_states.size(1), dtype=hidden_states.dtype)
+            position_embeddings = (zeros, zeros)
 
-        key_states = self.repeat_kv(key_states, self.num_key_value_groups)
-        value_states = self.repeat_kv(value_states, self.num_key_value_groups)
-
-        attn_weights = (
-            torch.matmul(query_states, key_states.transpose(2, 3)) * self.scaling
+        attn_output, _attn_weights = self.attn(
+            hidden_states, position_embeddings=position_embeddings, attention_mask=None
         )
 
-        attn_weights = torch.nn.functional.softmax(
-            attn_weights, dim=-1, dtype=torch.float32
-        ).to(query_states.dtype)
-        attn_output = torch.matmul(attn_weights, value_states)
-        attn_output = attn_output.transpose(1, 2).contiguous()
-
-        attn_output = attn_output.reshape((batch_size, seq_len, -1)).contiguous()
-
-        return self.o_proj(attn_output)
-
-    def repeat_kv(self, hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
-        batch, num_key_value_heads, slen, head_dim = hidden_states.shape
-        if n_rep == 1:
-            return hidden_states
-        hidden_states = hidden_states[:, :, None, :, :].expand(
-            batch, num_key_value_heads, n_rep, slen, head_dim
-        )
-        return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
+        return attn_output
 
 
 @pytest.fixture(scope="function")

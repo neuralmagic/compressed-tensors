@@ -22,7 +22,7 @@ from compressed_tensors.transform import (
     apply_transform_config,
 )
 from compressed_tensors.utils import offloaded_dispatch
-from tests.test_transform.conftest import MockAttention
+from tests.test_transform.conftest import MockAttentionModel
 from tests.testing_utils import requires_accelerate, requires_gpu
 
 
@@ -122,33 +122,53 @@ def test_correctness_attention_heads(type, randomize, head_dim):
     hidden_size = 64
     num_attention_heads = 8
 
-    attention = MockAttention(
+    model = MockAttentionModel(
         hidden_size=hidden_size,
         num_attention_heads=num_attention_heads,
         num_key_value_heads=head_dim,
+        skip_pos_embeddings=False,
+        attn_implementation="eager",  # TODO: fails with sdpa
     )
 
     input = torch.rand(17, 5, hidden_size)
-    true_output = attention(input)
+    true_output = model(input)
 
     config = TransformConfig(
         config_groups={
-            "": TransformScheme(
+            # "R3": TransformScheme(
+            #     type=type,
+            #     randomize=randomize,
+            #     head_dim=head_dim,
+            #     apply=[
+            #         TransformArgs(targets="attn.q_proj", location="output"),
+            #         TransformArgs(targets="attn.k_proj", location="output"),
+            #     ],
+            # ),
+            "R3": TransformScheme(
                 type=type,
                 randomize=randomize,
                 head_dim=head_dim,
                 apply=[
-                    TransformArgs(targets="v_proj", location="weight_output"),
+                    TransformArgs(targets="attn", location="attn_q"),
+                    TransformArgs(targets="attn", location="attn_k"),
+                ],
+            ),
+            "R2": TransformScheme(
+                type=type,
+                randomize=randomize,
+                head_dim=head_dim,
+                apply=[
+                    TransformArgs(targets="attn.v_proj", location="weight_output"),
                     TransformArgs(
-                        targets="o_proj", location="weight_input", inverse=True
+                        targets="attn.o_proj", location="weight_input", inverse=True
                     ),
                 ],
-            )
+            ),
         }
     )
-    apply_transform_config(attention, config)
+    apply_transform_config(model, config)
 
-    output = attention(input)
+    output = model(input)
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
