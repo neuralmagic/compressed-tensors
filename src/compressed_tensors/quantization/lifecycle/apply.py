@@ -22,6 +22,7 @@ from typing import Set, Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
+from compressed_tensors.modeling.attention import enable_compressed_attention
 from compressed_tensors.quantization.lifecycle.compressed import (
     compress_quantized_weights,
 )
@@ -143,6 +144,9 @@ def apply_quantization_config(
     for scheme in config.config_groups.values():
         for target in scheme.targets:
             target_to_scheme[target] = scheme
+
+    # enable attention calibration/ quantization
+    enable_compressed_attention(model)
 
     if run_compressed:
         from compressed_tensors.linear.compressed_linear import CompressedLinear
