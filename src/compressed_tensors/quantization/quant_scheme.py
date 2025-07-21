@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
@@ -52,6 +53,7 @@ class QuantizationScheme(BaseModel):
     def validate_model_after(model: "QuantizationScheme") -> "QuantizationScheme":
         inputs = model.input_activations
         outputs = model.output_activations
+        weights = model.weights
 
         if inputs is not None:
             if inputs.actorder is not None:
@@ -60,6 +62,21 @@ class QuantizationScheme(BaseModel):
         if outputs is not None:
             if outputs.actorder is not None:
                 raise ValueError("Cannot apply actorder to output activations")
+
+        if (
+            inputs and weights
+            and weights.strategy == QuantizationStrategy.GROUP 
+            and inputs.strategy == QuantizationStrategy.GROUP
+            and weights.group_size != inputs.group_size
+        ):
+            warnings.warn(
+                "Using GROUP strategy for both weights and input_activations "
+                f"with different group sizes ({weights.group_size} vs {inputs.group_size}) "
+                "may complicate fused kernel implementations. Consider using "
+                "TENSOR_GROUP strategy for both or matching group sizes.",
+                UserWarning,
+                stacklevel=2
+            )
 
         return model
 
