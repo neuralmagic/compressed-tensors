@@ -105,6 +105,11 @@ class HadamardTransform(TransformBase):
             weight = weight.T
 
         return (
-            apply_transform_weight(weight, value, self.args.location, self.module_type)
+            apply_transform_weight(
+                weight.to(torch.float64),
+                value.to(torch.float64),
+                self.args.location,
+                self.module_type,
+            )
             / self._scale
-        )
+        ).to(weight.dtype)
