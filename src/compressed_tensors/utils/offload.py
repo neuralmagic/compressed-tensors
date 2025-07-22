@@ -348,7 +348,11 @@ def offload_to_weights_map(
                     )
                 offload_device = tens.device
 
-        weights_map[key] = value.to(device=offload_device)
+        # for some reason, the commented code causes a memory leak
+        # weights_map[key] = value.to(device=offload_device)
+        if weights_map[key].device != offload_device:
+            weights_map[key] = weights_map[key].to(offload_device)
+        weights_map[key].copy_(value)
 
     else:
         raise NotImplementedError(
