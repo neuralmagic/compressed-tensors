@@ -180,6 +180,22 @@ def _initialize_scale_zero_point(
         ):
             num_groups = math.ceil(weight_shape[1] / quantization_args.group_size)
             expected_shape = (weight_shape[0], max(num_groups, 1))
+        elif quantization_args.strategy == QuantizationStrategy.BLOCK:
+            # For block quantization, scale shape should match number of blocks
+            if quantization_args.block_structure is None:
+                raise ValueError("Block quantization requires block_structure to be specified")
+            block_height, block_width = quantization_args.block_structure
+            rows, cols = weight_shape[-2], weight_shape[-1]
+            num_rows_blocks = math.ceil(rows / block_height)
+            num_cols_blocks = math.ceil(cols / block_width)
+            expected_shape = (num_rows_blocks, num_cols_blocks)
+    elif quantization_args.strategy == QuantizationStrategy.BLOCK:.
+        import warnings
+        warnings.warn(
+            f"BLOCK quantization not supported for {base_name} activations. "
+            f"Falling back to tensor-level quantization.",
+        )
+        expected_shape = 1
 
     # 3. Identify quantization scale and zp dtype
     scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
