@@ -7,14 +7,14 @@ import math
 from collections import OrderedDict
 
 
-# int4, PER CHANNEL, symmetric
+# int4, PER CHANNEL, asymmetric
 
 # From the QuaRot paper:
 # For weight quantization, we use round-to-nearest (RTN) and GPTQ
 # with per-column (also known as per-channel) symmetric quantization,
 # where we extract the clipping ratio using a linear search over the squared error
-quant_min = -7
-quant_max = 8
+quant_min = -8
+quant_max = 7
 generator = torch.Generator().manual_seed(42)
 dtype = torch.bfloat16  # seems to matter a lot. float32 is consistently better for transforms. This is the opposite finding of fp8
 
@@ -45,52 +45,52 @@ def mock_apply_qconfig(model: torch.nn.Module):
             "weight_scale",
             torch.nn.Parameter(torch.empty(module.weight.size(0), dtype=module.weight.dtype), requires_grad=False)
         )
+        module.register_parameter(
+            "weight_zero_point",
+            torch.nn.Parameter(torch.empty(module.weight.size(0), dtype=int), requires_grad=False)
+        )
 
 
 def mock_apply_tconfig(model: torch.nn.Module):
     hadamard = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype)
     #hadamard = random_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, gen=generator)
 
-    #hadamard = torch.round(hadamard).to(dtype=dtype)
+    hadamard = torch.round(hadamard).to(dtype=dtype)
+    inv = hadamard.T
 
     model.A.weight.data = (hadamard.T @ model.A.weight) / torch.tensor(hadamard.size(0)).sqrt()
-    model.B.weight.data = (model.B.weight @ hadamard.T) / torch.tensor(hadamard.size(0)).sqrt()
-
-    # values = model.A.weight.data.to(torch.float32).flatten()
-    # print(values)
-    # import matplotlib.pyplot as plt
-    # plt.figure(figsize=(8, 4))
-    # plt.hist(values, bins=100, color="steelblue", edgecolor="black")
-    # plt.title(f"normal after had")
-    # plt.xlabel("Weight value")
-    # plt.ylabel("Frequency")
-    # low, high = torch.quantile(values, torch.tensor([0.001, 0.999])).tolist()
-    # plt.xlim(low, high)
-    # plt.tight_layout()
-    # plt.savefig(f"normal_after_had.png")
-    # plt.close()
-    # exit(0)
+    model.B.weight.data = (model.B.weight @ inv.T) / torch.tensor(hadamard.size(0)).sqrt()
 
 
 def mock_calibrate_channel(module: torch.nn.Module):
     max_values = module.weight.max(dim=1).values
     min_values = module.weight.min(dim=1).values
 
-    max_abs = torch.maximum(max_values.abs(), min_values.abs())
-    max_abs = max_abs.clamp(min=torch.finfo(dtype).eps)
+    # scale
+    scale = (max_values - min_values) / (quant_max - quant_min)
+    scale = scale.clamp(min=torch.finfo(scale.dtype).eps)
+
+    # zero point
+    zero_point = quant_min - torch.round(min_values / scale)
+    zero_point = zero_point.clamp(quant_min, quant_max)
     
-    module.weight_scale.data = (max_abs * 2) / (quant_max - quant_min)
+    module.weight_scale.data = scale
+    module.weight_zero_point.data = zero_point
 
 
 def mock_forward_quantize(module: torch.nn.Module):
-    scale = getattr(module, "weight_scale")
+    scale = module.weight_scale
+    zero_point = module.weight_zero_point
     original_dtype = module.weight.dtype
-    quant_dtype = torch.float32
+    quant_dtype = torch.float32  # used during computation
 
-    x_q = module.weight.to(quant_dtype) / scale[:, None].to(quant_dtype)
-    x_q = torch.round(x_q)
+    # quantize
+    x = module.weight.to(quant_dtype)
+    x_q = torch.round(x / scale[:, None] + zero_point[:, None])
     x_q = torch.clamp(x_q, quant_min, quant_max)  # unlike current impl, round then clamp
-    x_qdq = x_q * scale[:, None]
+
+    # dequantize
+    x_qdq = (x_q - zero_point[:, None]) * scale[:, None]
 
     module.weight.data = x_qdq.to(original_dtype)
 

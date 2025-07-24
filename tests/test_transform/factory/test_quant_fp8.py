@@ -51,13 +51,14 @@ def mock_apply_qconfig(model: torch.nn.Module):
 
 
 def mock_apply_tconfig(model: torch.nn.Module):
-    hadamard = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype)
-    #hadamard = random_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, gen=generator)
+    #hadamard = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype)
+    hadamard = random_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, gen=generator)
 
     #hadamard = torch.round(hadamard).to(dtype=dtype)
+    inv = hadamard.T
 
     model.A.weight.data = (hadamard.T @ model.A.weight) / torch.tensor(hadamard.size(0)).sqrt()
-    model.B.weight.data = (model.B.weight @ hadamard.T) / torch.tensor(hadamard.size(0)).sqrt()
+    model.B.weight.data = (model.B.weight @ inv) / torch.tensor(hadamard.size(0)).sqrt()
 
 
 def mock_calibrate_channel(module: torch.nn.Module):
@@ -85,7 +86,7 @@ def mock_forward_quantize(module: torch.nn.Module):
     # quantize
     x = module.weight.to(quant_dtype)
     x_q = (x / scale[:, None] + zero_point[:, None]).to(q_dtype).to(quant_dtype)
-    x_q = torch.clamp(x_q, quant_min, quant_max)
+    x_q = torch.clamp(x_q, quant_min, quant_max)  # unlike current impl, round then clamp
 
     # dequantize
     x_qdq = (x_q - zero_point[:, None]) * scale[:, None]
@@ -149,5 +150,5 @@ def test_quantization_reconstruction(sizes):
     #assert quant_loss < 1e-05
     #assert trans_quant_loss < 1e-05
     print((trans_quant_loss, quant_loss))
-    assert trans_quant_loss <= quant_loss
+    assert trans_quant_loss < quant_loss
     # assert trans_quant_loss < quant_loss < 1e-05
