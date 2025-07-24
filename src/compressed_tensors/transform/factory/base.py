@@ -29,6 +29,7 @@ from compressed_tensors.utils import (
     align_module_device,
     delete_offload_module,
     has_offloaded_params,
+    match_named_modules,
     patch_attr,
     register_offload_module,
     update_offload_parameter,
