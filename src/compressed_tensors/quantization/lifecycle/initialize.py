@@ -170,18 +170,19 @@ def _initialize_scale_zero_point(
     else:
         expected_shape = 1
 
-    if base_name == "weight" and weight_shape is not None:
-        if quantization_args.strategy == QuantizationStrategy.CHANNEL:
-            # (output_channels, 1)
+    if weight_shape is not None:
+        if quantization_args.strategy == QuantizationStrategy.CHANNEL and base_name == "weight":
+            # (output_channels, 1) - only for weights
             expected_shape = (weight_shape[0], 1)
         elif quantization_args.strategy in (
             QuantizationStrategy.TENSOR_GROUP,
             QuantizationStrategy.GROUP,
         ):
+            # GROUP/TENSOR_GROUP for both weights and activations
             num_groups = math.ceil(weight_shape[1] / quantization_args.group_size)
             expected_shape = (weight_shape[0], max(num_groups, 1))
-        elif quantization_args.strategy == QuantizationStrategy.BLOCK:
-            # For block quantization, scale shape should match number of blocks
+        elif quantization_args.strategy == QuantizationStrategy.BLOCK and base_name == "weight":
+            # For block quantization, scale shape should match number of blocks - only for weights
             if quantization_args.block_structure is None:
                 raise ValueError("Block quantization requires block_structure to be specified")
             block_height, block_width = quantization_args.block_structure
@@ -194,6 +195,7 @@ def _initialize_scale_zero_point(
         warnings.warn(
             f"BLOCK quantization not supported for {base_name} activations. "
             f"Falling back to tensor-level quantization.",
+            UserWarning
         )
         expected_shape = 1
 

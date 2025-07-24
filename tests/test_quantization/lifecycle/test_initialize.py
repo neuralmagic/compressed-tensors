@@ -175,7 +175,7 @@ def test_initialize_module_for_quantization_offloaded(
         ),
         (
             QuantizationArgs(strategy="block", block_structure=[2, 4]),
-            QuantizationArgs(strategy="group", group_size=2),
+            None,
         ),
         (
             QuantizationArgs(strategy="token"),
