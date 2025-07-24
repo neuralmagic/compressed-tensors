@@ -1,11 +1,8 @@
-from compressed_tensors.transform.utils.hadamard import (
-    deterministic_hadamard_matrix, random_hadamard_matrix
-)
 import pytest
 import torch
 from collections import OrderedDict
 
-from compressed_tensors.quantization import QuantizationArgs, QuantizationType, QuantizationConfig, QuantizationScheme, apply_quantization_config
+from compressed_tensors.quantization import QuantizationArgs, QuantizationConfig, QuantizationScheme, apply_quantization_config
 from compressed_tensors.quantization.utils import calculate_qparams
 from compressed_tensors.transform import TransformConfig, TransformScheme, TransformArgs, apply_transform_config
 
@@ -16,9 +13,6 @@ from compressed_tensors.transform import TransformConfig, TransformScheme, Trans
 # For weight quantization, we use round-to-nearest (RTN) and GPTQ
 # with per-column (also known as per-channel) symmetric quantization,
 # where we extract the clipping ratio using a linear search over the squared error
-quant_min = -8
-quant_max = 7
-generator = torch.Generator().manual_seed(42)
 dtype = torch.bfloat16
 device = "cuda"
 
@@ -39,17 +33,6 @@ def create_model():
     return model
 
 
-def mock_apply_tconfig(model: torch.nn.Module):
-    hadamard = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, device=device)
-    #hadamard = random_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, device=device, gen=generator)
-
-    hadamard = torch.round(hadamard).to(dtype=dtype)
-    inv = hadamard.T
-
-    model.A.weight.data = (hadamard.T @ model.A.weight) / torch.tensor(hadamard.size(0)).sqrt()
-    model.B.weight.data = (model.B.weight @ inv.T) / torch.tensor(hadamard.size(0)).sqrt()
-
-
 def mock_calibrate_channel(module: torch.nn.Module, args: QuantizationArgs):
     max_values = module.weight.max(dim=1).values
     min_values = module.weight.min(dim=1).values
@@ -67,7 +50,7 @@ def test_quantization_reconstruction(test_index):
     t_config = TransformConfig(
         config_groups={
             "": TransformScheme(
-                type="hadamard",
+                type="random-hadamard",
                 apply=[
                     TransformArgs(targets="A", location="weight_output"),
                     TransformArgs(targets="B", location="weight_input", inverse=True),
@@ -81,7 +64,11 @@ def test_quantization_reconstruction(test_index):
             "": QuantizationScheme(
                 targets=["Linear"],
                 weights=QuantizationArgs(
-                    num_bits=4, type=QuantizationType.INT, strategy="channel", symmetric=True, dynamic=False
+                    num_bits=4,
+                    type="int",
+                    strategy="channel",
+                    symmetric=True,
+                    dynamic=False,
                 )
             )
         }
