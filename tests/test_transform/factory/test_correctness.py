@@ -90,10 +90,10 @@ def test_correctness_embedding(type, randomized, embed_loc, linear_loc):
 
 
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
-@pytest.mark.parametrize("randomized", (True, False))
+@pytest.mark.parametrize("randomize", (True, False))
 @pytest.mark.parametrize("input_batch_size", (1, 5, 17))
 def test_correctness_model(
-    type, randomized, input_batch_size, model_apply, offload=False
+    type, randomize, input_batch_size, model_apply, offload=False
 ):
     # load model
     model = model_apply[0]
@@ -109,13 +109,50 @@ def test_correctness_model(
     # apply transforms
     config = TransformConfig(
         config_groups={
-            "": TransformScheme(type=type, randomized=randomized, apply=model_apply[1])
+            "": TransformScheme(type=type, randomize=randomize, apply=model_apply[1])
         }
     )
     apply_transform_config(model, config)
 
     # compare outputs
     output = model(input)
+    assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
+
+
+@pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("randomize", (True, False))
+@pytest.mark.parametrize("head_dim", (4, 8))
+def test_correctness_attention_heads(type, randomize, head_dim):
+    hidden_size = 64
+    num_attention_heads = 8
+
+    attention = MockAttention(
+        hidden_size=hidden_size,
+        num_attention_heads=num_attention_heads,
+        num_key_value_heads=head_dim,
+    )
+
+    input = torch.rand(17, 5, hidden_size)
+    true_output = attention(input)
+
+    config = TransformConfig(
+        config_groups={
+            "": TransformScheme(
+                type=type,
+                randomize=randomize,
+                head_dim=head_dim,
+                apply=[
+                    TransformArgs(targets="v_proj", location="weight_output"),
+                    TransformArgs(
+                        targets="o_proj", location="weight_input", inverse=True
+                    ),
+                ],
+            )
+        }
+    )
+    apply_transform_config(attention, config)
+
+    output = attention(input)
     assert torch.allclose(true_output, output, atol=1e-5, rtol=0.0)
 
 
