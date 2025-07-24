@@ -3,7 +3,6 @@ from compressed_tensors.transform.utils.hadamard import (
 )
 import pytest
 import torch
-import math
 from collections import OrderedDict
 
 
@@ -16,7 +15,7 @@ from collections import OrderedDict
 quant_min = -8
 quant_max = 7
 generator = torch.Generator().manual_seed(42)
-dtype = torch.bfloat16  # seems to matter a lot. float32 is consistently better for transforms. This is the opposite finding of fp8
+dtype = torch.bfloat16
 device = "cuda"
 
 
@@ -84,15 +83,13 @@ def mock_calibrate_channel(module: torch.nn.Module):
     # module.weight_zero_point.data = zero_point
 
 
-
 def mock_forward_quantize(module: torch.nn.Module):
     scale = module.weight_scale
     zero_point = module.weight_zero_point
     original_dtype = module.weight.dtype
-    quant_dtype = torch.float32  # used during computation
 
     # quantize
-    x = module.weight.to(quant_dtype)
+    x = module.weight
     x_q = torch.round(x / scale[:, None] + zero_point[:, None])
     x_q = torch.clamp(x_q, quant_min, quant_max)  # unlike current impl, round then clamp
 
@@ -103,17 +100,8 @@ def mock_forward_quantize(module: torch.nn.Module):
     module.weight.data = x_qdq.to(original_dtype)
 
 
-num_tests = 10
-@pytest.mark.parametrize("sizes", (
-    # (4, 4, 4),
-    # (16, 16, 16),
-    # [(32, 128, 64)] * num_tests +
-    [(256, 256, 256)] * num_tests +
-    # [(32, 512, 64)] * num_tests +
-    # [(4096, 4096, 4096)] * num_tests +
-    []
-))
-def test_quantization_reconstruction(sizes):
+@pytest.mark.parametrize("test_index", [None for _ in range(10)])
+def test_quantization_reconstruction(test_index):
     model_a = create_model()
     model_b = create_model()
 
@@ -132,11 +120,6 @@ def test_quantization_reconstruction(sizes):
 
     # transform
     mock_apply_tconfig(model_b)
-    output_trans = model_b(input)
-    #assert torch.allclose(output_full, output_trans)
-    #assert torch.allclose(output_full, output_trans, atol=1e-1)#atol=1e-5, rtol=0.0)
-
-    # transform + quant
     mock_apply_qconfig(model_b)
     mock_calibrate_channel(model_b.A)
     mock_calibrate_channel(model_b.B)
@@ -144,20 +127,9 @@ def test_quantization_reconstruction(sizes):
     mock_forward_quantize(model_b.B)
     output_trans_quant = model_b(input)
 
-    # debug
-    # print(model_a.A.weight_scale)
-    # print(model_a.B.weight_scale)
-    # print(model_b.A.weight_scale)
-    # print(model_b.B.weight_scale)
-    print(torch.count_nonzero(model_b.A.weight_scale < model_a.A.weight_scale) / model_a.A.weight_scale.numel())
-    print(torch.count_nonzero(model_b.B.weight_scale < model_a.B.weight_scale) / model_a.B.weight_scale.numel())
-
     loss = torch.nn.MSELoss()
     quant_loss = loss(output_quant, output_full)
     trans_quant_loss = loss(output_trans_quant, output_full)
 
-    #assert quant_loss < 1e-05
-    #assert trans_quant_loss < 1e-05
     print((trans_quant_loss, quant_loss))
-    assert trans_quant_loss < quant_loss
-    # assert trans_quant_loss < quant_loss < 1e-05
+    assert trans_quant_loss < quant_loss < 0.03

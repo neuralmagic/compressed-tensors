@@ -4,7 +4,6 @@ from compressed_tensors.transform.utils.hadamard import (
 )
 import pytest
 import torch
-import math
 from collections import OrderedDict
 
 
@@ -87,8 +86,7 @@ def mock_forward_quantize(module: torch.nn.Module):
 
     # quantize
     x = module.weight
-    x_q = (x / scale[:, None]) + zero_point[:, None]
-    #breakpoint()
+    x_q = x / scale[:, None] + zero_point[:, None]
     x_q = x_q.to(q_dtype).to(original_dtype)
     x_q = torch.clamp(x_q, quant_min, quant_max)  # unlike current impl, round then clamp
 
@@ -96,12 +94,11 @@ def mock_forward_quantize(module: torch.nn.Module):
     x_qdq = (x_q - zero_point[:, None]) * scale[:, None]
 
     print(f"quant_loss: {torch.nn.MSELoss()(x_qdq, module.weight.data)}")
-    module.weight.data = x_qdq
+    module.weight.data = x_qdq.to(original_dtype)
 
 
-num_tests = 10
-@pytest.mark.parametrize("test_iter", (None for _ in range(num_tests)))
-def test_quantization_reconstruction(test_iter):
+@pytest.mark.parametrize("test_index", [None for _ in range(10)])
+def test_quantization_reconstruction(test_index):
     model_a = create_model()
     model_b = create_model()
 
