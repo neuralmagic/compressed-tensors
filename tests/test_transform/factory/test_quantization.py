@@ -5,10 +5,12 @@ import math
 from collections import OrderedDict
 
 
-# int4, PER CHANNEL, symetric
-#  For weight quantization, we use round-to-nearest (RTN) and GPTQ [Frantar et al., 2022]
-# with per-column (also known as per-channel) symmetric quantization, where we extract the clipping
-# ratio using a linear search over the squared error
+# int4, PER CHANNEL, symmetric
+
+# From the QuaRot paper:
+# For weight quantization, we use round-to-nearest (RTN) and GPTQ
+# with per-column (also known as per-channel) symmetric quantization,
+# where we extract the clipping ratio using a linear search over the squared error
 quant_min = -7
 quant_max = 8
 
