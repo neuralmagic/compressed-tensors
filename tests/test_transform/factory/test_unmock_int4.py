@@ -5,6 +5,7 @@ from collections import OrderedDict
 from compressed_tensors.quantization import QuantizationArgs, QuantizationConfig, QuantizationScheme, apply_quantization_config
 from compressed_tensors.quantization.utils import calculate_qparams
 from compressed_tensors.transform import TransformConfig, TransformScheme, TransformArgs, apply_transform_config
+from compressed_tensors import update_offload_parameter
 
 
 # int4, PER CHANNEL, asymmetric
@@ -33,13 +34,17 @@ def create_model():
     return model
 
 
-def mock_calibrate_channel(module: torch.nn.Module, args: QuantizationArgs):
-    max_values = module.weight.max(dim=1).values
-    min_values = module.weight.min(dim=1).values
+def mock_calibrate_channel(model: torch.nn.Module):
+    for module in model.modules():
+        if getattr(module, "quantization_scheme", None) is not None:
+            max_values = module.weight.max(dim=1, keepdim=True).values
+            min_values = module.weight.min(dim=1, keepdim=True).values
 
-    scale, zero_point = calculate_qparams(min_values, max_values, args)
-    module.weight_scale.data = scale.unsqueeze(1)
-    module.weight_zero_point.data = zero_point.unsqueeze(1)
+            args = module.quantization_scheme.weights
+            scale, zero_point = calculate_qparams(min_values, max_values, args)
+
+            update_offload_parameter(module, "weight_scale", scale)
+            update_offload_parameter(module, "weight_zero_point", zero_point)
 
 
 @pytest.mark.parametrize("test_index", [None for _ in range(10)])
@@ -81,15 +86,13 @@ def test_quantization_reconstruction(test_index):
 
     # quant
     apply_quantization_config(model_a, q_config)
-    mock_calibrate_channel(model_a.A, q_config.config_groups[""].weights)
-    mock_calibrate_channel(model_a.B, q_config.config_groups[""].weights)
+    mock_calibrate_channel(model_a)
     output_quant = model_a(input)
 
     # transform + quant
     apply_transform_config(model_b, t_config)
     apply_quantization_config(model_b, q_config)
-    mock_calibrate_channel(model_b.A, q_config.config_groups[""].weights)
-    mock_calibrate_channel(model_b.B, q_config.config_groups[""].weights)
+    mock_calibrate_channel(model_b)
     output_trans_quant = model_b(input)
 
     loss = torch.nn.MSELoss()
