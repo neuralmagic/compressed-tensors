@@ -1,4 +1,6 @@
-from compressed_tensors.transform.utils.hadamard import deterministic_hadamard_matrix
+from compressed_tensors.transform.utils.hadamard import (
+    deterministic_hadamard_matrix, random_hadamard_matrix
+)
 import pytest
 import torch
 import math
@@ -13,12 +15,14 @@ from collections import OrderedDict
 # where we extract the clipping ratio using a linear search over the squared error
 quant_min = -7
 quant_max = 8
+generator = torch.Generator().manual_seed(42)
+dtype = torch.float32
 
 
 def create_model(sizes, state_dict = None):
     model = torch.nn.Sequential(OrderedDict([
-        ("A", torch.nn.Linear(sizes[0], sizes[1], bias=False)),
-        ("B", torch.nn.Linear(sizes[1], sizes[2], bias=False)),
+        ("A", torch.nn.Linear(sizes[0], sizes[1], bias=False, dtype=dtype)),
+        ("B", torch.nn.Linear(sizes[1], sizes[2], bias=False, dtype=dtype)),
     ])).eval()
     model.A.weight.requires_grad = False
     model.B.weight.requires_grad = False
@@ -43,11 +47,13 @@ def mock_apply_qconfig(model: torch.nn.Module):
             torch.nn.Parameter(torch.empty(module.weight.size(0), dtype=module.weight.dtype), requires_grad=False)
         )
 
-def mock_apply_tconfig(model: torch.nn.Module):
-    data = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype)
 
-    model.A.weight.data = (data.T @ model.A.weight) / math.sqrt(data.size(0))
-    model.B.weight.data = (model.B.weight @ data.T) / math.sqrt(data.size(0))
+def mock_apply_tconfig(model: torch.nn.Module):
+    hadamard = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype)
+    #hadamard = random_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, gen=generator)
+
+    model.A.weight.data = (hadamard.T @ model.A.weight) / math.sqrt(hadamard.size(0))
+    model.B.weight.data = (model.B.weight @ hadamard.T) / math.sqrt(hadamard.size(0))
 
 
 def mock_calibrate_channel(module: torch.nn.Module):
@@ -75,17 +81,17 @@ num_tests = 5
 @pytest.mark.parametrize("sizes", (
     # (4, 4, 4),
     # (16, 16, 16),
-    [(128, 128, 128)] * num_tests +
-    [(256, 256, 256)] * num_tests +
-    [(512, 512, 512)] * num_tests +
-    [(4096, 4096, 4096)] * num_tests
+    [(32, 128, 64)] * num_tests +
+    [(32, 256, 64)] * num_tests +
+    [(32, 512, 64)] * num_tests +
+    [(32, 4096, 64)] * num_tests
 ))
 def test_quantization_reconstruction(sizes):
     model_a = create_model(sizes)
     model_b = create_model(sizes, model_a.state_dict())
 
     # full precision
-    input = torch.eye(sizes[0], requires_grad=False)
+    input = torch.eye(sizes[0], dtype=dtype, requires_grad=False)
     output_full = model_a(input)
     assert torch.all(output_full == model_b(input))
 
@@ -97,8 +103,13 @@ def test_quantization_reconstruction(sizes):
     mock_forward_quantize(model_a.B)
     output_quant = model_a(input)
 
-    # transform + quant
+    # transform
     mock_apply_tconfig(model_b)
+    output_trans = model_b(input)
+    assert torch.allclose(output_full, output_trans)
+    #assert torch.allclose(output_full, output_trans, atol=1e-1)#atol=1e-5, rtol=0.0)
+
+    # transform + quant
     mock_apply_qconfig(model_b)
     mock_calibrate_channel(model_b.A)
     mock_calibrate_channel(model_b.B)
@@ -120,6 +131,6 @@ def test_quantization_reconstruction(sizes):
 
     #assert quant_loss < 1e-05
     #assert trans_quant_loss < 1e-05
+    print((trans_quant_loss, quant_loss))
     assert trans_quant_loss <= quant_loss
-    # print((trans_quant_loss, quant_loss))
     # assert trans_quant_loss < quant_loss < 1e-05
