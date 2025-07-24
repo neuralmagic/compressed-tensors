@@ -189,7 +189,7 @@ def _initialize_scale_zero_point(
             num_rows_blocks = math.ceil(rows / block_height)
             num_cols_blocks = math.ceil(cols / block_width)
             expected_shape = (num_rows_blocks, num_cols_blocks)
-    elif quantization_args.strategy == QuantizationStrategy.BLOCK:.
+    elif quantization_args.strategy == QuantizationStrategy.BLOCK:
         import warnings
         warnings.warn(
             f"BLOCK quantization not supported for {base_name} activations. "
