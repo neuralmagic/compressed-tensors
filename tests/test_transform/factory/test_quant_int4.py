@@ -17,24 +17,21 @@ quant_min = -8
 quant_max = 7
 generator = torch.Generator().manual_seed(42)
 dtype = torch.bfloat16  # seems to matter a lot. float32 is consistently better for transforms. This is the opposite finding of fp8
+device = "cuda"
 
 
-def create_model(sizes, state_dict = None):
+def create_model():
+    state = torch.load("proj_weights.pt")
+
     model = torch.nn.Sequential(OrderedDict([
-        ("A", torch.nn.Linear(sizes[0], sizes[1], bias=False, dtype=dtype)),
-        ("B", torch.nn.Linear(sizes[1], sizes[2], bias=False, dtype=dtype)),
+        ("A", torch.nn.Linear(2048, 8192, bias=False, dtype=dtype, device=device)),
+        ("B", torch.nn.Linear(8192, 2048, bias=False, dtype=dtype, device=device)),
     ])).eval()
+
+    model.A.weight.data.copy_(state["up_proj_weight"])
+    model.B.weight.data.copy_(state["down_proj_weight"])
     model.A.weight.requires_grad = False
     model.B.weight.requires_grad = False
-
-    if state_dict is None:
-        # model.A.weight.data.uniform_(-0.1, 0.1)
-        # model.B.weight.data.uniform_(-0.1, 0.1)
-        model.A.weight.data.normal_(std=0.03)
-        model.B.weight.data.normal_(std=0.03)
-
-    else:
-        model.load_state_dict(state_dict)
 
     return model
 
@@ -43,17 +40,17 @@ def mock_apply_qconfig(model: torch.nn.Module):
     for module in (model.A, model.B):
         module.register_parameter(
             "weight_scale",
-            torch.nn.Parameter(torch.empty(module.weight.size(0), dtype=module.weight.dtype), requires_grad=False)
+            torch.nn.Parameter(torch.empty(module.weight.size(0), dtype=module.weight.dtype, device=device), requires_grad=False)
         )
         module.register_parameter(
             "weight_zero_point",
-            torch.nn.Parameter(torch.empty(module.weight.size(0), dtype=int), requires_grad=False)
+            torch.nn.Parameter(torch.zeros(module.weight.size(0), dtype=int, device=device), requires_grad=False)
         )
 
 
 def mock_apply_tconfig(model: torch.nn.Module):
-    hadamard = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype)
-    #hadamard = random_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, gen=generator)
+    hadamard = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, device=device)
+    #hadamard = random_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, device=device, gen=generator)
 
     hadamard = torch.round(hadamard).to(dtype=dtype)
     inv = hadamard.T
@@ -67,15 +64,25 @@ def mock_calibrate_channel(module: torch.nn.Module):
     min_values = module.weight.min(dim=1).values
 
     # scale
-    scale = (max_values - min_values) / (quant_max - quant_min)
-    scale = scale.clamp(min=torch.finfo(scale.dtype).eps)
+    # value_range = (max_values - min_values)
+    value_range = torch.maximum(max_values.abs(), min_values.abs()) * 2
+    scale = value_range / (quant_max - quant_min)
+    scale = scale.clamp(min=torch.finfo(torch.float32).eps)
+    #scale = scale.clamp(min=torch.finfo(scale.dtype).eps)
 
     # zero point
-    zero_point = quant_min - torch.round(min_values / scale)
-    zero_point = zero_point.clamp(quant_min, quant_max)
-    
+    #zero_point = quant_min - torch.round(min_values / scale)
+    #zero_point = zero_point.clamp(quant_min, quant_max)
+
+    # from compressed_tensors.quantization import QuantizationArgs, QuantizationType
+    # from compressed_tensors.quantization.utils import calculate_qparams
+    # args = QuantizationArgs(
+    #     num_bits=4, type=QuantizationType.INT, strategy="channel", symmetric=True, dynamic=False
+    # )
+    # scale, zero_point = calculate_qparams(min_values, max_values, args)
     module.weight_scale.data = scale
-    module.weight_zero_point.data = zero_point
+    # module.weight_zero_point.data = zero_point
+
 
 
 def mock_forward_quantize(module: torch.nn.Module):
@@ -92,10 +99,11 @@ def mock_forward_quantize(module: torch.nn.Module):
     # dequantize
     x_qdq = (x_q - zero_point[:, None]) * scale[:, None]
 
+    print(f"quant_loss: {torch.nn.MSELoss()(x_qdq, module.weight.data)}")
     module.weight.data = x_qdq.to(original_dtype)
 
 
-num_tests = 50
+num_tests = 10
 @pytest.mark.parametrize("sizes", (
     # (4, 4, 4),
     # (16, 16, 16),
@@ -106,11 +114,11 @@ num_tests = 50
     []
 ))
 def test_quantization_reconstruction(sizes):
-    model_a = create_model(sizes)
-    model_b = create_model(sizes, model_a.state_dict())
+    model_a = create_model()
+    model_b = create_model()
 
     # full precision
-    input = torch.rand(sizes[0], dtype=dtype, requires_grad=False)
+    input = torch.rand(model_a.A.weight.shape[1], dtype=dtype, device=device, requires_grad=False)
     output_full = model_a(input)
     assert torch.all(output_full == model_b(input))
 
