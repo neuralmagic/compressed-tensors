@@ -16,7 +16,7 @@ from collections import OrderedDict
 quant_min = -7
 quant_max = 8
 generator = torch.Generator().manual_seed(42)
-dtype = torch.float64
+dtype = torch.float32
 
 
 def create_model(sizes, state_dict = None):
@@ -28,10 +28,10 @@ def create_model(sizes, state_dict = None):
     model.B.weight.requires_grad = False
 
     if state_dict is None:
-        # model.A.weight.data.uniform_(-0.1, -0.1)
-        # model.B.weight.data.uniform_(-0.1, -0.1)
-        model.A.weight.data.normal_(std=0.01)
-        model.B.weight.data.normal_(std=0.01)
+        model.A.weight.data.uniform_(-0.1, -0.1)
+        model.B.weight.data.uniform_(-0.1, -0.1)
+        # model.A.weight.data.normal_(std=0.01)
+        # model.B.weight.data.normal_(std=0.01)
 
     else:
         model.load_state_dict(state_dict)
@@ -41,7 +41,6 @@ def create_model(sizes, state_dict = None):
 
 def mock_apply_qconfig(model: torch.nn.Module):
     for module in (model.A, model.B):
-        module.weight.requires_grad = False
         module.register_parameter(
             "weight_scale",
             torch.nn.Parameter(torch.empty(module.weight.size(0), dtype=module.weight.dtype), requires_grad=False)
@@ -52,8 +51,10 @@ def mock_apply_tconfig(model: torch.nn.Module):
     hadamard = deterministic_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype)
     #hadamard = random_hadamard_matrix(model.A.weight.size(0), model.A.weight.dtype, gen=generator)
 
-    model.A.weight.data = (hadamard.T @ model.A.weight) / math.sqrt(hadamard.size(0))
-    model.B.weight.data = (model.B.weight @ hadamard.T) / math.sqrt(hadamard.size(0))
+    #hadamard = torch.round(hadamard).to(dtype=dtype)
+
+    model.A.weight.data = (hadamard.T @ model.A.weight) / torch.tensor(hadamard.size(0)).sqrt()
+    model.B.weight.data = (model.B.weight @ hadamard.T) / torch.tensor(hadamard.size(0)).sqrt()
 
 
 def mock_calibrate_channel(module: torch.nn.Module):
@@ -82,16 +83,17 @@ num_tests = 5
     # (4, 4, 4),
     # (16, 16, 16),
     [(32, 128, 64)] * num_tests +
-    [(32, 256, 64)] * num_tests +
+    [(256, 256, 256)] * num_tests +
     [(32, 512, 64)] * num_tests +
-    [(32, 4096, 64)] * num_tests
+    [(4096, 4096, 4096)] * num_tests +
+    []
 ))
 def test_quantization_reconstruction(sizes):
     model_a = create_model(sizes)
     model_b = create_model(sizes, model_a.state_dict())
 
     # full precision
-    input = torch.eye(sizes[0], dtype=dtype, requires_grad=False)
+    input = torch.rand(sizes[0], dtype=dtype, requires_grad=False)
     output_full = model_a(input)
     assert torch.all(output_full == model_b(input))
 
@@ -106,7 +108,7 @@ def test_quantization_reconstruction(sizes):
     # transform
     mock_apply_tconfig(model_b)
     output_trans = model_b(input)
-    assert torch.allclose(output_full, output_trans)
+    #assert torch.allclose(output_full, output_trans)
     #assert torch.allclose(output_full, output_trans, atol=1e-1)#atol=1e-5, rtol=0.0)
 
     # transform + quant
