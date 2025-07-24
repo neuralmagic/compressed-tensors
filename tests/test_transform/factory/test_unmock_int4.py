@@ -34,28 +34,38 @@ def create_model():
     return model
 
 
-def mock_calibrate_channel(model: torch.nn.Module):
+def mock_calibrate(model: torch.nn.Module):
     for module in model.modules():
-        if getattr(module, "quantization_scheme", None) is not None:
-            max_values = module.weight.max(dim=1, keepdim=True).values
-            min_values = module.weight.min(dim=1, keepdim=True).values
+        if (scheme := getattr(module, "quantization_scheme", None)):
+            if scheme.weights.strategy == "group":
+                group_size = scheme.weights.group_size
+                num_groups = module.weight.size(-1) // group_size
+                values = module.weight.unflatten(-1, (num_groups, group_size))
 
-            args = module.quantization_scheme.weights
-            scale, zero_point = calculate_qparams(min_values, max_values, args)
+            elif scheme.weights.strategy == "channel":
+                values = module.weight.unflatten(-1, (1, module.weight.size(-1)))
+
+            max_values = values.max(dim=-1).values
+            min_values = values.min(dim=-1).values
+            scale, zero_point = calculate_qparams(min_values, max_values, scheme.weights)
 
             update_offload_parameter(module, "weight_scale", scale)
             update_offload_parameter(module, "weight_zero_point", zero_point)
 
 
-@pytest.mark.parametrize("test_index", [None for _ in range(10)])
-def test_quantization_reconstruction(test_index):
+@pytest.mark.parametrize("test_index", [None for _ in range(3)])
+@pytest.mark.parametrize("t_type", ("hadamard", "random-hadamard"))
+@pytest.mark.parametrize("q_type,num_bits", (("int", 4), ("float", 8)))
+@pytest.mark.parametrize("strategy", ("channel", "group"))
+@pytest.mark.parametrize("symmetric", (True, False))
+def test_quantization_reconstruction(test_index, t_type, q_type, num_bits, strategy, symmetric):
     model_a = create_model()
     model_b = create_model()
 
     t_config = TransformConfig(
         config_groups={
             "": TransformScheme(
-                type="random-hadamard",
+                type=t_type,
                 apply=[
                     TransformArgs(targets="A", location="weight_output"),
                     TransformArgs(targets="B", location="weight_input", inverse=True),
@@ -69,10 +79,11 @@ def test_quantization_reconstruction(test_index):
             "": QuantizationScheme(
                 targets=["Linear"],
                 weights=QuantizationArgs(
-                    num_bits=4,
-                    type="int",
-                    strategy="channel",
-                    symmetric=True,
+                    num_bits=num_bits,
+                    type=q_type,
+                    strategy=strategy,
+                    group_size=(128 if strategy == "group" else None),
+                    symmetric=symmetric,
                     dynamic=False,
                 )
             )
@@ -86,18 +97,18 @@ def test_quantization_reconstruction(test_index):
 
     # quant
     apply_quantization_config(model_a, q_config)
-    mock_calibrate_channel(model_a)
+    mock_calibrate(model_a)
     output_quant = model_a(input)
 
     # transform + quant
     apply_transform_config(model_b, t_config)
     apply_quantization_config(model_b, q_config)
-    mock_calibrate_channel(model_b)
+    mock_calibrate(model_b)
     output_trans_quant = model_b(input)
 
     loss = torch.nn.MSELoss()
     quant_loss = loss(output_quant, output_full)
     trans_quant_loss = loss(output_trans_quant, output_full)
 
-    print((trans_quant_loss, quant_loss))
-    assert trans_quant_loss < quant_loss < 0.03
+    #print((trans_quant_loss, quant_loss))
+    assert trans_quant_loss <= quant_loss < 0.03

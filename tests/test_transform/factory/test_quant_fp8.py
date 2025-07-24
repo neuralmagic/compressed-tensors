@@ -69,12 +69,6 @@ def mock_calibrate_channel(module: torch.nn.Module):
     zero_point = quant_min - torch.round(min_values / scale)
     zero_point = zero_point.clamp(quant_min, quant_max)
 
-    # from compressed_tensors.quantization import QuantizationArgs, QuantizationType
-    # from compressed_tensors.quantization.utils import calculate_qparams
-    # args = QuantizationArgs(
-    #     num_bits=4, type=QuantizationType.INT, strategy="channel", symmetric=True, dynamic=False
-    # )
-    # scale, zero_point = calculate_qparams(min_values, max_values, args)
     module.weight_scale.data = scale
     module.weight_zero_point.data = zero_point
 
