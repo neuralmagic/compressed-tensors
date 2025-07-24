@@ -16,7 +16,7 @@ from collections import OrderedDict
 quant_min = -7
 quant_max = 8
 generator = torch.Generator().manual_seed(42)
-dtype = torch.float32
+dtype = torch.bfloat16  # seems to matter a lot. float32 is consistently better for transforms. This is the opposite finding of fp8
 
 
 def create_model(sizes, state_dict = None):
@@ -28,10 +28,10 @@ def create_model(sizes, state_dict = None):
     model.B.weight.requires_grad = False
 
     if state_dict is None:
-        model.A.weight.data.uniform_(-0.1, -0.1)
-        model.B.weight.data.uniform_(-0.1, -0.1)
-        # model.A.weight.data.normal_(std=0.01)
-        # model.B.weight.data.normal_(std=0.01)
+        # model.A.weight.data.uniform_(-0.1, 0.1)
+        # model.B.weight.data.uniform_(-0.1, 0.1)
+        model.A.weight.data.normal_(std=0.03)
+        model.B.weight.data.normal_(std=0.03)
 
     else:
         model.load_state_dict(state_dict)
@@ -56,36 +56,53 @@ def mock_apply_tconfig(model: torch.nn.Module):
     model.A.weight.data = (hadamard.T @ model.A.weight) / torch.tensor(hadamard.size(0)).sqrt()
     model.B.weight.data = (model.B.weight @ hadamard.T) / torch.tensor(hadamard.size(0)).sqrt()
 
+    # values = model.A.weight.data.to(torch.float32).flatten()
+    # print(values)
+    # import matplotlib.pyplot as plt
+    # plt.figure(figsize=(8, 4))
+    # plt.hist(values, bins=100, color="steelblue", edgecolor="black")
+    # plt.title(f"normal after had")
+    # plt.xlabel("Weight value")
+    # plt.ylabel("Frequency")
+    # low, high = torch.quantile(values, torch.tensor([0.001, 0.999])).tolist()
+    # plt.xlim(low, high)
+    # plt.tight_layout()
+    # plt.savefig(f"normal_after_had.png")
+    # plt.close()
+    # exit(0)
+
 
 def mock_calibrate_channel(module: torch.nn.Module):
     max_values = module.weight.max(dim=1).values
     min_values = module.weight.min(dim=1).values
 
     max_abs = torch.maximum(max_values.abs(), min_values.abs())
-    max_abs = max_abs.clamp(min=1e-6)
+    max_abs = max_abs.clamp(min=torch.finfo(dtype).eps)
     
     module.weight_scale.data = (max_abs * 2) / (quant_max - quant_min)
 
 
 def mock_forward_quantize(module: torch.nn.Module):
     scale = getattr(module, "weight_scale")
+    original_dtype = module.weight.dtype
+    quant_dtype = torch.float32
 
-    x_q = module.weight / scale[:, None]
+    x_q = module.weight.to(quant_dtype) / scale[:, None].to(quant_dtype)
     x_q = torch.round(x_q)
     x_q = torch.clamp(x_q, quant_min, quant_max)  # unlike current impl, round then clamp
     x_qdq = x_q * scale[:, None]
 
-    module.weight.data = x_qdq
+    module.weight.data = x_qdq.to(original_dtype)
 
 
-num_tests = 5
+num_tests = 50
 @pytest.mark.parametrize("sizes", (
     # (4, 4, 4),
     # (16, 16, 16),
-    [(32, 128, 64)] * num_tests +
+    # [(32, 128, 64)] * num_tests +
     [(256, 256, 256)] * num_tests +
-    [(32, 512, 64)] * num_tests +
-    [(4096, 4096, 4096)] * num_tests +
+    # [(32, 512, 64)] * num_tests +
+    # [(4096, 4096, 4096)] * num_tests +
     []
 ))
 def test_quantization_reconstruction(sizes):
@@ -124,8 +141,8 @@ def test_quantization_reconstruction(sizes):
     # print(model_a.B.weight_scale)
     # print(model_b.A.weight_scale)
     # print(model_b.B.weight_scale)
-    # print(torch.count_nonzero(model_b.A.weight_scale < model_a.A.weight_scale) / model_a.A.weight_scale.numel())
-    # print(torch.count_nonzero(model_b.B.weight_scale < model_a.B.weight_scale) / model_a.B.weight_scale.numel())
+    print(torch.count_nonzero(model_b.A.weight_scale < model_a.A.weight_scale) / model_a.A.weight_scale.numel())
+    print(torch.count_nonzero(model_b.B.weight_scale < model_a.B.weight_scale) / model_a.B.weight_scale.numel())
 
     loss = torch.nn.MSELoss()
     quant_loss = loss(output_quant, output_full)
@@ -134,5 +151,5 @@ def test_quantization_reconstruction(sizes):
     #assert quant_loss < 1e-05
     #assert trans_quant_loss < 1e-05
     print((trans_quant_loss, quant_loss))
-    assert trans_quant_loss <= quant_loss
+    assert trans_quant_loss < quant_loss
     # assert trans_quant_loss < quant_loss < 1e-05
