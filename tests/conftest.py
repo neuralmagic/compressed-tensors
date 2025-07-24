@@ -116,7 +116,7 @@ def mock_per_channel_calibration():
 
 @pytest.fixture
 def mock_per_tensor_calibration():
-    def update_scale_zp(module: torch.nn.Module, base_name: str, value: torch.Tensor):
+    def update_scale_zp(module: torch.nn.Module, base_name: str, value: torch.Tensor, *args, **kwargs):
         quantization_scheme = getattr(module, "quantization_scheme", None)
         if not quantization_scheme:
             # no quantization scheme nothing to do
