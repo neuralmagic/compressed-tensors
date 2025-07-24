@@ -7,6 +7,7 @@ from collections import OrderedDict
 
 from compressed_tensors.quantization import QuantizationArgs, QuantizationType, QuantizationConfig, QuantizationScheme, apply_quantization_config
 from compressed_tensors.quantization.utils import calculate_qparams
+from compressed_tensors.transform import TransformConfig, TransformScheme, TransformArgs, apply_transform_config
 
 
 # int4, PER CHANNEL, asymmetric
@@ -63,6 +64,18 @@ def test_quantization_reconstruction(test_index):
     model_a = create_model()
     model_b = create_model()
 
+    t_config = TransformConfig(
+        config_groups={
+            "": TransformScheme(
+                type="hadamard",
+                apply=[
+                    TransformArgs(targets="A", location="weight_output"),
+                    TransformArgs(targets="B", location="weight_input", inverse=True),
+                ]
+            )
+        }
+    )
+
     q_config = QuantizationConfig(
         config_groups={
             "": QuantizationScheme(
@@ -86,7 +99,7 @@ def test_quantization_reconstruction(test_index):
     output_quant = model_a(input)
 
     # transform + quant
-    mock_apply_tconfig(model_b)
+    apply_transform_config(model_b, t_config)
     apply_quantization_config(model_b, q_config)
     mock_calibrate_channel(model_b.A, q_config.config_groups[""].weights)
     mock_calibrate_channel(model_b.B, q_config.config_groups[""].weights)
