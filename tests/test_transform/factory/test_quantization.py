@@ -16,7 +16,7 @@ from collections import OrderedDict
 quant_min = -7
 quant_max = 8
 generator = torch.Generator().manual_seed(42)
-dtype = torch.float32
+dtype = torch.float64
 
 
 def create_model(sizes, state_dict = None):
@@ -70,8 +70,8 @@ def mock_forward_quantize(module: torch.nn.Module):
     scale = getattr(module, "weight_scale")
 
     x_q = module.weight / scale[:, None]
-    x_q = torch.clamp(x_q, quant_min, quant_max)
     x_q = torch.round(x_q)
+    x_q = torch.clamp(x_q, quant_min, quant_max)  # unlike current impl, round then clamp
     x_qdq = x_q * scale[:, None]
 
     module.weight.data = x_qdq
