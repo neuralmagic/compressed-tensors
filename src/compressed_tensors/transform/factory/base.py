@@ -19,7 +19,6 @@ from typing import List, Optional, Tuple
 import torch
 import torch.nn.utils.parametrize as P
 from compressed_tensors import InternalModule
-from compressed_tensors.quantization.lifecycle import is_target  # TODO: move to utils
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
@@ -30,6 +29,7 @@ from compressed_tensors.utils import (
     align_module_device,
     delete_offload_module,
     has_offloaded_params,
+    match_named_modules,
     patch_attr,
     register_offload_module,
     update_offload_parameter,
@@ -91,9 +91,8 @@ class TransformFactory(RegistryMixin, ABC):
         :param model: module to apply transforms to
         """
         for arg in self.scheme.apply:
-            for name, module in list(model.named_modules()):
-                if is_target(name, module, arg.targets, arg.ignore):
-                    self._apply_to_module(module, arg)
+            for _, module in match_named_modules(model, arg.targets, arg.ignore):
+                self._apply_to_module(module, arg)
 
         self._update_tied_weights()
 
@@ -112,7 +111,7 @@ class TransformFactory(RegistryMixin, ABC):
                 )
 
         # create transform as submodule
-        transform_name = f"{self.name}_{args.location.value}"
+        transform_name = f"{self.name}_{args.location}"
         transform = self.create_transform(module, args)
         self.transforms.append(transform)
         register_offload_module(module, transform_name, transform)
@@ -131,10 +130,8 @@ class TransformFactory(RegistryMixin, ABC):
             TransformLocation.WEIGHT_INPUT,
             TransformLocation.WEIGHT_OUTPUT,
         ):
-            assert isinstance(module, torch.nn.Linear)
-            assert module.bias is None
-
             # fuse transform into weight
+            assert hasattr(module, "weight")
             with torch.no_grad(), align_module_device(module):
                 update_offload_parameter(module, "weight", transform(module.weight))
 
@@ -189,6 +186,7 @@ class TransformFactory(RegistryMixin, ABC):
                 for transform, name in shared_keys:
                     transform._dynamic_tied_weights_keys.append(name)
                     setattr(transform, name, tensor)
+
 
 class TransformBase(InternalModule, ABC):
     """
