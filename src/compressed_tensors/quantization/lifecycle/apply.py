@@ -13,12 +13,11 @@
 # limitations under the License.
 
 import logging
-import re
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from copy import deepcopy
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, List, Optional
 from typing import OrderedDict as OrderedDictType
-from typing import Set, Union
+from typing import Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
@@ -51,9 +50,6 @@ __all__ = [
     "load_pretrained_quantization_parameters",
     "apply_quantization_config",
     "apply_quantization_status",
-    "find_name_or_class_matches",
-    "expand_target_names",
-    "is_target",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -249,100 +245,6 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
     if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
         model.apply(compress_quantized_weights)
-
-
-def expand_target_names(
-    model: Module,
-    targets: Optional[Iterable[str]] = None,
-    ignore: Optional[Iterable[str]] = None,
-) -> Set[str]:
-    """
-    Finds all unique module names in the model that match the given
-    targets and ignore lists.
-
-    Note: Targets must be regexes, layer types, or full layer names.
-
-    :param model: model to search for targets in
-    :param targets: Iterable of targets to search for
-    :param ignore: Iterable of targets to ignore
-    :return: set of all targets that match the given targets and should
-        not be ignored
-    """
-    return {
-        name
-        for name, module in model.named_modules()
-        if is_target(name, module, targets, ignore)
-    }
-
-
-def is_target(
-    name: str,
-    module: Module,
-    targets: Optional[Iterable[str]] = None,
-    ignore: Optional[Iterable[str]] = None,
-) -> bool:
-    """
-    Determines if a module should be included in the targets based on the
-    targets and ignore lists.
-
-    Note: Targets must be regexes, layer types, or full layer names.
-
-    :param name: name of the module
-    :param module: the module itself
-    :param targets: Iterable of targets to search for
-    :param ignore: Iterable of targets to ignore
-    :return: True if the module is a target and not ignored, False otherwise
-    """
-    return bool(
-        find_name_or_class_matches(name, module, targets or [])
-        and not find_name_or_class_matches(name, module, ignore or [])
-    )
-
-
-def find_name_or_class_matches(
-    name: str, module: Module, targets: Iterable[str], check_contains: bool = False
-) -> List[str]:
-    """
-    Returns all targets that match the given name or the class name.
-    Returns empty list otherwise.
-    The order of the output `matches` list matters.
-    The entries are sorted in the following order:
-        1. matches on exact strings
-        2. matches on regex patterns
-        3. matches on module names
-    """
-    from compressed_tensors import InternalModule
-
-    if isinstance(module, InternalModule):
-        return []
-
-    targets = sorted(targets, key=lambda x: ("re:" in x, x))
-    if isinstance(targets, Iterable):
-        matches = _find_matches(name, targets) + _find_matches(
-            module.__class__.__name__, targets, check_contains
-        )
-        matches = [match for match in matches if match is not None]
-        return matches
-
-
-def _find_matches(
-    value: str, targets: Iterable[str], check_contains: bool = False
-) -> List[str]:
-    # returns all the targets that match value either
-    # exactly or as a regex after 're:'. if check_contains is set to True,
-    # additionally checks if the target string is contained with value.
-    matches = []
-    for target in targets:
-        if target.startswith("re:"):
-            pattern = target[3:]
-            if re.match(pattern, value):
-                matches.append(target)
-        elif check_contains:
-            if target.lower() in value.lower():
-                matches.append(target)
-        elif target == value:
-            matches.append(target)
-    return matches
 
 
 def _infer_status(model: Module) -> Optional[QuantizationStatus]:

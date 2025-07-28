@@ -34,8 +34,8 @@ __all__ = [
 
 def match_named_modules(
     model: torch.nn.Module,
-    targets: Iterable[str],
-    ignore: Iterable[str] | None = tuple(),
+    targets: Iterable[str] | None,
+    ignore: Iterable[str] | None = None,
     warn_on_fail: bool = False,
     warn_on_unmatched_ignores: bool = False,
     return_matched_targets: bool = False,
@@ -52,6 +52,7 @@ def match_named_modules(
     :return: generator of module names and modules
     """
     ignore = ignore or []
+    targets = targets or []
 
     unmatched_targets = set(targets)
     unmatched_ignores = set(ignore)
@@ -59,6 +60,9 @@ def match_named_modules(
     # Order targets by type: exact name match, regex name match, class name match
     targets = sorted(targets, key=lambda x: ("re:" in x, x))
     for name, module in model.named_modules():
+        if isinstance(module, InternalModule):
+            continue
+
         # preprocess the module name and module
         name = preprocess_name(name)
 
@@ -74,7 +78,7 @@ def match_named_modules(
         matched_targets = []
         # Check for name matches first (exact then regex)
         for target in targets:
-            if match_name(name, target):
+            if _match_name(name, target):
                 unmatched_targets -= {target}
                 matched_targets.append(target)
                 if not return_matched_targets:
@@ -87,7 +91,7 @@ def match_named_modules(
 
         # Check for class matches
         for target in targets:
-            if match_class(module, target):
+            if _match_class(module, target):
                 unmatched_targets -= {target}
                 matched_targets.append(target)
                 if not return_matched_targets:
