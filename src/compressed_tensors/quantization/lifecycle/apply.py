@@ -40,6 +40,7 @@ from compressed_tensors.quantization.utils import (
     is_kv_cache_quant_scheme,
 )
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
+from compressed_tensors.utils.match import match_named_modules
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
@@ -147,47 +148,35 @@ def apply_quantization_config(
     if run_compressed:
         from compressed_tensors.linear.compressed_linear import CompressedLinear
 
-    # list of submodules to ignore
-    ignored_submodules = defaultdict(list)
     # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in model.named_modules():
-        # potentially fix module name to remove FSDP wrapper prefix
-        name = fix_fsdp_module_name(name)
-        if matches := find_name_or_class_matches(name, submodule, config.ignore):
-            for match in matches:
-                ignored_submodules[match].append(name)
-            continue  # layer matches ignore list, continue
+    for name, submodule, matched_targets in match_named_modules(
+        model,
+        target_to_scheme,
+        config.ignore or [],
+        warn_on_fail=True,
+        warn_on_unmatched_ignores=True,
+        return_matched_targets=True,
+        preprocess_name=fix_fsdp_module_name,
+    ):
+        # mark modules to be quantized by adding
+        # quant scheme to the matching layers
+        scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
+        if run_compressed:
+            format = config.format
+            if format != CompressionFormat.dense.value:
+                if isinstance(submodule, torch.nn.Linear):
+                    # TODO: expand to more module types
+                    compressed_linear = CompressedLinear.from_linear(
+                        submodule,
+                        quantization_scheme=scheme,
+                        quantization_format=format,
+                    )
+                    replace_module(model, name, compressed_linear)
 
-        targets = find_name_or_class_matches(name, submodule, target_to_scheme)
+        # target matched - add layer and scheme to target list
+        submodule.quantization_scheme = scheme
 
-        if targets:
-            # mark modules to be quantized by adding
-            # quant scheme to the matching layers
-            scheme = _scheme_from_targets(target_to_scheme, targets, name)
-            if run_compressed:
-                format = config.format
-                if format != CompressionFormat.dense.value:
-                    if isinstance(submodule, torch.nn.Linear):
-                        # TODO: expand to more module types
-                        compressed_linear = CompressedLinear.from_linear(
-                            submodule,
-                            quantization_scheme=scheme,
-                            quantization_format=format,
-                        )
-                        replace_module(model, name, compressed_linear)
-
-            # target matched - add layer and scheme to target list
-            submodule.quantization_scheme = scheme
-
-            names_to_scheme[name] = submodule.quantization_scheme
-
-    if config.ignore is not None and ignored_submodules is not None:
-        if set(config.ignore) - set(ignored_submodules):
-            _LOGGER.warning(
-                "Some layers that were to be ignored were "
-                "not found in the model: "
-                f"{set(config.ignore) - set(ignored_submodules)}"
-            )
+        names_to_scheme[name] = submodule.quantization_scheme
 
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
@@ -429,7 +418,6 @@ def _scheme_from_targets(
 def _merge_schemes(
     schemes_to_merge: List[QuantizationScheme], name: str
 ) -> QuantizationScheme:
-
     kv_cache_quantization_scheme = [
         scheme for scheme in schemes_to_merge if is_kv_cache_quant_scheme(scheme)
     ]

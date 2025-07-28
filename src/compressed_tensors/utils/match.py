@@ -15,7 +15,7 @@
 import logging
 import re
 from collections.abc import Generator
-from typing import Iterable, Tuple
+from typing import Callable, Iterable, Tuple
 
 import torch
 from compressed_tensors.utils.internal import InternalModule
@@ -35,8 +35,11 @@ __all__ = [
 def match_named_modules(
     model: torch.nn.Module,
     targets: Iterable[str],
-    ignore: Iterable[str] = tuple(),
+    ignore: Iterable[str] | None = tuple(),
     warn_on_fail: bool = False,
+    warn_on_unmatched_ignores: bool = False,
+    return_matched_targets: bool = False,
+    preprocess_name: Callable[[str], str] = lambda x: x,
 ) -> Generator[Tuple[str, torch.nn.Module]]:
     """
     Yields names and modules which match `targets` but do not match `ignore`.
@@ -48,19 +51,64 @@ def match_named_modules(
     :param warn_on_fail: if True, warns if any targets do not match any modules in model
     :return: generator of module names and modules
     """
-    unmatched_targets = set(targets)
-    for name, module in model.named_modules():
-        for target in targets:
-            if is_match(name, module, target):
-                unmatched_targets -= {target}
+    ignore = ignore or []
 
-                if not any(is_match(name, module, ign) for ign in ignore):
-                    yield name, module
+    unmatched_targets = set(targets)
+    unmatched_ignores = set(ignore)
+
+    # Order targets by type: exact name match, regex name match, class name match
+    targets = sorted(targets, key=lambda x: ("re:" in x, x))
+    for name, module in model.named_modules():
+        # preprocess the module name and module
+        name = preprocess_name(name)
+
+        ignore_matched = False
+        for ign in ignore:
+            if is_match(name, module, ign):
+                unmatched_ignores -= {ign}
+                ignore_matched = True
+                break
+        if ignore_matched:
+            continue
+
+        matched_targets = []
+        # Check for name matches first (exact then regex)
+        for target in targets:
+            if match_name(name, target):
+                unmatched_targets -= {target}
+                matched_targets.append(target)
+                if not return_matched_targets:
+                    break
+
+        if not return_matched_targets and matched_targets:
+            # Don't need to check other targets, one match is enough
+            yield name, module
+            continue
+
+        # Check for class matches
+        for target in targets:
+            if match_class(module, target):
+                unmatched_targets -= {target}
+                matched_targets.append(target)
+                if not return_matched_targets:
+                    break
+
+        if matched_targets:
+            if return_matched_targets:
+                yield name, module, matched_targets
+            else:
+                yield name, module
 
     if warn_on_fail:
         for target in unmatched_targets:
             _LOGGER.warning(
                 f"Could not match `{target}` in instance of {model.__class__.__name__}"
+            )
+
+    if warn_on_unmatched_ignores:
+        for ign in unmatched_ignores:
+            _LOGGER.warning(
+                f"Unmatched ignore targets: {unmatched_ignores}, in instance of {model.__class__.__name__}"
             )
 
 
