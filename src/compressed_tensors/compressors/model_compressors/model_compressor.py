@@ -195,7 +195,7 @@ class ModelCompressor:
 
     @staticmethod
     def parse_sparsity_config(
-        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"],
     ) -> Union[Dict[str, Any], None]:
         """
         Parse sparsity config from quantization/compression config. Sparsity
@@ -215,7 +215,7 @@ class ModelCompressor:
 
     @staticmethod
     def parse_quantization_config(
-        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"],
     ) -> Union[Dict[str, Any], None]:
         """
         Parse quantization config from quantization/compression config. The
