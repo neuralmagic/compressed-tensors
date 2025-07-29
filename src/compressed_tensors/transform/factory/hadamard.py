@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import math
-from typing import Optional, Union
+from typing import Optional
 
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
@@ -26,7 +26,7 @@ from compressed_tensors.transform.utils.matrix import (
 from compressed_tensors.utils import get_execution_device, get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
 from torch import Tensor, device, dtype
-from torch.nn import Linear, Module, Parameter
+from torch.nn import Module, Parameter
 
 
 @TransformFactory.register("hadamard")

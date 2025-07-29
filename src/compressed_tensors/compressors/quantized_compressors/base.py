@@ -24,7 +24,6 @@ from compressed_tensors.utils import (
     get_nested_weight_mappings,
     merge_names,
 )
-from compressed_tensors.utils.safetensors_load import match_param_name
 from safetensors import safe_open
 from torch import Tensor
 from tqdm import tqdm

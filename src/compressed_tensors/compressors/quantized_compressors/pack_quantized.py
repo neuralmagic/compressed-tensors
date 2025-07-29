@@ -14,7 +14,6 @@
 import math
 from typing import Dict, Literal, Optional, Tuple, Union
 
-import numpy as np
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.quantized_compressors.base import (

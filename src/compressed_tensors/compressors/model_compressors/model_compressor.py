@@ -42,7 +42,6 @@ from compressed_tensors.quantization import (
     load_pretrained_quantization_parameters,
 )
 from compressed_tensors.quantization.lifecycle import expand_target_names
-from compressed_tensors.quantization.utils import is_module_quantized
 from compressed_tensors.utils import (
     align_module_device,
     delete_offload_parameter,
@@ -390,7 +389,6 @@ class ModelCompressor:
         )
 
         for prefix, module in tqdm(model.named_modules(), desc="Compressing model"):
-
             if prefix in module_to_scheme or prefix in sparse_compression_targets:
                 module_device = get_execution_device(module)
                 is_meta = module_device.type == "meta"

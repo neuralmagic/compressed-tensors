@@ -14,7 +14,7 @@
 
 import warnings
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from compressed_tensors.quantization.quant_args import (
     DynamicType,
