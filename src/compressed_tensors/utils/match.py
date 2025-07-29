@@ -15,7 +15,7 @@
 import logging
 import re
 from collections.abc import Generator
-from typing import Callable, Iterable, List, Tuple
+from typing import Iterable, List, Tuple
 
 import torch
 from compressed_tensors.utils.internal import InternalModule
@@ -37,8 +37,7 @@ def match_named_modules(
     targets: Iterable[str] | None,
     ignore: Iterable[str] | None = None,
     warn_on_fail: bool = False,
-    preprocess_name: Callable[[str], str] = lambda x: x,
-) -> Generator[Tuple[str, torch.nn.Module] | Tuple[str, torch.nn.Module, List[str]]]:
+) -> Generator[Tuple[str, torch.nn.Module]]:
     """
     Yields names and modules which match `targets` but do not match `ignore`.
     Values are returned in order of `model.named_modules()`
@@ -58,9 +57,6 @@ def match_named_modules(
     for name, module in model.named_modules():
         if isinstance(module, InternalModule):
             continue
-
-        # preprocess the module name and module
-        name = preprocess_name(name)
 
         if any(is_match(name, module, ign) for ign in ignore):
             continue
