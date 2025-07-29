@@ -258,15 +258,13 @@ def get_sample_tinyllama_quant_config(status: str = "frozen"):
 
 @requires_accelerate()
 @pytest.mark.parametrize(
-    "ignore,should_raise_warning",
+    "ignore",
     [
-        [("lm_head", "re:.*gate"), False],
-        [("lm_head", "re:.*foobarbaz"), True],
+        ("lm_head", "re:.*gate"),
+        ("lm_head", "re:.*foobarbaz"),
     ],
 )
-def test_apply_quantization_status(caplog, ignore, should_raise_warning):
-    import logging
-
+def test_apply_quantization_status(ignore):
     # load a dense, unquantized tiny llama model
     model = get_tinyllama_model()
     quantization_config_dict = {
@@ -290,10 +288,4 @@ def test_apply_quantization_status(caplog, ignore, should_raise_warning):
     config = QuantizationConfig(**quantization_config_dict)
     config.quantization_status = QuantizationStatus.CALIBRATION
 
-    # mismatch in the ignore key of quantization_config_dict
-    with caplog.at_level(logging.WARNING):
-        apply_quantization_config(model, config)
-        if should_raise_warning:
-            assert len(caplog.text) > 0
-        else:
-            assert len(caplog.text) == 0
+    apply_quantization_config(model, config)

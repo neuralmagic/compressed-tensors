@@ -37,8 +37,6 @@ def match_named_modules(
     targets: Iterable[str] | None,
     ignore: Iterable[str] | None = None,
     warn_on_fail: bool = False,
-    warn_on_unmatched_ignores: bool = False,
-    yield_matched_targets: bool = False,
     preprocess_name: Callable[[str], str] = lambda x: x,
 ) -> Generator[Tuple[str, torch.nn.Module] | Tuple[str, torch.nn.Module, List[str]]]:
     """
@@ -49,8 +47,6 @@ def match_named_modules(
     :param targets: target strings, potentially containing "re:" prefixes
     :param ignore: targets to ignore, potentially containing "re:" prefixes
     :param warn_on_fail: if True, warns if any targets do not match any modules in model
-    :param warn_on_unmatched_ignores: if True, warns if any ignores do not match any modules in model
-    :param yield_matched_targets: if True, yields the matched targets in addition to the module name and module
     :param preprocess_name: a function to preprocess the module name
     :return: generator of module names and modules
     """
@@ -58,11 +54,7 @@ def match_named_modules(
     targets = targets or []
 
     unmatched_targets = set(targets)
-    unmatched_ignores = set(ignore)
 
-    # Note: when yield_matched_targets is True, the ordering of the targets is important
-    # Order targets by type: exact name match, regex name match, class name match
-    targets = sorted(targets, key=lambda x: ("re:" in x, x))
     for name, module in model.named_modules():
         if isinstance(module, InternalModule):
             continue
@@ -70,47 +62,19 @@ def match_named_modules(
         # preprocess the module name and module
         name = preprocess_name(name)
 
-        ignore_matched = False
-        for ign in ignore:
-            if is_match(name, module, ign):
-                unmatched_ignores -= {ign}
-                ignore_matched = True
-                break
-        if ignore_matched:
+        if any(is_match(name, module, ign) for ign in ignore):
             continue
 
-        matched_target_on_name = []
-        matched_target_on_class = []
-        # Check for name matches first (exact then regex, enforced by sort above)
         for target in targets:
-            if _match_name(name, target):
+            if is_match(name, module, target):
                 unmatched_targets -= {target}
-                matched_target_on_name.append(target)
-                if not yield_matched_targets:
-                    break
-            elif _match_class(module, target):
-                unmatched_targets -= {target}
-                matched_target_on_class.append(target)
-                if not yield_matched_targets:
-                    break
-
-        matched_targets = matched_target_on_name + matched_target_on_class
-        if matched_targets:
-            if yield_matched_targets:
-                yield name, module, matched_targets
-            else:
                 yield name, module
+                break
 
     if warn_on_fail:
         for target in unmatched_targets:
             _LOGGER.warning(
                 f"Could not match `{target}` in instance of {model.__class__.__name__}"
-            )
-
-    if warn_on_unmatched_ignores:
-        for ign in unmatched_ignores:
-            _LOGGER.warning(
-                f"Unmatched ignore targets: {unmatched_ignores}, in instance of {model.__class__.__name__}"
             )
 
 
@@ -149,6 +113,23 @@ def match_named_parameters(
             _LOGGER.warning(
                 f"Could not match `{target}` in instance of {model.__class__.__name__}"
             )
+
+
+def match_targets(
+    name: str, module: torch.nn.Module, targets: Iterable[str]
+) -> Generator[str]:
+    """
+    Yields the targets that match the given name and module.
+    Outputs are ordered by type: exact name match, regex name match, class name match
+    """
+    targets = sorted(targets, key=lambda x: ("re:" in x, x))
+    for target in targets:
+        if _match_name(name, target):
+            yield target
+
+    for target in targets:
+        if _match_class(module, target):
+            yield target
 
 
 def match_modules_set(

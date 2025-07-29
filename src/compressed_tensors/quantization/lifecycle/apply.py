@@ -39,7 +39,7 @@ from compressed_tensors.quantization.utils import (
     is_kv_cache_quant_scheme,
 )
 from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
-from compressed_tensors.utils.match import match_named_modules
+from compressed_tensors.utils.match import is_match, match_named_modules, match_targets
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
@@ -145,17 +145,16 @@ def apply_quantization_config(
         from compressed_tensors.linear.compressed_linear import CompressedLinear
 
     # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule, matched_targets in match_named_modules(
+    for name, submodule in match_named_modules(
         model,
         target_to_scheme,
         config.ignore or [],
         warn_on_fail=True,
-        warn_on_unmatched_ignores=True,
-        yield_matched_targets=True,
         preprocess_name=fix_fsdp_module_name,
     ):
         # mark modules to be quantized by adding
         # quant scheme to the matching layers
+        matched_targets = list(match_targets(name, submodule, target_to_scheme))
         scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
         if run_compressed:
             format = config.format
