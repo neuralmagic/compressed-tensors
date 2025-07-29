@@ -42,7 +42,6 @@ from compressed_tensors.quantization import (
     apply_quantization_config,
     load_pretrained_quantization_parameters,
 )
-from compressed_tensors.quantization.utils import is_module_quantized
 from compressed_tensors.transform import TransformConfig
 from compressed_tensors.utils import (
     align_module_device,

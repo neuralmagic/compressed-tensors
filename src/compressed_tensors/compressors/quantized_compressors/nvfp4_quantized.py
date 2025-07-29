@@ -15,7 +15,6 @@
 
 from typing import Dict, Optional, Tuple
 
-import numpy
 import torch
 from compressed_tensors.compressors.base import BaseCompressor
 from compressed_tensors.compressors.quantized_compressors.base import (
@@ -92,7 +91,6 @@ class NVFP4PackedCompressor(BaseQuantizationCompressor):
         zero_point: Optional[torch.Tensor] = None,
         g_idx: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
-
         quantized_weight = quantize(
             x=weight,
             scale=scale,
@@ -112,7 +110,6 @@ class NVFP4PackedCompressor(BaseQuantizationCompressor):
         compressed_data: Dict[str, Tensor],
         quantization_args: Optional[QuantizationArgs] = None,
     ) -> torch.Tensor:
-
         weight = compressed_data["weight_packed"]
         scale = compressed_data["weight_scale"]
         global_scale = compressed_data["weight_global_scale"]
