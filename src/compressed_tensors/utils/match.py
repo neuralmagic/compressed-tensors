@@ -117,19 +117,25 @@ def match_named_parameters(
 
 def match_targets(
     name: str, module: torch.nn.Module, targets: Iterable[str]
-) -> Generator[str]:
+) -> List[str]:
     """
-    Yields the targets that match the given name and module.
+    Returns the targets that match the given name and module.
     Outputs are ordered by type: exact name match, regex name match, class name match
     """
+    if isinstance(module, InternalModule):
+        return []
+
     targets = sorted(targets, key=lambda x: ("re:" in x, x))
+    matched_targets = []
     for target in targets:
         if _match_name(name, target):
-            yield target
+            matched_targets.append(target)
 
     for target in targets:
-        if _match_class(module, target):
-            yield target
+        if _match_class(module, target) and target not in matched_targets:
+            matched_targets.append(target)
+
+    return matched_targets
 
 
 def match_modules_set(

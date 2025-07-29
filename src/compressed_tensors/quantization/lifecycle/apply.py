@@ -154,7 +154,7 @@ def apply_quantization_config(
     ):
         # mark modules to be quantized by adding
         # quant scheme to the matching layers
-        matched_targets = list(match_targets(name, submodule, target_to_scheme))
+        matched_targets = match_targets(name, submodule, target_to_scheme)
         scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
         if run_compressed:
             format = config.format
