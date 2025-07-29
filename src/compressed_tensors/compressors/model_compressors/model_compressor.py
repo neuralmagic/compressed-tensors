@@ -562,11 +562,12 @@ class ModelCompressor:
         :param model_path: path to compressed weights
         :param model: pytorch model to load decompressed weights into
 
-        Note: decompress makes use of both _replace_sparsity_weights and _replace_weights
-        The variations in these methods are a result of the subtle variations between the sparsity
-        and quantization compressors. Specifically, quantization compressors return not just the
-        decompressed weight, but the quantization parameters (e.g scales, zero_point) whereas sparsity
-        compressors only return the decompressed weight.
+        Note: decompress makes use of both _replace_sparsity_weights and
+        _replace_weights. The variations in these methods are a result of the subtle
+        variations between the sparsity and quantization compressors. Specifically,
+        quantization compressors return not just the decompressed weight, but the
+        quantization parameters (e.g scales, zero_point) whereas sparsity compressors
+        only return the decompressed weight.
 
         """
         model_path = get_safetensors_folder(model_path)
@@ -598,18 +599,17 @@ class ModelCompressor:
             with override_quantization_status(
                 self.quantization_config, QuantizationStatus.FROZEN
             ):
-
                 names_to_scheme = apply_quantization_config(
                     model, self.quantization_config
                 )
                 # Load activation scales/zp or any other quantization parameters
-                # Conditionally load the weight quantization parameters if we have a dense compressor
-                # Or if a sparsity compressor has already been applied
+                # Conditionally load the weight quantization parameters if we have a
+                # dense compressor or if a sparsity compressor has already been applied
                 load_pretrained_quantization_parameters(
                     model,
                     model_path,
-                    # TODO: all weight quantization params will be moved to the compressor in a follow-up
-                    # including initialization
+                    # TODO: all weight quantization params will be moved to the
+                    # compressor in a follow-up including initialization
                     load_weight_quantization=(
                         sparse_decompressed
                         or isinstance(self.quantization_compressor, DenseCompressor)
@@ -695,7 +695,6 @@ class ModelCompressor:
         :param model: The model whose weights are to be updated.
         """
         for name, data in tqdm(dense_weight_generator, desc="Decompressing model"):
-
             split_name = name.split(".")
             prefix, param_name = ".".join(split_name[:-1]), split_name[-1]
             module = operator.attrgetter(prefix)(model)
@@ -731,9 +730,10 @@ class ModelCompressor:
             for param_name, param_data in data.items():
                 if hasattr(module, param_name):
                     # If compressed, will have an incorrect dtype for transformers >4.49
-                    # TODO: we can also just skip initialization of scales/zp if in decompression in init
-                    # to be consistent with loading which happens later as well
-                    # however, update_data does a good shape check - should be moved to the compressor
+                    # TODO: we can also just skip initialization of scales/zp if in
+                    # decompression in init to be consistent with loading which happens
+                    # later as well however, update_data does a good shape check -
+                    # should be moved to the compressor
                     if param_name == "weight":
                         delattr(module, param_name)
                         requires_grad = param_data.dtype in (
