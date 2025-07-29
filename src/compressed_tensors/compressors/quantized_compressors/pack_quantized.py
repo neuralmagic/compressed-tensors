@@ -135,7 +135,8 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         compressed_dict["weight_shape"] = weight_shape
         compressed_dict["weight_packed"] = packed_weight
 
-        # We typically don't compress zp; apart from when using the packed_compressor and when storing group/channel zp
+        # We typically don't compress zp; apart from when using the packed_compressor
+        # and when storing group/channel zp
         if not quantization_args.symmetric and quantization_args.strategy in [
             QuantizationStrategy.GROUP.value,
             QuantizationStrategy.CHANNEL.value,
@@ -166,7 +167,8 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
         num_bits = quantization_args.num_bits
         unpacked = unpack_from_int32(weight, num_bits, original_shape)
 
-        # NOTE: this will fail decompression as we don't currently handle packed zp on decompression
+        # NOTE: this will fail decompression as we don't currently handle packed zp on
+        # decompression
         if not quantization_args.symmetric and quantization_args.strategy in [
             QuantizationStrategy.GROUP.value,
             QuantizationStrategy.CHANNEL.value,

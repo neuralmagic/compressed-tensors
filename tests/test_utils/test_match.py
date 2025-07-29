@@ -461,7 +461,7 @@ class TestMatchModulesSet:
         for module_set in matches:
             # Check that modules are returned in target order (v, q, k)
             v_proj, q_proj, k_proj = module_set
-            # We can"t easily check the exact modules, but we can check they"re all Linear
+            # We can't easily check the exact modules, but can check they're all Linear
             assert all(isinstance(m, nn.Linear) for m in [v_proj, q_proj, k_proj])
 
     def test_incomplete_set_error(self):

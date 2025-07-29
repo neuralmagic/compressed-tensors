@@ -107,7 +107,8 @@ class BaseQuantizationCompressor(BaseCompressor):
                     compressed_dict[name] = value.to(compression_device)
                     continue
 
-                # compress values on meta if loading from meta otherwise on cpu (memory movement too expensive)
+                # compress values on meta if loading from meta otherwise on cpu (memory
+                # movement too expensive)
                 module_path = prefix[:-1] if prefix.endswith(".") else prefix
                 quant_args = names_to_scheme[module_path].weights
                 compressed_values = self.compress_weight(

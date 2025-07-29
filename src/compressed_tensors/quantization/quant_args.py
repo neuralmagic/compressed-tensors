@@ -211,23 +211,21 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     def validate_block_structure(cls, value) -> Optional[List[int]]:
         if value is None:
             return value
+        invalid_block_structure_msg = (
+            f"Invalid block_structure '{value}'. Must be a list of two ints"
+            " [rows, cols]."
+        )
         # For backward compatibility, allow string format "2x4", "8x16", etc.
         if isinstance(value, str):
             try:
                 return [int(x) for x in value.split("x")]
             except Exception:
-                raise ValueError(
-                    f"Invalid block_structure '{value}'. Must be a list of two ints [rows, cols]."
-                )
+                raise ValueError(invalid_block_structure_msg)
         if isinstance(value, (list, tuple)):
             if len(value) != 2 or not all(isinstance(v, int) for v in value):
-                raise ValueError(
-                    f"Invalid block_structure '{value}'. Must be a list of two ints [rows, cols]."
-                )
+                raise ValueError(invalid_block_structure_msg)
             return list(value)
-        raise ValueError(
-            f"Invalid block_structure '{value}'. Must be a list of two ints [rows, cols]."
-        )
+        raise ValueError(invalid_block_structure_msg)
 
     @field_validator("strategy", mode="before")
     def validate_strategy(cls, value) -> Union[QuantizationStrategy, None]:
@@ -307,7 +305,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             )
             if strategy not in supported_strategies:
                 raise ValueError(
-                    f"One of {supported_strategies} must be used for dynamic quantization"
+                    f"One of {supported_strategies} must be used for dynamic quant."
                 )
 
             if (
@@ -322,7 +320,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                         observer != "memoryless"
                     ):  # avoid annoying users with old configs
                         warnings.warn(
-                            "No observer is used for dynamic quantization, setting to None"
+                            "No observer is used for dynamic quant., setting to None"
                         )
                     observer = None
             else:
