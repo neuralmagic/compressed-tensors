@@ -15,7 +15,7 @@
 import logging
 import re
 from collections.abc import Generator
-from typing import Callable, Iterable, Tuple
+from typing import Callable, Iterable, List, Tuple
 
 import torch
 from compressed_tensors.utils.internal import InternalModule
@@ -38,9 +38,9 @@ def match_named_modules(
     ignore: Iterable[str] | None = None,
     warn_on_fail: bool = False,
     warn_on_unmatched_ignores: bool = False,
-    return_matched_targets: bool = False,
+    yield_matched_targets: bool = False,
     preprocess_name: Callable[[str], str] = lambda x: x,
-) -> Generator[Tuple[str, torch.nn.Module]]:
+) -> Generator[Tuple[str, torch.nn.Module] | Tuple[str, torch.nn.Module, List[str]]]:
     """
     Yields names and modules which match `targets` but do not match `ignore`.
     Values are returned in order of `model.named_modules()`
@@ -49,6 +49,9 @@ def match_named_modules(
     :param targets: target strings, potentially containing "re:" prefixes
     :param ignore: targets to ignore, potentially containing "re:" prefixes
     :param warn_on_fail: if True, warns if any targets do not match any modules in model
+    :param warn_on_unmatched_ignores: if True, warns if any ignores do not match any modules in model
+    :param yield_matched_targets: if True, yields the matched targets in addition to the module name and module
+    :param preprocess_name: a function to preprocess the module name
     :return: generator of module names and modules
     """
     ignore = ignore or []
@@ -57,6 +60,7 @@ def match_named_modules(
     unmatched_targets = set(targets)
     unmatched_ignores = set(ignore)
 
+    # Note: when yield_matched_targets is True, the ordering of the targets is important
     # Order targets by type: exact name match, regex name match, class name match
     targets = sorted(targets, key=lambda x: ("re:" in x, x))
     for name, module in model.named_modules():
@@ -75,30 +79,24 @@ def match_named_modules(
         if ignore_matched:
             continue
 
-        matched_targets = []
-        # Check for name matches first (exact then regex)
+        matched_target_on_name = []
+        matched_target_on_class = []
+        # Check for name matches first (exact then regex, enforced by sort above)
         for target in targets:
             if _match_name(name, target):
                 unmatched_targets -= {target}
-                matched_targets.append(target)
-                if not return_matched_targets:
+                matched_target_on_name.append(target)
+                if not yield_matched_targets:
                     break
-
-        if not return_matched_targets and matched_targets:
-            # Don't need to check other targets, one match is enough
-            yield name, module
-            continue
-
-        # Check for class matches
-        for target in targets:
-            if _match_class(module, target):
+            elif _match_class(module, target):
                 unmatched_targets -= {target}
-                matched_targets.append(target)
-                if not return_matched_targets:
+                matched_target_on_class.append(target)
+                if not yield_matched_targets:
                     break
 
+        matched_targets = matched_target_on_name + matched_target_on_class
         if matched_targets:
-            if return_matched_targets:
+            if yield_matched_targets:
                 yield name, module, matched_targets
             else:
                 yield name, module

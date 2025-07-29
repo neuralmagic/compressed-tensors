@@ -151,7 +151,7 @@ def apply_quantization_config(
         config.ignore or [],
         warn_on_fail=True,
         warn_on_unmatched_ignores=True,
-        return_matched_targets=True,
+        yield_matched_targets=True,
         preprocess_name=fix_fsdp_module_name,
     ):
         # mark modules to be quantized by adding
