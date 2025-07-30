@@ -15,7 +15,7 @@
 import logging
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
 from typing import Union
 
@@ -50,6 +50,7 @@ __all__ = [
     "load_pretrained_quantization_parameters",
     "apply_quantization_config",
     "apply_quantization_status",
+    "find_name_or_class_matches",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -240,6 +241,39 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
     if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
         model.apply(compress_quantized_weights)
+
+
+def find_name_or_class_matches(
+    name: str, module: Module, targets: Iterable[str], check_contains: bool = False
+) -> List[str]:
+    """
+    DEPRECATED: Use `match_targets` instead.
+
+    This function is deprecated and will be removed in a future release.
+    Please use `match_targets` from `compressed_tensors.utils.match` instead.
+
+    Returns all targets that match the given name or the class name.
+    Returns empty list otherwise.
+    The order of the output `matches` list matters.
+    The entries are sorted in the following order:
+        1. matches on exact strings
+        2. matches on regex patterns
+        3. matches on module names
+    """
+    import warnings
+
+    warnings.warn(
+        "find_name_or_class_matches is deprecated and will be removed in a future release. "
+        "Please use compressed_tensors.utils.match.match_targets instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    if check_contains:
+        raise NotImplementedError(
+            "This function is deprecated, and the check_contains=True option has been removed."
+        )
+
+    return match_targets(name, module, targets)
 
 
 def _infer_status(model: Module) -> Optional[QuantizationStatus]:
