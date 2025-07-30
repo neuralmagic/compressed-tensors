@@ -124,8 +124,12 @@ def dequantize(
                     strategy=QuantizationStrategy.GROUP, group_size=group_size
                 )
             else:
+                block_height = x_q.shape[0] // scale.shape[0]  # Rows per block
+                block_width = x_q.shape[1] // scale.shape[1]   # Columns per block
+
                 args = QuantizationArgs(
-                    strategy=QuantizationStrategy.BLOCK, block_structure=scale.shape
+                    strategy=QuantizationStrategy.BLOCK,
+                    block_structure=[block_height, block_width]
                 )
         else:
             raise ValueError(
@@ -252,7 +256,7 @@ def _process_quantization(
                 global_scale=global_scale,
             )
         # restore original shape
-        output = x_blocks.transpose(1, 2).reshape(original_shape)
+        output = x_blocks.transpose(1, 2).reshape(rows, cols)
     elif args.strategy in (
         QuantizationStrategy.GROUP,
         QuantizationStrategy.TENSOR_GROUP,
@@ -468,7 +472,6 @@ def _quantize(
     dtype: Optional[torch.dtype] = None,
     global_scale: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-
     # if a global scale is optionally provided, use it
     # to further scale the local `scale` parameter
     if global_scale is not None:
@@ -501,7 +504,6 @@ def _dequantize(
     dtype: Optional[torch.dtype] = None,
     global_scale: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-
     # if a global scale is optionally provided, use it
     # to further scale the local `scale` parameter
     if global_scale is not None:
