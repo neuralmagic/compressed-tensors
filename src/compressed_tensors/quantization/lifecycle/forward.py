@@ -472,6 +472,7 @@ def _quantize(
     dtype: Optional[torch.dtype] = None,
     global_scale: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
+
     # if a global scale is optionally provided, use it
     # to further scale the local `scale` parameter
     if global_scale is not None:
@@ -504,6 +505,7 @@ def _dequantize(
     dtype: Optional[torch.dtype] = None,
     global_scale: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
+
     # if a global scale is optionally provided, use it
     # to further scale the local `scale` parameter
     if global_scale is not None:
