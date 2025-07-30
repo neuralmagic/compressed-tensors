@@ -71,7 +71,6 @@ class NVFP4PackedCompressor(BaseQuantizationCompressor):
         zero_point: Optional[torch.Tensor] = None,
         g_idx: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
-
         quantized_weight = quantize(
             x=weight,
             scale=scale,
@@ -91,7 +90,6 @@ class NVFP4PackedCompressor(BaseQuantizationCompressor):
         compressed_data: Dict[str, Tensor],
         quantization_args: Optional[QuantizationArgs] = None,
     ) -> torch.Tensor:
-
         weight = compressed_data["weight_packed"]
         scale = compressed_data["weight_scale"]
         global_scale = compressed_data["weight_global_scale"]
@@ -105,7 +103,7 @@ class NVFP4PackedCompressor(BaseQuantizationCompressor):
         return decompressed_weight
 
 
-@torch.compile(fullgraph=True)
+@torch.compile(fullgraph=True, dynamic=True)
 def pack_fp4_to_uint8(x: torch.Tensor) -> torch.Tensor:
     """
     Packs a tensor with values in the fp4 range into uint8.
@@ -154,8 +152,9 @@ kE2M1ToFloat = torch.tensor(
     [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0], dtype=torch.float32
 )
 
+
 # reference: : https://github.com/vllm-project/vllm/pull/16362
-@torch.compile(fullgraph=True)
+@torch.compile(fullgraph=True, dynamic=True)
 def unpack_fp4_from_uint8(
     a: torch.Tensor, m: int, n: int, dtype: Optional[torch.dtype] = torch.bfloat16
 ) -> torch.Tensor:
