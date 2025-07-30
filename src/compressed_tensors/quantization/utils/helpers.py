@@ -167,7 +167,7 @@ def compute_dynamic_scales_and_zp(
 
     keep_dims = True
     if args.strategy == QuantizationStrategy.TOKEN:
-        dim = {0, 1, 2}
+        dim = {1, 2}
         reduce_dims = tuple(idx for idx in range(value.ndim) if idx not in dim)
     elif args.strategy == QuantizationStrategy.TENSOR:
         reduce_dims = None
@@ -176,13 +176,8 @@ def compute_dynamic_scales_and_zp(
         QuantizationStrategy.GROUP,
     ):
 
-        if len(value.shape) > 2:
-            dim = {0, 1, 2}
-        else:
-            dim = {0, 1}
-
         reduce_dims = tuple(
-            idx for idx in range(len(value.shape) + 1) if idx not in dim
+            idx for idx in range(len(value.shape) + 1) if idx not in range(value.dim())
         )
         keep_dims = False
 
