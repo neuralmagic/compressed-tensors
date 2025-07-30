@@ -27,6 +27,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 __all__ = [
     "match_named_modules",
     "match_named_parameters",
+    "match_targets",
     "match_modules_set",
     "is_match",
 ]
@@ -46,25 +47,19 @@ def match_named_modules(
     :param targets: target strings, potentially containing "re:" prefixes
     :param ignore: targets to ignore, potentially containing "re:" prefixes
     :param warn_on_fail: if True, warns if any targets do not match any modules in model
-    :param preprocess_name: a function to preprocess the module name
     :return: generator of module names and modules
     """
-    ignore = ignore or []
     targets = targets or []
+    ignore = ignore or []
 
     unmatched_targets = set(targets)
 
     for name, module in model.named_modules():
-        if isinstance(module, InternalModule):
-            continue
-
-        if any(is_match(name, module, ign) for ign in ignore):
-            continue
-
         for target in targets:
             if is_match(name, module, target):
                 unmatched_targets -= {target}
-                yield name, module
+                if not any(is_match(name, module, ign) for ign in ignore):
+                    yield name, module
                 break
 
     if warn_on_fail:
@@ -76,8 +71,8 @@ def match_named_modules(
 
 def match_named_parameters(
     model: torch.nn.Module,
-    targets: Iterable[str],
-    ignore: Iterable[str] = tuple(),
+    targets: Iterable[str] | None = None,
+    ignore: Iterable[str] | None = None,
     warn_on_fail: bool = False,
 ) -> Generator[Tuple[str, torch.nn.Module, torch.nn.Parameter]]:
     """
@@ -90,6 +85,9 @@ def match_named_parameters(
     :param warn_on_fail: if True, warns if any targets do not match any params in model
     :return: generator of fully-qualified param names, parent modules, and params
     """
+    targets = targets or []
+    ignore = ignore or []
+
     unmatched_targets = set(targets)
     for module_name, module in model.named_modules():
         if isinstance(module, InternalModule):
@@ -112,14 +110,29 @@ def match_named_parameters(
 
 
 def match_targets(
-    name: str, module: torch.nn.Module, targets: Iterable[str]
+    name: str, module: torch.nn.Module, targets: Iterable[str] | None = None
 ) -> List[str]:
     """
     Returns the targets that match the given name and module.
+
+    :param name: the name of the module
+    :param module: the module to match
+    :param targets: the target strings, potentially containing "re:" prefixes
+    :return: the targets that match the given name and module
+
     Outputs are ordered by type: exact name match, regex name match, class name match
     """
+    targets = targets or []
+
     if isinstance(module, InternalModule):
         return []
+
+    # The order of the output `matches` list matters, the are arranged from most
+    # specific to least specific, and this order will be used when merging configs.
+    # The entries are sorted in the following order:
+    #     1. matches on exact strings
+    #     2. matches on regex patterns
+    #     3. matches on module names
 
     targets = sorted(targets, key=lambda x: ("re:" in x, x))
     matched_targets = []
@@ -136,8 +149,8 @@ def match_targets(
 
 def match_modules_set(
     model: torch.nn.Module,
-    targets: Iterable[str],
-    ignore: Iterable[str] = tuple(),
+    targets: Iterable[str] | None = None,
+    ignore: Iterable[str] | None = None,
 ) -> Generator[Iterable[torch.nn.Module]]:
     """
     Yields modules grouped with the same order and size as `targets`.
@@ -175,6 +188,9 @@ def match_modules_set(
     :param targets: target strings, potentially containing "re:" prefixes
     :param ignore: targets to ignore, potentially containing "re:" prefixes
     """
+    targets = targets or []
+    ignore = ignore or []
+
     matches = dict.fromkeys(targets, None)
     for name, module in model.named_modules():
         # match until we get a full set
