@@ -175,35 +175,23 @@ def compute_dynamic_scales_and_zp(
         QuantizationStrategy.TENSOR_GROUP,
         QuantizationStrategy.GROUP,
     ):
-        #if len(value.shape) > 2:
-        #    value = value.squeeze(0)
+
         if len(value.shape) > 2:
             dim = {0, 1, 2}
         else:
             dim = {0, 1}
 
-        reduce_dims = tuple(idx for idx in range(len(value.shape) + 1) if idx not in dim)
+        reduce_dims = tuple(
+            idx for idx in range(len(value.shape) + 1) if idx not in dim
+        )
         keep_dims = False
 
-        if len(value.shape) > 2:
-            value = torch.reshape(
-                value,
-                (
-                    value.shape[0],
-                    value.shape[1],
-                    math.ceil(value.shape[-1] / args.group_size),
-                    args.group_size,
-                ),
-            )
-        else:
-            value = torch.reshape(
-                value,
-                (
-                    value.shape[0],
-                    math.ceil(value.shape[-1] / args.group_size),
-                    args.group_size,
-                ),
-            )
+        reshaped_dims = tuple(value.shape[:-1]) + (
+            math.ceil(value.shape[-1] / args.group_size),
+            args.group_size,
+        )
+        value = torch.reshape(value, reshaped_dims)
+
     else:
         supported_strategies = (
             QuantizationStrategy.TOKEN,

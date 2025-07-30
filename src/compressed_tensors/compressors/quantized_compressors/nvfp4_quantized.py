@@ -60,7 +60,7 @@ class NVFP4PackedCompressor(BaseQuantizationCompressor):
             "weight_zero_point",
             "weight_global_scale",
         )
-    
+
     def compression_param_info(
         self,
         weight_shape: torch.Size,
@@ -75,10 +75,12 @@ class NVFP4PackedCompressor(BaseQuantizationCompressor):
         :return: dictionary mapping compressed parameter names to shape and dtype
         """
         output = {
-            "weight_packed": (torch.Size((weight_shape[0], weight_shape[1] // 2)), torch.uint8),
+            "weight_packed": (
+                torch.Size((weight_shape[0], weight_shape[1] // 2)),
+                torch.uint8,
+            ),
         }
         return output
-
 
     def compress_weight(
         self,
