@@ -291,11 +291,11 @@ def _process_quantization(
             x = safe_permute(x, perm, dim=1)
 
         # Maintain all dimensions apart from the last dim, which is divided by the group_size
-        reshaped_dims = tuple(x.shape[:-1]) + (
+        reshaped_dims = (
             ceil(x.shape[-1] / group_size),
             group_size,
         )
-        x = torch.reshape(x, reshaped_dims)
+        x = x.unflatten(-1, reshaped_dims)
 
         if do_quantize:
             output = _quantize(
@@ -318,11 +318,7 @@ def _process_quantization(
                 global_scale=global_scale,
             )
 
-        original_shaped_dims = tuple(output.shape[:-2]) + (
-            output.shape[-1] * output.shape[-2],
-        )
-        output = torch.reshape(output, original_shaped_dims)
-
+        output = output.flatten(start_dim=-2)
         output = output.to(output_dtype)
 
         if not is_column_order:

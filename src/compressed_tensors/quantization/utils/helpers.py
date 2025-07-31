@@ -176,16 +176,14 @@ def compute_dynamic_scales_and_zp(
         QuantizationStrategy.GROUP,
     ):
 
-        reduce_dims = tuple(
-            idx for idx in range(len(value.shape) + 1) if idx not in range(value.dim())
-        )
+        reduce_dims = -1
         keep_dims = False
 
-        reshaped_dims = tuple(value.shape[:-1]) + (
+        reshaped_dims = (
             math.ceil(value.shape[-1] / args.group_size),
             args.group_size,
         )
-        value = torch.reshape(value, reshaped_dims)
+        value = value.unflatten(-1, reshaped_dims)
 
     else:
         supported_strategies = (
