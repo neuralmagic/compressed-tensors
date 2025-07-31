@@ -14,7 +14,7 @@
 
 import warnings
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from compressed_tensors.quantization.quant_args import (
     DynamicType,
@@ -72,9 +72,10 @@ class QuantizationScheme(BaseModel):
         ):
             warnings.warn(
                 "Using GROUP strategy for both weights and input_activations "
-                f"with different group sizes ({weights.group_size} vs {inputs.group_size}) "
-                "may complicate fused kernel implementations. Consider using "
-                "TENSOR_GROUP strategy for both or matching group sizes.",
+                f"with different group sizes ({weights.group_size} vs "
+                f"{inputs.group_size}) may complicate fused kernel implementations. "
+                "Consider using TENSOR_GROUP strategy for both or matching group"
+                " sizes.",
                 UserWarning,
                 stacklevel=2,
             )
