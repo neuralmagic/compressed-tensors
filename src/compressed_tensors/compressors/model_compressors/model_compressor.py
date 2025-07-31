@@ -177,9 +177,8 @@ class ModelCompressor:
             algorithm
         :return: compressor for the configs, or None if model is not compressed
         """
-        quantization_config = QuantizationConfig.from_pretrained(
-            model, format=quantization_format
-        )
+        # attached during `apply_quantization_config`
+        quantization_config = getattr(model.quantization_config, None)
 
         if isinstance(sparsity_config, str):  # we passed in a sparsity format
             sparsity_config = SparsityCompressionConfig.load_from_registry(

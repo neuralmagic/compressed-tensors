@@ -191,6 +191,14 @@ def apply_quantization_config(
 
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
+
+    # attach config to model for serialization purposes only
+    if hasattr(model, "quantization_config"):
+        raise NotImplementedError(
+            "Applying multiple quantization configs is not implemented as of now"
+        )
+    setattr(model, "quantization_config", config)
+
     return names_to_scheme
 
 

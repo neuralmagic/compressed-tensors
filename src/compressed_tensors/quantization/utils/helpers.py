@@ -426,37 +426,6 @@ def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
     return False
 
 
-def parse_out_kv_cache_args(
-    quant_scheme_to_layers: List[QuantizationScheme],
-) -> Tuple[Optional[QuantizationArgs], List[QuantizationScheme]]:
-    """
-    If possible, parse out the kv cache specific QuantizationArgs
-    from the list of the QuantizationSchemes. If no kv cache
-    specific QuantizationArgs available, this function acts
-    as an identity function
-
-    :param quant_scheme_to_layers: list of QuantizationSchemes
-    :return: kv_cache_args (optional) and the (remaining or original)
-        list of the QuantizationSchemes
-    """
-    kv_cache_quant_scheme_to_layers = [
-        scheme for scheme in quant_scheme_to_layers if is_kv_cache_quant_scheme(scheme)
-    ]
-    quant_scheme_to_layers = [
-        scheme
-        for scheme in quant_scheme_to_layers
-        if not is_kv_cache_quant_scheme(scheme)
-    ]
-
-    if kv_cache_quant_scheme_to_layers:
-        kv_cache_quant_scheme_to_layers = kv_cache_quant_scheme_to_layers[0]
-        kv_cache_args = kv_cache_quant_scheme_to_layers.output_activations
-    else:
-        kv_cache_args = None
-
-    return kv_cache_args, quant_scheme_to_layers
-
-
 def generate_gparam(
     updated_min_val: torch.Tensor,
     updated_max_val: torch.Tensor,
