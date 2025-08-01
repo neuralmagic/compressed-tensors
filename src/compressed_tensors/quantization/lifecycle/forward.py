@@ -126,7 +126,7 @@ def dequantize(
             else:
                 rows, cols = x_q.shape[-2], x_q.shape[-1]
                 block_height = rows // scale.shape[0]  # Rows per block
-                block_width = cols // scale.shape[1]   # Columns per block
+                block_width = cols // scale.shape[1]  # Columns per block
 
                 args = QuantizationArgs(
                     strategy=QuantizationStrategy.BLOCK,
