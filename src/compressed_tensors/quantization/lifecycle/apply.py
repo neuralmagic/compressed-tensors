@@ -16,34 +16,34 @@ import logging
 import re
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
-from typing import Dict, Iterable, List, Optional
-from typing import OrderedDict as OrderedDictType
-from typing import Set, Union
+from typing import Dict, Iterable, List, Optional, OrderedDict as OrderedDictType, Set, Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization.lifecycle.compressed import (
+from compressed_tensors.quantization.lifecycle import (
+    initialize_module_for_quantization,
     compress_quantized_weights,
 )
-from compressed_tensors.quantization.lifecycle.initialize import (
-    initialize_module_for_quantization,
-)
-from compressed_tensors.quantization.quant_args import QuantizationArgs
-from compressed_tensors.quantization.quant_config import (
+from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationStatus,
+    QuantizationArgs,
+    QuantizationScheme,
 )
-from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     KV_CACHE_TARGETS,
-    infer_quantization_status,
     is_kv_cache_quant_scheme,
 )
-from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
+from compressed_tensors.utils.helpers import replace_module
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
 from torch.nn import Module
+from compressed_tensors.linear.compressed_linear import CompressedLinear
+
+from compressed_tensors.utils.match import match_named_modules
+
+from transformers import PreTrainedModel
 
 
 __all__ = [
@@ -116,8 +116,10 @@ def load_pretrained_quantization_parameters(
 
 
 def apply_quantization_config(
-    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
-) -> Dict[str, QuantizationScheme]:
+    model: PreTrainedModel,
+    config: Union[QuantizationConfig, None],
+    run_compressed: bool = False,
+):
     """
     Initializes the model for quantization in-place based on the given config.
     Optionally coverts quantizable modules to compressed_linear modules
@@ -127,79 +129,46 @@ def apply_quantization_config(
     :param run_compressed: Whether the model will be run in compressed mode or
         decompressed fully on load
     """
-    # Workaround for when HF Quantizer passes None, see PR #180
-    if config is None:
-        return dict()
+    # potentially merge with existing configs
+    existing_config = getattr(model, "quantization_config", None)
+    config = merge_quantization_configs(existing_config, config)
 
-    # remove reference to the original `config`
-    # argument. This function can mutate it, and we'd
-    # like to keep the original `config` as it is.
-    config = deepcopy(config)
-    # build mapping of targets to schemes for easier matching
-    # use ordered dict to preserve target ordering in config
-    target_to_scheme = OrderedDict()
+    # backwards compatibility with `kv_cache_scheme` field
+    original_config = config.model_copy()
     config = process_quantization_config(config)
-    names_to_scheme = dict()
+
+    # backwards compatibility with model loading
+    # can be removed after transformers#39039 lands
+    dtype = getattr(model, "dtype", None)
+
+    # remove any existing configs
+    for module in model.modules():
+        # TODO: implement a function which removes qstatus (qparams, ect)
+        pass
+
+    # apply config to model
+    status = config.quantization_status
     for scheme in config.config_groups.values():
-        for target in scheme.targets:
-            target_to_scheme[target] = scheme
+        assert isinstance(scheme, QuantizationScheme)
+        for name, module in match_named_modules(model, scheme.targets, config.ignore):
 
-    if run_compressed:
-        from compressed_tensors.linear.compressed_linear import CompressedLinear
+            # backwards compatibility with model loading
+            # can be removed after transformers#39039 lands
+            if (
+                status == QuantizationStatus.COMPRESSED and
+                run_compressed and
+                isinstance(module, torch.nn.Linear),
+            ):
+                compressed_linear = CompressedLinear.from_linear(
+                    module, scheme, config.format,
+                )
+                replace_module(model, name, compressed_linear)
 
-    # list of submodules to ignore
-    ignored_submodules = defaultdict(list)
-    # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in model.named_modules():
-        # potentially fix module name to remove FSDP wrapper prefix
-        name = fix_fsdp_module_name(name)
-        if matches := find_name_or_class_matches(name, submodule, config.ignore):
-            for match in matches:
-                ignored_submodules[match].append(name)
-            continue  # layer matches ignore list, continue
+            else:
+                apply_quantization_status(module, scheme, status, dtype)
 
-        targets = find_name_or_class_matches(name, submodule, target_to_scheme)
-
-        if targets:
-            # mark modules to be quantized by adding
-            # quant scheme to the matching layers
-            scheme = _scheme_from_targets(target_to_scheme, targets, name)
-            if run_compressed:
-                format = config.format
-                if format != CompressionFormat.dense.value:
-                    if isinstance(submodule, torch.nn.Linear):
-                        # TODO: expand to more module types
-                        compressed_linear = CompressedLinear.from_linear(
-                            submodule,
-                            quantization_scheme=scheme,
-                            quantization_format=format,
-                        )
-                        replace_module(model, name, compressed_linear)
-
-            # target matched - add layer and scheme to target list
-            submodule.quantization_scheme = scheme
-
-            names_to_scheme[name] = submodule.quantization_scheme
-
-    if config.ignore is not None and ignored_submodules is not None:
-        if set(config.ignore) - set(ignored_submodules):
-            _LOGGER.warning(
-                "Some layers that were to be ignored were "
-                "not found in the model: "
-                f"{set(config.ignore) - set(ignored_submodules)}"
-            )
-
-    # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
-
-    # attach config to model for serialization purposes only
-    if hasattr(model, "quantization_config"):
-        raise NotImplementedError(
-            "Applying multiple quantization configs is not implemented as of now"
-        )
-    setattr(model, "quantization_config", config)
-
-    return names_to_scheme
+    # attach config for compression and serialization
+    setattr(model, "quantization_config", original_config)
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
@@ -238,36 +207,44 @@ def process_kv_cache_config(
     return config
 
 
-def apply_quantization_status(model: Module, status: QuantizationStatus):
-    """
-    Applies in place the quantization lifecycle up to the given status
-
-    :param model: model to apply quantization to
-    :param status: status to update the module to
-    """
-
-    current_status = infer_quantization_status(model)
+def apply_quantization_status(
+    module: torch.nn.Module,
+    scheme: QuantizationScheme,
+    status: QuantizationStatus,
+    dtype: Union[torch.dtype, None],
+):
+    current_status = getattr(module, "quantization_status", None)
 
     if status >= QuantizationStatus.INITIALIZED > current_status:
+        # Can remove after transformers#39039 lands
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
 
+        # Can remove after transformers#39039 lands
         # When decompressing, we set the scale_dtype as the model's dtype
         # This is because the normal workflow of using the weight's dtype
         # will be incorrect as the model weight will be compressed
         # Therfore, use the dtype set by the user using the PretrainedModel
-        scale_dtype = None
-        if status == QuantizationStatus.FROZEN:
-            if hasattr(model, "dtype"):
-                scale_dtype = model.dtype
+        scale_dtype = dtype
 
-        model.apply(
-            lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
-            )
+        initialize_module_for_quantization(
+            module,
+            scheme,
+            force_zero_point=force_zero_point_init,
+            scale_dtype=scale_dtype,
         )
 
+    if status >= QuantizationStatus.CALIBRATION > current_status:
+        # technically calibration should be applied here,
+        # but the only existing use cases for applying status greater than INITIALIZED
+        # only apply when preparing to load weights which have already been calibrated,
+        # so we can skip for now
+        pass
+
+    # after transformers#39039 lands, this will only exist for lifecycle completeness
+    # this doesn't really even make sense, as a true compressed state requires
+    # using the model compressor
     if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
-        model.apply(compress_quantized_weights)
+        compress_quantized_weights(module)
 
 
 def expand_target_names(
@@ -479,3 +456,7 @@ def _merge_schemes(
         merged_scheme.update(targets=[name])
 
         return QuantizationScheme(**merged_scheme)
+
+
+def merge_quantization_configs(config_a: QuantizationConfig, config_b: QuantizationConfig) -> QuantizationConfig:
+    pass
