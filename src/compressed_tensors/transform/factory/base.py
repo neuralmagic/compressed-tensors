@@ -18,7 +18,7 @@ from typing import List, Optional, Tuple, Set
 
 import torch
 import torch.nn.utils.parametrize as P
-from compressed_tensors import InternalModule
+from compressed_tensors.utils.internal import InternalModule
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
