@@ -123,8 +123,8 @@ def initialize_module_for_quantization(
                     module, "output", scheme.output_activations, scale_dtype=scale_dtype
                 )
 
-        module.quantization_scheme = scheme
-        module.quantization_status = QuantizationStatus.INITIALIZED
+        setattr(module, "quantization_scheme", scheme)
+        setattr(module, "quantization_status", QuantizationStatus.INITIALIZED)
 
         with disable_hf_hook(module):
             # wrap forward call of module to perform
