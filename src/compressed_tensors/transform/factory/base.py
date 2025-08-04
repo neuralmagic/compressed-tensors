@@ -14,11 +14,11 @@
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Set
 
 import torch
 import torch.nn.utils.parametrize as P
-from compressed_tensors import InternalModule, match_named_modules
+from compressed_tensors.utils.internal import InternalModule
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
@@ -164,10 +164,6 @@ class TransformFactory(RegistryMixin, ABC):
         which is used by transformers to detect and remove shared pointers
         during saving
         """
-        # avoid issues with this method being called twice
-        for transform in self.transforms:
-            transform._dynamic_tied_weights_keys = list()
-
         # map from data_ptrs to keys
         ptr_to_keys: dict[int, List[Tuple[TransformBase, str]]] = defaultdict(list)
         for transform in self.transforms:
@@ -184,7 +180,7 @@ class TransformFactory(RegistryMixin, ABC):
                 tensor = getattr(shared_keys[0][0], shared_keys[0][1])
 
                 for transform, name in shared_keys:
-                    transform._dynamic_tied_weights_keys.append(name)
+                    transform._dynamic_tied_weights_keys.add(name)
                     setattr(transform, name, tensor)
 
 
@@ -195,11 +191,11 @@ class TransformBase(InternalModule, ABC):
 
     args: TransformArgs
     weight: Parameter
-    _dynamic_tied_weights_keys: List[str]
+    _dynamic_tied_weights_keys: Set[str]
 
     def __init__(self):
         super().__init__()
-        self._dynamic_tied_weights_keys = list()
+        self._dynamic_tied_weights_keys = set()
 
     @abstractmethod
     def forward(self, value: Tensor) -> Tensor:
