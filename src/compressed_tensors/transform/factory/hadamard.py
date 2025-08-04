@@ -13,11 +13,7 @@
 # limitations under the License.
 
 import math
-<<<<<<< HEAD
 from typing import Optional
-=======
-from typing import Optional, Union
->>>>>>> kylesayrs/serialize-tconfig
 
 import torch
 from compressed_tensors.transform import TransformArgs, TransformScheme
