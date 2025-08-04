@@ -224,7 +224,7 @@ def _initialize_attn_scales(module: Module, quantization_args: QuantizationArgs)
     """Initlaize k_scale, v_scale for  self_attn"""
 
     if quantization_args.strategy == QuantizationStrategy.CHANNEL:
-        expected_shape = module.k_proj.out_features
+        expected_shape = (module.k_proj.out_features, 1)
     elif quantization_args.strategy == QuantizationStrategy.TENSOR:
         expected_shape = 1
     else:
