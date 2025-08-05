@@ -53,15 +53,14 @@ class HadamardFactory(TransformFactory):
         """
         assert hasattr(module, "weight")
         size = get_transform_size(module, args.location, self.scheme.head_dim)
-        dtype = module.weight.dtype
+        dtype = self.scheme.precision
         device = get_offloaded_device(module)
         exec_device = get_execution_device(module)
-        precision = self.scheme.precision
 
         factory_kwargs = {"construct_device": exec_device}
         weight = self.weights.get(size, dtype, device, factory_kwargs=factory_kwargs)
         perm = self.perms[weight] if self.scheme.randomize else None
-        return HadamardTransform(weight, perm, args, precision, type(module))
+        return HadamardTransform(weight, perm, self.scheme, args, type(module))
 
     def _create_weight(
         self,
@@ -85,17 +84,17 @@ class HadamardTransform(TransformBase):
         self,
         weight: Parameter,
         perm: Optional[Parameter],
+        scheme: TransformScheme,
         args: TransformArgs,
-        precision: torch.dtype,
         module_type: type[torch.nn.Module],
     ):
         super().__init__()
         self.weight = weight
         self.perm = perm
+        self.scheme = scheme
         self.args = args
-        self.precision = precision
         self.module_type = module_type
-        self._scale = torch.tensor(weight.size(0), dtype=self.precision).sqrt()
+        self._scale = torch.tensor(weight.size(0), dtype=self.scheme.precision).sqrt()
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -108,8 +107,8 @@ class HadamardTransform(TransformBase):
 
         return (
             apply_transform_weight(
-                weight.to(self.precision),
-                value.to(self.precision),
+                weight.to(self.scheme.precision),
+                value.to(self.scheme.precision),
                 self.args.location,
                 self.module_type,
             )

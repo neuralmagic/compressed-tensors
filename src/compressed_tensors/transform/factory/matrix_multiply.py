@@ -24,7 +24,7 @@ from compressed_tensors.transform.utils.matrix import (
 from compressed_tensors.utils import get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
 from torch import Tensor, device, dtype
-from torch.nn import Linear, Module, Parameter
+from torch.nn import Module, Parameter
 
 
 @TransformFactory.register("random-matrix")
@@ -52,7 +52,7 @@ class RandomMatrixFactory(TransformFactory):
         """
         assert hasattr(module, "weight")
         size = get_transform_size(module, args.location, self.scheme.head_dim)
-        dtype = module.weight.dtype
+        dtype = self.scheme.precision
         device = get_offloaded_device(module)
         precision = self.scheme.precision
 
@@ -78,20 +78,20 @@ class RandomMatrixTransform(TransformBase):
     def __init__(
         self,
         weight: Tensor,
+        scheme: TransformScheme,
         args: TransformArgs,
-        precision: torch.dtype,
         module_type: type[torch.nn.Module],
     ):
         super().__init__()
         self.weight = weight  # is an inverse if args.inverse
+        self.scheme = scheme
         self.args = args
-        self.precision = precision
         self.module_type = module_type
 
     def forward(self, value: Tensor) -> Parameter:
         return apply_transform_weight(
-            self.weight.to(self.precision),
-            value.to(self.precision),
+            self.weight.to(self.scheme.precision),
+            value.to(self.scheme.precision),
             self.args.location,
             self.module_type,
         ).to(value.dtype)
@@ -99,8 +99,8 @@ class RandomMatrixTransform(TransformBase):
     def right_inverse(self, value: Tensor) -> Tensor:
         inverse = high_precision_invert(self.weight)
         return apply_transform_weight(
-            inverse.to(self.precision),
-            value.to(self.precision),
+            inverse.to(self.scheme.precision),
+            value.to(self.scheme.precision),
             self.args.location,
             self.module_type,
         ).to(value.dtype)
