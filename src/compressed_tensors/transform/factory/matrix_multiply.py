@@ -54,12 +54,13 @@ class RandomMatrixFactory(TransformFactory):
         size = get_transform_size(module, args.location, self.scheme.head_dim)
         dtype = module.weight.dtype
         device = get_offloaded_device(module)
+        precision = self.scheme.precision
 
         weight = self.weights[size, dtype, device]
         if args.inverse:
             weight = self.inverses[weight]
 
-        return RandomMatrixTransform(weight, args, type(module))
+        return RandomMatrixTransform(weight, args, precision, type(module))
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         # TODO: verify that weight is invertible (has non-zero determinant)
@@ -78,24 +79,32 @@ class RandomMatrixTransform(TransformBase):
         self,
         weight: Tensor,
         args: TransformArgs,
+        precision: torch.dtype,
         module_type: type[torch.nn.Module],
     ):
         super().__init__()
         self.weight = weight  # is an inverse if args.inverse
         self.args = args
+        self.precision = precision
         self.module_type = module_type
 
     def forward(self, value: Tensor) -> Parameter:
         return apply_transform_weight(
-            self.weight, value, self.args.location, self.module_type
-        )
+            self.weight.to(self.precision),
+            value.to(self.precision),
+            self.args.location,
+            self.module_type,
+        ).to(value.dtype)
 
     def right_inverse(self, value: Tensor) -> Tensor:
         inverse = high_precision_invert(self.weight)
         return apply_transform_weight(
-            inverse, value, self.args.location, self.module_type
-        )
+            inverse.to(self.precision),
+            value.to(self.precision),
+            self.args.location,
+            self.module_type,
+        ).to(value.dtype)
 
 
 def high_precision_invert(weight: Tensor) -> Tensor:
-    return torch.linalg.inv(weight.to(torch.float32)).to(weight.dtype)
+    return torch.linalg.inv(weight.to(torch.float64)).to(weight.dtype)
