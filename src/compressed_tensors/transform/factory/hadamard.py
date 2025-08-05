@@ -86,7 +86,6 @@ class HadamardTransform(TransformBase):
         perm: Optional[Parameter],
         scheme: TransformScheme,
         args: TransformArgs,
-        precision: torch.dtype,
         module_type: type[torch.nn.Module],
     ):
         super().__init__()
@@ -94,7 +93,6 @@ class HadamardTransform(TransformBase):
         self.perm = perm
         self.scheme = scheme
         self.args = args
-        self.precision = precision
         self.module_type = module_type
         self._scale = torch.tensor(weight.size(0), dtype=self.scheme.precision).sqrt()
 
