@@ -54,13 +54,12 @@ class RandomMatrixFactory(TransformFactory):
         size = get_transform_size(module, args.location, self.scheme.head_dim)
         dtype = self.scheme.precision
         device = get_offloaded_device(module)
-        precision = self.scheme.precision
 
         weight = self.weights[size, dtype, device]
         if args.inverse:
             weight = self.inverses[weight]
 
-        return RandomMatrixTransform(weight, args, precision, type(module))
+        return RandomMatrixTransform(weight, self.scheme, args, type(module))
 
     def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
         # TODO: verify that weight is invertible (has non-zero determinant)
