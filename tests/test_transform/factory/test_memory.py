@@ -42,7 +42,7 @@ def test_memory_sharing(type, randomize, requires_grad, offload=False):
         config_groups={
             "": TransformScheme(
                 type=type,
-                randomzied=randomize,
+                randomize=randomize,
                 requires_grad=requires_grad,
                 apply=[
                     TransformArgs(targets="Linear", location="input"),
@@ -85,8 +85,5 @@ def test_memory_sharing(type, randomize, requires_grad, offload=False):
 @requires_accelerate()
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
 @pytest.mark.parametrize("randomize", (True, False))
-def test_memory_sharing_offload(
-    type,
-    randomize,
-):
+def test_memory_sharing_offload(type, randomize):
     test_memory_sharing(type, randomize, requires_grad=False, offload=True)
