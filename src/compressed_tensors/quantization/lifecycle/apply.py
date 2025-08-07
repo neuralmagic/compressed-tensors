@@ -38,7 +38,7 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     is_kv_cache_quant_scheme,
 )
-from compressed_tensors.utils.helpers import replace_module
+from compressed_tensors.utils.helpers import deprecated, replace_module
 from compressed_tensors.utils.match import match_named_modules, match_targets
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
@@ -243,15 +243,14 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         model.apply(compress_quantized_weights)
 
 
+@deprecated(
+    message="This function is deprecated and will be removed in a future release."
+    "Please use `match_targets` from `compressed_tensors.utils.match` instead."
+)
 def find_name_or_class_matches(
     name: str, module: Module, targets: Iterable[str], check_contains: bool = False
 ) -> List[str]:
     """
-    DEPRECATED: Use `match_targets` instead.
-
-    This function is deprecated and will be removed in a future release.
-    Please use `match_targets` from `compressed_tensors.utils.match` instead.
-
     Returns all targets that match the given name or the class name.
     Returns empty list otherwise.
     The order of the output `matches` list matters.
@@ -260,14 +259,6 @@ def find_name_or_class_matches(
         2. matches on regex patterns
         3. matches on module names
     """
-    import warnings
-
-    warnings.warn(
-        "find_name_or_class_matches is deprecated and will be removed in a future release. "
-        "Please use compressed_tensors.utils.match.match_targets instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
     if check_contains:
         raise NotImplementedError(
             "This function is deprecated, and the check_contains=True option has been removed."
