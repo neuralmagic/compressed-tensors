@@ -139,9 +139,9 @@ def test_apply_quantization_config_tinyllama():
             _weights = not module_type == "LlamaRotaryEmbedding"
             _test_layer_quantization_status(module, inputs=_inputs, weights=_weights)
 
-    assert all(value == 0 for value in count_layer_num.values()), (
-        "Not all values are zero"
-    )
+    assert all(
+        value == 0 for value in count_layer_num.values()
+    ), "Not all values are zero"
 
     # test quantization compression
     # sample forward pass to fill scales, zps

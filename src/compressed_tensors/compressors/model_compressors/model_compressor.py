@@ -42,7 +42,6 @@ from compressed_tensors.quantization import (
     load_pretrained_quantization_parameters,
 )
 from compressed_tensors.quantization.utils import is_module_quantized
-from compressed_tensors.utils.match import match_named_modules
 from compressed_tensors.utils import (
     align_module_device,
     delete_offload_parameter,
@@ -58,6 +57,7 @@ from compressed_tensors.utils.helpers import (
     fix_fsdp_module_name,
     is_compressed_tensors_config,
 )
+from compressed_tensors.utils.match import match_named_modules
 from torch import Tensor
 from torch.nn import Module
 from tqdm import tqdm
