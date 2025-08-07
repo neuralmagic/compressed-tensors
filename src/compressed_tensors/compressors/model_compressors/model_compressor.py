@@ -169,7 +169,7 @@ class ModelCompressor:
         cls,
         model: Module,
         sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
-        quantization_format: Optional[str] = None,
+        quantization_format: Optional[List[str]] = None,
     ) -> Optional["ModelCompressor"]:
         """
         Given a pytorch model and optional sparsity and/or quantization configs,
@@ -284,9 +284,18 @@ class ModelCompressor:
                 sparsity_config.format, config=sparsity_config
             )
         if quantization_config is not None:
-            self.quantization_compressor = BaseCompressor.load_from_registry(
-                quantization_config.format, config=quantization_config
-            )
+            if isinstance(quantization_config.format, list):
+                self.quantization_compressor = {}
+                for format in quantization_config.format:
+                    self.quantization_compressor[
+                        format
+                    ] = BaseCompressor.load_from_registry(
+                        format, config=quantization_config
+                    )
+            else:
+                self.quantization_compressor = BaseCompressor.load_from_registry(
+                    quantization_config.format, config=quantization_config
+                )
 
     # ----- used by hf quantizer ----- #
 
@@ -424,12 +433,23 @@ class ModelCompressor:
 
                 # quantization first
                 if prefix in module_to_scheme:
-                    state_dict = self.quantization_compressor.compress(
-                        state_dict,
-                        names_to_scheme=module_to_scheme,
-                        show_progress=False,
-                        compression_device=exec_device,
-                    )
+                    if isinstance(self.quantization_compressor, dict):
+                        quant_compressor = self.quantization_compressor.get(
+                            module.quantization_scheme.format
+                        )
+                        state_dict = quant_compressor.compress(
+                            state_dict,
+                            names_to_scheme=module_to_scheme,
+                            show_progress=False,
+                            compression_device=exec_device,
+                        )
+                    else:
+                        state_dict = self.quantization_compressor.compress(
+                            state_dict,
+                            names_to_scheme=module_to_scheme,
+                            show_progress=False,
+                            compression_device=exec_device,
+                        )
 
                 # sparsity second
                 if prefix in sparse_compression_targets:

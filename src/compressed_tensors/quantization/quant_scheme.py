@@ -16,6 +16,7 @@ import warnings
 from copy import deepcopy
 from typing import List, Optional
 
+from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_args import (
     DynamicType,
     QuantizationArgs,
@@ -48,6 +49,7 @@ class QuantizationScheme(BaseModel):
     weights: Optional[QuantizationArgs] = None
     input_activations: Optional[QuantizationArgs] = None
     output_activations: Optional[QuantizationArgs] = None
+    format: Optional[CompressionFormat] = None
 
     @model_validator(mode="after")
     def validate_model_after(model: "QuantizationScheme") -> "QuantizationScheme":

@@ -138,7 +138,7 @@ class QuantizationConfig(BaseModel):
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
     quant_method: str = DEFAULT_QUANTIZATION_METHOD
     kv_cache_scheme: Optional[QuantizationArgs] = None
-    format: str = DEFAULT_QUANTIZATION_FORMAT
+    format: Union[List[str], str] = DEFAULT_QUANTIZATION_FORMAT
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
@@ -165,7 +165,7 @@ class QuantizationConfig(BaseModel):
 
     @staticmethod
     def from_pretrained(
-        model: Module, format: Optional[str] = None
+        model: Module, format: Optional[Union[List[str], str]] = None
     ) -> Optional["QuantizationConfig"]:
         """
         Converts a model into its associated QuantizationConfig based on the
@@ -231,7 +231,7 @@ class QuantizationConfig(BaseModel):
 
         if format is None:
             if quantization_status == QuantizationStatus.COMPRESSED:
-                format = CompressionFormat.int_quantized.value
+                format = CompressionFormat.int_quantized.value  # why?!
             else:
                 format = CompressionFormat.dense.value
 
