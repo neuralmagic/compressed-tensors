@@ -147,7 +147,7 @@ class ModelCompressor:
 
         sparsity_config = cls.parse_sparsity_config(compression_config)
         quantization_config = cls.parse_quantization_config(compression_config)
-        # NOTE: transfrom config is not support by ctconfig yet
+        # TODO: transform config is not support by CompressedTensorsConfig yet
 
         if sparsity_config is None and quantization_config is None:
             return None
