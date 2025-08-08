@@ -177,6 +177,13 @@ class ModelCompressor:
             algorithm
         :return: compressor for the configs, or None if model is not compressed
         """
+        # assume multiple compression formats means mixed-precision
+        # as we currently only support one compressor per precision type and scheme
+        if len(quantization_format) > 1:
+            quantization_format = CompressionFormat.mixed_precision
+        else:
+            quantization_format = quantization_format[0]
+
         quantization_config = QuantizationConfig.from_pretrained(
             model, format=quantization_format
         )
@@ -190,7 +197,8 @@ class ModelCompressor:
             return None
 
         return cls(
-            sparsity_config=sparsity_config, quantization_config=quantization_config
+            sparsity_config=sparsity_config,
+            quantization_config=quantization_config,
         )
 
     @staticmethod
@@ -250,6 +258,17 @@ class ModelCompressor:
 
         return quantization_config
 
+    def _fetch_unique_quantization_formats(self):
+        """
+        Get all unique compression formats used in
+        model
+        """
+        quantization_formats = []
+        for _, scheme in self.quantization_config.config_groups.items():
+            if scheme.format not in quantization_formats:
+                quantization_formats.append(scheme)
+        return quantization_formats
+
     def __init__(
         self,
         sparsity_config: Optional[SparsityCompressionConfig] = None,
@@ -259,25 +278,23 @@ class ModelCompressor:
         self.quantization_config = quantization_config
         self.sparsity_compressor = None
         self.quantization_compressor: Optional[
-            Union[BaseQuantizationCompressor, DenseCompressor]
+            Dict[str, Union[BaseQuantizationCompressor, DenseCompressor]]
         ] = None
 
         if sparsity_config is not None:
             self.sparsity_compressor = BaseCompressor.load_from_registry(
                 sparsity_config.format, config=sparsity_config
             )
+
+        quantization_formats = self._fetch_unique_quantization_formats()
+
         if quantization_config is not None:
-            if isinstance(quantization_config.format, list):
-                self.quantization_compressor = {}
-                for format in quantization_config.format:
-                    self.quantization_compressor[
-                        format
-                    ] = BaseCompressor.load_from_registry(
-                        format, config=quantization_config
-                    )
-            else:
-                self.quantization_compressor = BaseCompressor.load_from_registry(
-                    quantization_config.format, config=quantization_config
+            self.quantization_compressor = {}
+            for format in quantization_formats:
+                self.quantization_compressor[
+                    format
+                ] = BaseCompressor.load_from_registry(
+                    format, config=quantization_config
                 )
 
     # ----- used by hf quantizer ----- #
@@ -416,23 +433,15 @@ class ModelCompressor:
 
                 # quantization first
                 if prefix in module_to_scheme:
-                    if isinstance(self.quantization_compressor, dict):
-                        quant_compressor = self.quantization_compressor.get(
-                            module.quantization_scheme.format
-                        )
-                        state_dict = quant_compressor.compress(
-                            state_dict,
-                            names_to_scheme=module_to_scheme,
-                            show_progress=False,
-                            compression_device=exec_device,
-                        )
-                    else:
-                        state_dict = self.quantization_compressor.compress(
-                            state_dict,
-                            names_to_scheme=module_to_scheme,
-                            show_progress=False,
-                            compression_device=exec_device,
-                        )
+                    quant_compressor = self.quantization_compressor.get(
+                        module.quantization_scheme.format
+                    )
+                    state_dict = quant_compressor.compress(
+                        state_dict,
+                        names_to_scheme=module_to_scheme,
+                        show_progress=False,
+                        compression_device=exec_device,
+                    )
 
                 # sparsity second
                 if prefix in sparse_compression_targets:
@@ -498,12 +507,13 @@ class ModelCompressor:
 
                 # quantization second
                 if prefix in module_to_scheme:
-                    state_dict = (
-                        self.quantization_compressor.decompress_module_from_state_dict(
-                            prefix,
-                            state_dict,
-                            scheme=module_to_scheme[prefix],
-                        )
+                    quant_compressor = self.quantization_compressor.get(
+                        module.quantization_scheme.format
+                    )
+                    state_dict = quant_compressor.decompress_module_from_state_dict(
+                        prefix,
+                        state_dict,
+                        scheme=module_to_scheme[prefix],
                     )
 
                 # remove any existing parameters
@@ -542,7 +552,9 @@ class ModelCompressor:
 
         if self.quantization_compressor is not None:
             module_to_scheme = map_module_to_scheme(model)
-            state_dict = self.quantization_compressor.compress(
+            # Note - compress only supports one compression format atm
+            quant_compressor = next(iter(self.quantization_compressor))
+            state_dict = quant_compressor.compress(
                 state_dict,
                 names_to_scheme=module_to_scheme,
                 show_progress=show_progress,
@@ -596,9 +608,11 @@ class ModelCompressor:
             self.sparsity_compressor is not None
             and self.sparsity_config.format != CompressionFormat.dense.value
         ):
+            # note - decompress only support one compressor so far
+            quant_compressor = next(iter(self.quantization_compressor))
             params_to_ignore = None
             if self.quantization_compressor is not None:
-                params_to_ignore = self.quantization_compressor.compression_param_names
+                params_to_ignore = quant_compressor.compression_param_names
             # Sparse decompression is applied on the model_path
             # The compressor will try and load any quantization parameters as well
             # params_to_skip_load will skip over quantization params from being loaded
@@ -609,7 +623,7 @@ class ModelCompressor:
             setattr(model, SPARSITY_CONFIG_NAME, self.sparsity_compressor.config)
             sparse_decompressed = True
 
-        if self.quantization_compressor is not None:
+        if quant_compressor is not None:
             # Temporarily set quantization status to FROZEN to prevent
             # quantization during apply_quantization_config. This ensures
             # that the dtypes of the weights are not unintentionally updated.
@@ -632,7 +646,7 @@ class ModelCompressor:
                     # including initialization
                     load_weight_quantization=(
                         sparse_decompressed
-                        or isinstance(self.quantization_compressor, DenseCompressor)
+                        or isinstance(quant_compressor, DenseCompressor)
                     ),
                 )
 
@@ -640,7 +654,7 @@ class ModelCompressor:
                 model.state_dict() if sparse_decompressed else model_path
             )
 
-            dense_gen = self.quantization_compressor.decompress(
+            dense_gen = quant_compressor.decompress(
                 model_path_or_state_dict, names_to_scheme=names_to_scheme
             )
             # TODO: all weight quantization params will be moved to the compressor

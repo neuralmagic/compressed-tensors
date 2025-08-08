@@ -138,7 +138,7 @@ class QuantizationConfig(BaseModel):
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
     quant_method: str = DEFAULT_QUANTIZATION_METHOD
     kv_cache_scheme: Optional[QuantizationArgs] = None
-    format: Union[List[str], str] = DEFAULT_QUANTIZATION_FORMAT
+    format: str = DEFAULT_QUANTIZATION_FORMAT
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
