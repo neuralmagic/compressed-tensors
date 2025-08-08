@@ -276,8 +276,12 @@ class ModelCompressor:
         """
         quantization_formats = []
         for _, scheme in self.quantization_config.config_groups.items():
-            if scheme.format not in quantization_formats:
+            if scheme.format is not None and scheme.format not in quantization_formats:
                 quantization_formats.append(scheme.format)
+
+        # If empty list, fallback to using the global format
+        if len(quantization_formats) == 0:
+            quantization_formats.append(self.quantization_config.format)
         return quantization_formats
 
     def __init__(
@@ -301,8 +305,8 @@ class ModelCompressor:
                 sparsity_config.format, config=sparsity_config
             )
 
-        quantization_formats = self._fetch_unique_quantization_formats()
         if quantization_config is not None:
+            quantization_formats = self._fetch_unique_quantization_formats()
             self.quantization_compressor = {}
             for format in quantization_formats:
                 self.quantization_compressor[
@@ -567,7 +571,7 @@ class ModelCompressor:
         if self.quantization_compressor is not None:
             module_to_scheme = map_module_to_scheme(model)
             # Note - compress only supports one compression format atm
-            quant_compressor = next(iter(self.quantization_compressor))
+            quant_compressor = next(iter(self.quantization_compressor.values()))
             state_dict = quant_compressor.compress(
                 state_dict,
                 names_to_scheme=module_to_scheme,
@@ -623,7 +627,7 @@ class ModelCompressor:
             and self.sparsity_config.format != CompressionFormat.dense.value
         ):
             # note - decompress only supports one compressor atm
-            quant_compressor = next(iter(self.quantization_compressor))
+            quant_compressor = next(iter(self.quantization_compressor.values()))
             params_to_ignore = None
             if self.quantization_compressor is not None:
                 params_to_ignore = quant_compressor.compression_param_names
