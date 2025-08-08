@@ -185,7 +185,7 @@ class ModelCompressor:
         # assume multiple compression formats means mixed-precision
         # as we currently only support one compressor per precision type and scheme
         if len(quantization_format) > 1:
-            quantization_format = CompressionFormat.mixed_precision
+            quantization_format = CompressionFormat.mixed_precision.value
         else:
             quantization_format = quantization_format[0]
 
@@ -269,15 +269,15 @@ class ModelCompressor:
 
         return quantization_config
 
-    def _fetch_unique_quantization_formats(self):
+    def _fetch_unique_quantization_formats(self) -> List[str]:
         """
-        Get all unique compression formats used in
-        model
+        Get all unique compression formats present in a model
+        :return: list of quantization formats
         """
         quantization_formats = []
         for _, scheme in self.quantization_config.config_groups.items():
             if scheme.format not in quantization_formats:
-                quantization_formats.append(scheme)
+                quantization_formats.append(scheme.format)
         return quantization_formats
 
     def __init__(
@@ -302,7 +302,6 @@ class ModelCompressor:
             )
 
         quantization_formats = self._fetch_unique_quantization_formats()
-
         if quantization_config is not None:
             self.quantization_compressor = {}
             for format in quantization_formats:
