@@ -623,7 +623,7 @@ class ModelCompressor:
             self.sparsity_compressor is not None
             and self.sparsity_config.format != CompressionFormat.dense.value
         ):
-            # note - decompress only support one compressor so far
+            # note - decompress only supports one compressor atm
             quant_compressor = next(iter(self.quantization_compressor))
             params_to_ignore = None
             if self.quantization_compressor is not None:

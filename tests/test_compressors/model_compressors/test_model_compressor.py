@@ -395,7 +395,7 @@ def _get_combined_config(s_config, q_config):
 )
 def test_compress_model(model_stub, q_format, s_config, tmpdir):
     model = AutoModelForCausalLM.from_pretrained(model_stub, torch_dtype=torch.float32)
-    compressor = ModelCompressor.from_pretrained_model(model, s_config, q_format)
+    compressor = ModelCompressor.from_pretrained_model(model, s_config, [q_format])
 
     # compress model by eagerly compressing state dict
     true_compressed = dict(compressor.compress(model))
