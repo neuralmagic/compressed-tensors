@@ -14,7 +14,7 @@
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import List, Optional, Tuple, Set
+from typing import List, Optional, Set, Tuple
 
 import torch
 import torch.nn.utils.parametrize as P
