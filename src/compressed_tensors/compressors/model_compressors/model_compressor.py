@@ -169,7 +169,7 @@ class ModelCompressor:
         cls,
         model: Module,
         sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
-        quantization_format: Optional[List[str]] = None,
+        quantization_format: Optional[Union[str, List[str]]] = None,
     ) -> Optional["ModelCompressor"]:
         """
         Given a pytorch model and optional sparsity and/or quantization configs,
@@ -184,10 +184,14 @@ class ModelCompressor:
         """
         # assume multiple compression formats means mixed-precision
         # as we currently only support one compressor per precision type and scheme
-        if len(quantization_format) > 1:
-            quantization_format = CompressionFormat.mixed_precision.value
-        else:
-            quantization_format = quantization_format[0]
+        if quantization_format is not None:
+            if isinstance(quantization_format, str):
+                quantization_format = [quantization_format]
+
+            if len(quantization_format) > 1:
+                quantization_format = CompressionFormat.mixed_precision.value
+            else:
+                quantization_format = quantization_format[0]
 
         quantization_config = QuantizationConfig.from_pretrained(
             model, format=quantization_format
@@ -408,12 +412,13 @@ class ModelCompressor:
                     targets=scheme.targets,
                     ignore=self.quantization_config.ignore,
                 )
-                unexpected_keys.update(
-                    merge_names(target, param)
-                    for target in quant_targets
-                    for param in self.quantization_compressor.compression_param_names
-                    if param != "weight"
-                )
+                for quant_compressor in self.quantization_compressor.values():
+                    unexpected_keys.update(
+                        merge_names(target, param)
+                        for target in quant_targets
+                        for param in quant_compressor.compression_param_names
+                        if param != "weight"
+                    )
 
         return list(unexpected_keys)
 
@@ -451,9 +456,24 @@ class ModelCompressor:
 
                 # quantization first
                 if prefix in module_to_scheme:
-                    quant_compressor = self.quantization_compressor.get(
-                        module.quantization_scheme.format
-                    )
+                    if (
+                        not hasattr(module.quantization_scheme, "format")
+                        or module.quantization_scheme.format is None
+                    ):
+                        if (
+                            self.quantization_config.format
+                            == CompressionFormat.mixed_precision.value
+                        ):
+                            raise ValueError(
+                                "Compressing mixed-precision models without defining "
+                                "per module quantization_scheme.format is currently "
+                                "not supported"
+                            )
+                        format = self.quantization_config.format
+                    else:
+                        format = module.quantization_scheme.format
+
+                    quant_compressor = self.quantization_compressor.get(format)
                     state_dict = quant_compressor.compress(
                         state_dict,
                         names_to_scheme=module_to_scheme,
@@ -525,9 +545,24 @@ class ModelCompressor:
 
                 # quantization second
                 if prefix in module_to_scheme:
-                    quant_compressor = self.quantization_compressor.get(
-                        module.quantization_scheme.format
-                    )
+
+                    if (
+                        not hasattr(module.quantization_scheme, "format")
+                        or module.quantization_scheme.format is None
+                    ):
+                        if (
+                            self.quantization_config.format
+                            == CompressionFormat.mixed_precision.value
+                        ):
+                            raise ValueError(
+                                "Decompressing mixed-precision models without defining "
+                                "per module quantization_scheme.format is currently not "
+                                "supported"
+                            )
+                        format = self.quantization_config.format
+                    else:
+                        format = module.quantization_scheme.format
+                    quant_compressor = self.quantization_compressor.get(format)
                     state_dict = quant_compressor.decompress_module_from_state_dict(
                         prefix,
                         state_dict,
@@ -621,15 +656,19 @@ class ModelCompressor:
         """
         model_path = get_safetensors_folder(model_path)
         sparse_decompressed = False
+        quant_compressor = (
+            next(iter(self.quantization_compressor.values()))
+            if self.quantization_compressor is not None
+            else None
+        )
 
         if (
             self.sparsity_compressor is not None
             and self.sparsity_config.format != CompressionFormat.dense.value
         ):
             # note - decompress only supports one compressor atm
-            quant_compressor = next(iter(self.quantization_compressor.values()))
             params_to_ignore = None
-            if self.quantization_compressor is not None:
+            if quant_compressor is not None:
                 params_to_ignore = quant_compressor.compression_param_names
             # Sparse decompression is applied on the model_path
             # The compressor will try and load any quantization parameters as well
