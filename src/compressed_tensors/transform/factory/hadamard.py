@@ -95,6 +95,7 @@ class HadamardTransform(TransformBase):
         self.args = args
         self.module_type = module_type
         self._scale = torch.tensor(weight.size(0), dtype=self.scheme.precision).sqrt()
+        self._precision = scheme.precision if args.is_online() else torch.float64
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -107,8 +108,8 @@ class HadamardTransform(TransformBase):
 
         return (
             apply_transform_weight(
-                weight.to(self.scheme.precision),
-                value.to(self.scheme.precision),
+                weight.to(self._precision),
+                value.to(self._precision),
                 self.args.location,
                 self.module_type,
             )
