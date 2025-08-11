@@ -147,7 +147,7 @@ class ModelCompressor:
 
         sparsity_config = cls.parse_sparsity_config(compression_config)
         quantization_config = cls.parse_quantization_config(compression_config)
-        # NOTE: transfrom config is not support by ctconfig yet
+        # TODO: transform config is not support by CompressedTensorsConfig yet
 
         if sparsity_config is None and quantization_config is None:
             return None
@@ -207,7 +207,7 @@ class ModelCompressor:
 
     @staticmethod
     def parse_sparsity_config(
-        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"],
     ) -> Union[Dict[str, Any], None]:
         """
         Parse sparsity config from quantization/compression config. Sparsity
@@ -227,7 +227,7 @@ class ModelCompressor:
 
     @staticmethod
     def parse_quantization_config(
-        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"]
+        compression_config: Union[Dict[str, Any], "CompressedTensorsConfig"],
     ) -> Union[Dict[str, Any], None]:
         """
         Parse quantization config from quantization/compression config. The

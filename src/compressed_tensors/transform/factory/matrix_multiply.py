@@ -87,11 +87,12 @@ class RandomMatrixTransform(TransformBase):
         self.scheme = scheme
         self.args = args
         self.module_type = module_type
+        self._precision = scheme.precision if args.is_online() else torch.float64
 
     def forward(self, value: Tensor) -> Parameter:
         return apply_transform_weight(
-            self.weight.to(self.scheme.precision),
-            value.to(self.scheme.precision),
+            self.weight.to(self._precision),
+            value.to(self._precision),
             self.args.location,
             self.module_type,
         ).to(value.dtype)
@@ -99,8 +100,8 @@ class RandomMatrixTransform(TransformBase):
     def right_inverse(self, value: Tensor) -> Tensor:
         inverse = high_precision_invert(self.weight)
         return apply_transform_weight(
-            inverse.to(self.scheme.precision),
-            value.to(self.scheme.precision),
+            inverse.to(self._precision),
+            value.to(self._precision),
             self.args.location,
             self.module_type,
         ).to(value.dtype)

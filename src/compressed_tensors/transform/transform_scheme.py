@@ -36,8 +36,8 @@ class TransformScheme(BaseModel):
     :param randomize: True if uniquely randomized transform weights should be used,
         otherwise use identical transform weights where applicable
     :param requires_grad: True if weights include gradients for training
-    :param precision: Precision at which this transform should be applied. This applies
-        to both weight fusing and online rotations
+    :param precision: Precision at which this transform should be applied during online
+        rotations. Fused (offline) rotations are always performed in float64
     """
 
     type: str

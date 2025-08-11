@@ -36,7 +36,7 @@ class _TorchDtypeAnnotation:
             try:
                 value = getattr(torch, name)
                 assert isinstance(value, torch.dtype)
-            except AttributeError:
+            except Exception:
                 raise ValueError(f"No such torch dtype `torch.{name}`")
 
             return value
