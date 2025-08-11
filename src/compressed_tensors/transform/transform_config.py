@@ -31,44 +31,5 @@ class TransformConfig(BaseModel):
     """
 
     config_groups: Dict[str, TransformScheme]
+
     model_config = ConfigDict(extra="forbid")
-
-
-# quip / quip sharp
-QUIP = TransformConfig(
-    config_groups={
-        "v": TransformScheme(
-            type="hadamard",
-            apply=[
-                TransformArgs(
-                    targets=["Linear"],
-                    location="input",  # non-mergable
-                ),
-                TransformArgs(
-                    targets=["Linear"],
-                    location="weight_input",
-                    inverse=True,
-                ),
-            ],
-            randomize=True,
-        ),
-        "u": TransformScheme(
-            type="hadamard",
-            apply=[
-                TransformArgs(
-                    targets=["Linear"],
-                    location="weight_output",
-                ),
-                TransformArgs(
-                    targets=["Linear"], location="output", inverse=True  # non-mergable
-                ),
-            ],
-            randomize=True,
-        ),
-    }
-)
-
-
-PRESET_CONFIGS = {
-    "QUIP": QUIP,
-}

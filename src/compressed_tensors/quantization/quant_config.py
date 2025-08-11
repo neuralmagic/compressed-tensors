@@ -145,7 +145,6 @@ class QuantizationConfig(BaseModel):
     # `run_compressed` is a dummy, unused arg for backwards compatibility
     # see: https://github.com/huggingface/transformers/pull/39324
     run_compressed: Annotated[Any, Field(exclude=True)] = None
-    model_config = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context):
         """
@@ -258,3 +257,5 @@ class QuantizationConfig(BaseModel):
                     return True
 
         return False
+
+    model_config = ConfigDict(extra="forbid")
