@@ -179,7 +179,14 @@ def get_execution_device(module: torch.nn.Module) -> torch.device:
     """
     for submodule in module.modules():
         if has_offloaded_params(submodule):
-            return submodule._hf_hook.execution_device
+            if isinstance(submodule._hf_hook.execution_device, int):
+                return torch.device(
+                    f"cuda:{submodule._hf_hook.execution_device}"
+                    if submodule._hf_hook.execution_device >= 0
+                    else "cpu"
+                )
+            else:
+                return submodule._hf_hook.execution_device
 
         param = next(submodule.parameters(recurse=False), None)
         if param is not None:
