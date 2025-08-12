@@ -182,12 +182,15 @@ class ModelCompressor:
             algorithm
         :return: compressor for the configs, or None if model is not compressed
         """
-        # assume multiple compression formats means mixed-precision
-        # as we currently only support one compressor per precision type and scheme
+
         if quantization_format is not None:
-            if isinstance(quantization_format, str):
+            # llmcompressor incorrectly passes in a CompressionFormat when
+            # the value string is expected - handle both cases
+            if isinstance(quantization_format, (str, CompressionFormat)):
                 quantization_format = [quantization_format]
 
+            # assume multiple compression formats means mixed-precision
+            # as we currently only support one compressor per precision type and scheme
             if len(quantization_format) > 1:
                 quantization_format = CompressionFormat.mixed_precision.value
             else:
