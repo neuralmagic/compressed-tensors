@@ -231,7 +231,7 @@ class QuantizationConfig(BaseModel):
 
         if format is None:
             if quantization_status == QuantizationStatus.COMPRESSED:
-                format = CompressionFormat.int_quantized.value  # why?!
+                format = CompressionFormat.int_quantized.value
             else:
                 format = CompressionFormat.dense.value
 
