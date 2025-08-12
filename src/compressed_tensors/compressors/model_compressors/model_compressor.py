@@ -189,6 +189,7 @@ class ModelCompressor:
             if isinstance(quantization_format, (str, CompressionFormat)):
                 quantization_format = [quantization_format]
 
+            compression_formats = quantization_format
             # assume multiple compression formats means mixed-precision
             # as we currently only support one compressor per precision type and scheme
             if len(quantization_format) > 1:
@@ -216,6 +217,7 @@ class ModelCompressor:
             sparsity_config=sparsity_config,
             quantization_config=quantization_config,
             transform_config=transform_config,
+            compression_formats=compression_formats,
         )
 
     @staticmethod
@@ -296,10 +298,12 @@ class ModelCompressor:
         sparsity_config: Optional[SparsityCompressionConfig] = None,
         quantization_config: Optional[QuantizationConfig] = None,
         transform_config: Optional[TransformConfig] = None,
+        compression_formats: Optional[List[str]] = None,
     ):
         self.sparsity_config = sparsity_config
         self.quantization_config = quantization_config
         self.transform_config = transform_config
+        self.compression_formats = compression_formats
 
         self.sparsity_compressor = None
         self.quantization_compressor: Optional[
@@ -313,9 +317,11 @@ class ModelCompressor:
             )
 
         if quantization_config is not None:
-            quantization_formats = self._fetch_unique_quantization_formats()
+            if not self.compression_formats:
+                self.compression_formats = self._fetch_unique_quantization_formats()
+
             self.quantization_compressor = {}
-            for format in quantization_formats:
+            for format in self.compression_formats:
                 self.quantization_compressor[
                     format
                 ] = BaseCompressor.load_from_registry(

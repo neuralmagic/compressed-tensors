@@ -43,6 +43,7 @@ class QuantizationScheme(BaseModel):
     :param weights: quantization config for layer weights
     :param input_activations: quantization config for layer inputs
     :param output_activations: quantization config for layer outputs
+    :param format: CompressionFormat for the layer
     """
 
     targets: List[str]
