@@ -183,6 +183,7 @@ class ModelCompressor:
         :return: compressor for the configs, or None if model is not compressed
         """
 
+        compression_formats = None
         if quantization_format is not None:
             # llmcompressor incorrectly passes in a CompressionFormat when
             # the value string is expected - handle both cases
