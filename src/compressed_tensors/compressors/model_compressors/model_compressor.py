@@ -674,7 +674,7 @@ class ModelCompressor:
 
         # serialize configs into json
         qconfig_data = (
-            self.quantization_config.model_dump(exclude=["quant_method", "format"])
+            self.quantization_config.model_dump(exclude=["quant_method"])
             if self.quantization_config is not None
             else {}
         )
