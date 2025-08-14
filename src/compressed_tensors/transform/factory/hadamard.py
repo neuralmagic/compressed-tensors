@@ -42,6 +42,7 @@ class HadamardFactory(TransformFactory):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
         self.perms = ParameterizedDefaultDict(self._create_permutation)
+        self._shared_tensors_device = None
 
     def create_transform(self, module: Module, args: TransformArgs):
         """
@@ -57,20 +58,33 @@ class HadamardFactory(TransformFactory):
         device = get_offloaded_device(module)
         exec_device = get_execution_device(module)
 
-        factory_kwargs = {"construct_device": exec_device}
-        weight = self.weights.get(size, dtype, device, factory_kwargs=factory_kwargs)
+        factory_kwargs = {"device": device, "construct_device": exec_device}
+        weight = self.weights.get(size, factory_kwargs=factory_kwargs)
+        # TODO: permutations should be keyed by fused modules, not weight
         perm = self.perms[weight] if self.scheme.randomize else None
         return HadamardTransform(weight, perm, self.scheme, args, type(module))
 
     def _create_weight(
         self,
         size: int,
-        dtype: dtype,
         device: device,
         construct_device: device,
     ) -> Parameter:
-        # construct on execution device, cache on offload device
-        data = deterministic_hadamard_matrix(size, dtype, construct_device)
+        # check that shared tensors device is consistent
+        if self._shared_tensors_device is None:
+            self._shared_tensors_device = device
+
+        if device != self._shared_tensors_device:
+            raise NotImplementedError(
+                "Creating multi-gpu transform weights are not supported as of now due "
+                "to the limitations of shared tensors across GPUs."
+                # in the future, tensors can be shared within GPUs,
+                # and can be all-reduced during updates and compression
+            )
+
+        # construct on execution device, cache shared tensor on offload device
+        precision = self.scheme.precision
+        data = deterministic_hadamard_matrix(size, precision, construct_device)
         data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 

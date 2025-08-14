@@ -41,6 +41,7 @@ class RandomMatrixFactory(TransformFactory):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
         self.inverses = ParameterizedDefaultDict(self._create_inverse)
+        self._shared_tensors_device = None
 
     def create_transform(self, module: Module, args: TransformArgs):
         """
@@ -52,19 +53,34 @@ class RandomMatrixFactory(TransformFactory):
         """
         assert hasattr(module, "weight")
         size = get_transform_size(module, args.location, self.scheme.head_dim)
-        dtype = self.scheme.precision
         device = get_offloaded_device(module)
 
-        weight = self.weights[size, dtype, device]
+        factory_kwargs = {"device": device}
+        weight = self.weights.get(size, factory_kwargs=factory_kwargs)
         if args.inverse:
             weight = self.inverses[weight]
 
         return RandomMatrixTransform(weight, self.scheme, args, type(module))
 
-    def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
-        # TODO: verify that weight is invertible (has non-zero determinant)
+    def _create_weight(self, size: int, device: device) -> Parameter:
+        # check that shared tensors device is consistent
+        if self._shared_tensors_device is None:
+            self._shared_tensors_device = device
+
+        if device != self._shared_tensors_device:
+            raise NotImplementedError(
+                "Creating multi-gpu transform weights are not supported as of now due "
+                "to the limitations of shared tensors across GPUs"
+                # in the future, tensors can be shared within GPUs,
+                # and can be all-reduced during updates and compression
+            )
+
+        # TODO: construct such that weight is invertible (has non-zero determinant)
         data = torch.rand(
-            (size, size), generator=self.generator, dtype=dtype, device=device
+            (size, size),
+            generator=self.generator,
+            dtype=self.scheme.precision,
+            device=device,
         )
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
