@@ -182,22 +182,6 @@ class ModelCompressor:
             algorithm
         :return: compressor for the configs, or None if model is not compressed
         """
-
-        compression_formats = None
-        if quantization_format is not None:
-            # llmcompressor incorrectly passes in a CompressionFormat when
-            # the value string is expected - handle both cases
-            if isinstance(quantization_format, (str, CompressionFormat)):
-                quantization_format = [quantization_format]
-
-            compression_formats = quantization_format
-            # assume multiple compression formats means mixed-precision
-            # as we currently only support one compressor per precision type and scheme
-            if len(quantization_format) > 1:
-                quantization_format = CompressionFormat.mixed_precision.value
-            else:
-                quantization_format = quantization_format[0]
-
         quantization_config = QuantizationConfig.from_pretrained(
             model, format=quantization_format
         )
@@ -218,7 +202,9 @@ class ModelCompressor:
             sparsity_config=sparsity_config,
             quantization_config=quantization_config,
             transform_config=transform_config,
-            compression_formats=compression_formats,
+            compression_formats=[quantization_format]
+            if isinstance(quantization_format, str)
+            else quantization_format,
         )
 
     @staticmethod
@@ -281,7 +267,7 @@ class ModelCompressor:
 
     def _fetch_unique_quantization_formats(self) -> List[str]:
         """
-        Get all unique compression formats present in a model
+        Get all unique compression formats present in a model.
         :return: list of quantization formats
         """
         quantization_formats = []
@@ -289,8 +275,11 @@ class ModelCompressor:
             if scheme.format is not None and scheme.format not in quantization_formats:
                 quantization_formats.append(scheme.format)
 
-        # If empty list, fallback to using the global format
-        if len(quantization_formats) == 0:
+        if (
+            len(quantization_formats) == 0
+            and self.quantization_config.format
+            != CompressionFormat.mixed_precision.value
+        ):
             quantization_formats.append(self.quantization_config.format)
         return quantization_formats
 
@@ -318,6 +307,9 @@ class ModelCompressor:
             )
 
         if quantization_config is not None:
+            # If a list of compression_format is not provided, we resolve the
+            # relevant quantization formats using the config groups from the config
+            # and if those are not defined, we fall-back to the global quantization format
             if not self.compression_formats:
                 self.compression_formats = self._fetch_unique_quantization_formats()
 
@@ -470,16 +462,12 @@ class ModelCompressor:
                         not hasattr(module.quantization_scheme, "format")
                         or module.quantization_scheme.format is None
                     ):
-                        if (
-                            self.quantization_config.format
-                            == CompressionFormat.mixed_precision.value
-                        ):
+                        if len(self.compression_formats) > 1:
                             raise ValueError(
-                                "Compressing mixed-precision models without defining "
-                                "per module quantization_scheme.format is currently "
-                                "not supported"
+                                "Applying multiple compressors without defining "
+                                "per module formats is not supported "
                             )
-                        format = self.quantization_config.format
+                        format = self.compression_formats[0]
                     else:
                         format = module.quantization_scheme.format
 
@@ -560,16 +548,12 @@ class ModelCompressor:
                         not hasattr(module.quantization_scheme, "format")
                         or module.quantization_scheme.format is None
                     ):
-                        if (
-                            self.quantization_config.format
-                            == CompressionFormat.mixed_precision.value
-                        ):
+                        if len(self.compression_formats) > 1:
                             raise ValueError(
-                                "Decompressing mixed-precision models without defining "
-                                "per module quantization_scheme.format is currently not "
-                                "supported"
+                                "Applying multiple compressors without defining "
+                                "per module formats is not supported "
                             )
-                        format = self.quantization_config.format
+                        format = self.compression_formats[0]
                     else:
                         format = module.quantization_scheme.format
                     quant_compressor = self.quantization_compressor.get(format)
