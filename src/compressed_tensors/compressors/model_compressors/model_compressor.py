@@ -169,7 +169,7 @@ class ModelCompressor:
         cls,
         model: Module,
         sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
-        quantization_format: Optional[Union[str, List[str]]] = None,
+        quantization_format: Optional[Union[str, CompressionFormat, List[str], List[CompressionFormat]]] = None,
     ) -> Optional["ModelCompressor"]:
         """
         Given a pytorch model and optional sparsity and/or quantization configs,
@@ -203,7 +203,7 @@ class ModelCompressor:
             quantization_config=quantization_config,
             transform_config=transform_config,
             compression_formats=[quantization_format]
-            if isinstance(quantization_format, str)
+            if not isinstance(quantization_format, list)
             else quantization_format,
         )
 
@@ -315,10 +315,11 @@ class ModelCompressor:
 
             self.quantization_compressor = {}
             for format in self.compression_formats:
+                name = format.value if isinstance(format, CompressionFormat) else format
                 self.quantization_compressor[
                     format
                 ] = BaseCompressor.load_from_registry(
-                    format, config=quantization_config
+                    name, config=quantization_config
                 )
 
     # ----- used by hf quantizer ----- #
