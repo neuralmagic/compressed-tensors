@@ -175,7 +175,7 @@ def is_match(
     name: str,
     module: torch.nn.Module,
     targets: Union[str, Iterable[str]],
-    ignore: Union[str, Iterable[str]],
+    ignore: Union[str, Iterable[str]] = tuple(),
     fused: Optional[FusedMappping] = None,
 ) -> bool:
     """
