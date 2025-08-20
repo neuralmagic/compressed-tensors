@@ -17,7 +17,7 @@ import logging
 import math
 import warnings
 from enum import Enum
-from typing import List, Optional
+from typing import Optional
 
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
@@ -82,54 +82,51 @@ def initialize_module_for_quantization(
         # no scheme passed and layer not targeted for quantization - skip
         return
 
-    if is_attention_module(module):
-        # quantized actions based on calltime status
-        _initialize_attn_scales(module)
+    if not isinstance(module, torch.nn.Linear):
+        return
 
-    else:
+    if scheme.input_activations is not None:
+        _initialize_scale_zero_point(
+            module,
+            "input",
+            scheme.input_activations,
+            force_zero_point=force_zero_point,
+            scale_dtype=scale_dtype,
+        )
 
-        if scheme.input_activations is not None:
+    if scheme.weights is not None:
+        if hasattr(module, "weight"):
+            weight_shape = None
+            if isinstance(module, torch.nn.Linear):
+                weight_shape = module.weight.shape
             _initialize_scale_zero_point(
                 module,
-                "input",
-                scheme.input_activations,
+                "weight",
+                scheme.weights,
+                weight_shape=weight_shape,
                 force_zero_point=force_zero_point,
                 scale_dtype=scale_dtype,
             )
+        else:
+            _LOGGER.warning(
+                f"module type {type(module)} targeted for weight quantization but "
+                "has no attribute weight, skipping weight quantization "
+                f"for {type(module)}"
+            )
 
-        if scheme.weights is not None:
-            if hasattr(module, "weight"):
-                weight_shape = None
-                if isinstance(module, torch.nn.Linear):
-                    weight_shape = module.weight.shape
-                _initialize_scale_zero_point(
-                    module,
-                    "weight",
-                    scheme.weights,
-                    weight_shape=weight_shape,
-                    force_zero_point=force_zero_point,
-                    scale_dtype=scale_dtype,
-                )
-            else:
-                _LOGGER.warning(
-                    f"module type {type(module)} targeted for weight quantization but "
-                    "has no attribute weight, skipping weight quantization "
-                    f"for {type(module)}"
-                )
+    if scheme.output_activations is not None:
+        if not is_kv_cache_quant_scheme(scheme):
+            _initialize_scale_zero_point(
+                module, "output", scheme.output_activations, scale_dtype=scale_dtype
+            )
 
-        if scheme.output_activations is not None:
-            if not is_kv_cache_quant_scheme(scheme):
-                _initialize_scale_zero_point(
-                    module, "output", scheme.output_activations, scale_dtype=scale_dtype
-                )
+    module.quantization_scheme = scheme
+    module.quantization_status = QuantizationStatus.INITIALIZED
 
-        module.quantization_scheme = scheme
-        module.quantization_status = QuantizationStatus.INITIALIZED
-
-        with disable_hf_hook(module):
-            # wrap forward call of module to perform
-            # quantized actions based on calltime status
-            wrap_module_forward_quantized(module, scheme)
+    with disable_hf_hook(module):
+        # wrap forward call of module to perform
+        # quantized actions based on calltime status
+        wrap_module_forward_quantized(module, scheme)
 
 
 def is_attention_module(module: Module):

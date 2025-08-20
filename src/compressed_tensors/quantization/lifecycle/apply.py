@@ -14,32 +14,36 @@
 
 import logging
 import re
+from collections import OrderedDict
 from copy import deepcopy
 from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
 from typing import Set, Union
 
 import torch
-from compressed_tensors.quantization.lifecycle.compressed import (
-    compress_quantized_weights,
-)
+from compressed_tensors.config import CompressionFormat
+from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.quantization.quant_config import QuantizationConfig, QuantizationStatus
+
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
+    is_attention_module
 )
-from compressed_tensors.quantization.quant_args import QuantizationArgs
-from compressed_tensors.quantization.quant_config import (
-    QuantizationConfig,
-    QuantizationStatus,
-)
-from compressed_tensors.quantization.quant_scheme import QuantizationScheme
+from compressed_tensors.quantization.lifecycle.compressed import compress_quantized_weights
 from compressed_tensors.quantization.utils import (
     KV_CACHE_TARGETS,
     infer_quantization_status,
     is_kv_cache_quant_scheme,
 )
-from compressed_tensors.utils import match_named_modules, replace_module
-from compressed_tensors.utils.offload import update_parameter_data
-from compressed_tensors.utils.safetensors_load import get_safetensors_folder
+from compressed_tensors.utils import (
+    get_safetensors_folder,
+    is_narrow_match,
+    match_named_modules,
+    match_targets,
+    replace_module,
+    update_parameter_data,
+)
 from safetensors import safe_open
 from torch.nn import Module
 from transformers import PreTrainedModel
@@ -133,58 +137,60 @@ def apply_quantization_config(
         return dict()
     config = deepcopy(config)
 
-    # preprocessing for kv cache quantization
-    # TODO: KV cache-only uses this, attention uses standard targets
-    # perhaps the kv_cache targets have their own matching loop
+    # build mapping of targets to schemes for easier matching
+    # use ordered dict to preserve target ordering in config
+    target_to_scheme = {
+        target: scheme
+        for scheme in config.config_groups.values()
+        for target in scheme.targets
+    }
+    names_to_scheme = dict()
+
+    # preprocessing for kv cache, TODO: fix
     config = process_quantization_config(config)
 
-    for scheme in config.config_groups.values():
-        for name, module in match_named_modules(model, scheme.targets):
-            # apply status
-            setattr(module, "quantization_status", config.quantization_status)
+    if run_compressed:
+        from compressed_tensors.linear.compressed_linear import CompressedLinear
 
-            if isinstance(module, torch.nn.Linear):
-                # can remove after meta model compression lands
-                force_zero_point_init = (
-                    config.quantization_status != QuantizationStatus.COMPRESSED
-                )
-                scale_dtype = None
-                if config.quantization_status == QuantizationStatus.FROZEN:
-                    if hasattr(model, "dtype"):
-                        scale_dtype = model.dtype
+    # mark appropriate layers for quantization by setting their quantization schemes
+    for name, submodule in match_named_modules(
+        model, target_to_scheme, config.ignore or [], warn_on_fail=True
+    ):
+        # mark modules to be quantized by adding
+        # quant scheme to the matching layers
+        matched_targets = match_targets(name, submodule, target_to_scheme)
+        scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
 
-                # add quantization parameters, wrap forward
-                setattr(module, "quantization_scheme", scheme)
-                initialize_module_for_quantization(
-                    module,
-                    force_zero_point=force_zero_point_init,
-                    scale_dtype=scale_dtype,
-                )
-
-                # hopefully we can remove this soon
-                # avoid circular dep
-                from compressed_tensors.linear.compressed_linear import CompressedLinear
-
-                if run_compressed:
+        if isinstance(submodule, torch.nn.Linear):
+            if run_compressed:
+                format = config.format
+                if format != CompressionFormat.dense.value:
+                    # TODO: expand to more module types
                     compressed_linear = CompressedLinear.from_linear(
-                        module,
+                        submodule,
                         quantization_scheme=scheme,
                         quantization_format=format,
                     )
                     replace_module(model, name, compressed_linear)
 
-            elif name.endswith("self_attn"):
-                # avoid circular dep
-                from compressed_tensors.modeling.attention import (
-                    initialize_hooked_attention,
-                )
+            # target matched - add layer and scheme to target list
+            setattr(submodule, "quantization_scheme", scheme)
+            names_to_scheme[name] = submodule.quantization_scheme
 
-                initialize_hooked_attention(model, module, quantize=True)
+        elif is_attention_module(submodule) and is_narrow_match(
+            model, matched_targets, name
+        ):
+            # unlike linear, do initialization here
+            from compressed_tensors.modeling.attention import initialize_hooked_attention
+            initialize_hooked_attention(model, submodule, quantize=True)
 
-            else:
-                raise ValueError(f"Cannot quantize unknown module type {type(module)}")
+            # target matched - add layer and scheme to target list
+            setattr(submodule, "quantization_scheme", scheme)
+            names_to_scheme[name] = submodule.quantization_scheme
 
-    return {}  # hopefully can remove soon
+    # apply current quantization status across all targeted layers
+    apply_quantization_status(model, config.quantization_status)
+    return names_to_scheme
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
@@ -347,14 +353,6 @@ def _find_matches(
         elif target == value:
             matches.append(target)
     return matches
-
-
-def _infer_status(model: Module) -> Optional[QuantizationStatus]:
-    for module in model.modules():
-        status = getattr(module, "quantization_status", None)
-        if status is not None:
-            return status
-    return None
 
 
 def _load_quant_args_from_mapping(

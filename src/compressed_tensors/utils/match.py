@@ -27,8 +27,10 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 __all__ = [
     "match_named_modules",
     "match_named_parameters",
+    "match_targets",
     "match_modules_set",
     "is_match",
+    "is_narrow_match",
 ]
 
 
@@ -62,6 +64,7 @@ def match_named_modules(
 
                 if not is_match(name, module, ignore, fused=fused):
                     yield name, module
+                break
 
     if warn_on_fail:
         for target in unmatched_targets:
@@ -108,6 +111,42 @@ def match_named_parameters(
             _LOGGER.warning(
                 f"Could not match `{target}` in instance of {model.__class__.__name__}"
             )
+
+
+def match_targets(
+    name: str, module: torch.nn.Module, targets: Iterable[str] | None = None
+) -> List[str]:
+    """
+    Returns the targets that match the given name and module.
+    :param name: the name of the module
+    :param module: the module to match
+    :param targets: the target strings, potentially containing "re:" prefixes
+    :return: the targets that match the given name and module
+    Outputs are ordered by type: exact name match, regex name match, class name match
+    """
+    targets = targets or []
+
+    if isinstance(module, InternalModule):
+        return []
+
+    # The order of the output `matches` list matters, the are arranged from most
+    # specific to least specific, and this order will be used when merging configs.
+    # The entries are sorted in the following order:
+    #     1. matches on exact strings
+    #     2. matches on regex patterns
+    #     3. matches on module names
+
+    targets = sorted(targets, key=lambda x: ("re:" in x, x))
+    matched_targets = []
+    for target in targets:
+        if _match_name(name, target):
+            matched_targets.append(target)
+
+    for target in targets:
+        if _match_class(module, target) and target not in matched_targets:
+            matched_targets.append(target)
+
+    return matched_targets
 
 
 def match_modules_set(
