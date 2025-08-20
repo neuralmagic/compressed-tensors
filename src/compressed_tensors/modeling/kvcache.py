@@ -23,16 +23,15 @@ from compressed_tensors.quantization import (
 )
 from torch import Tensor
 from torch.utils.hooks import RemovableHandle
-from transformers import DynamicCache
+from transformers import Cache, PretrainedConfig, PreTrainedModel
 
 
-class QuantizedKVCache(DynamicCache, torch.nn.Module):
+class QuantizedKVCache(torch.nn.Module):
     def __init__(self, attn_module: torch.nn.Module):
-        DynamicCache.__init__(self)
-        torch.nn.Module.__init__(self)
+        super().__init__()
         self.attn_module_container = [attn_module]  # avoid nn.Module circular reference
-        self.use_cache = False
-        self.quantization_enabled = False
+        self.past_key_value: Optional[Cache] = None
+        self._quantization_enabled = False
 
     def update(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
         return self(*args, **kwargs)
@@ -41,8 +40,8 @@ class QuantizedKVCache(DynamicCache, torch.nn.Module):
         self,
         key_states: Tensor,
         value_states: Tensor,
-        layer_idx: int,
-        cache_kwargs: Optional[Dict[str, Any]] = None,
+        *args,
+        **kwargs,
     ) -> Tuple[Tensor, Tensor]:
         # quantization always gets applied last after hooks, in the same way that
         # quantized `wrapped_forward` always applies quantization last
@@ -52,7 +51,8 @@ class QuantizedKVCache(DynamicCache, torch.nn.Module):
             module, "quantization_scheme", None
         )
 
-        if scheme is not None and self.quantization_enabled:
+        assert not self._quantization_enabled
+        if scheme is not None and self._quantization_enabled:
             if scheme.input_activations is not None:
                 key_states = forward_quantize(
                     module, key_states, "k", scheme.input_activations
@@ -67,30 +67,35 @@ class QuantizedKVCache(DynamicCache, torch.nn.Module):
             if scheme.output_activations is not None:
                 raise NotImplementedError("")
 
-        if self.use_cache:
-            return super().update(key_states, value_states, layer_idx, cache_kwargs)
+        if self.past_key_value is not None:
+            ret = self.past_key_value.update(key_states, value_states, *args, **kwargs)
+            self.past_key_value = None
+            return ret
         else:
             return key_states, value_states
 
+    def enable_quantization(self):
+        self._quantization_enabled = True
 
-def initialize_hooked_kv_cache(module: torch.nn.Module, quantize: bool = False):
+
+def initialize_hooked_kv_cache(
+    model: PreTrainedModel, module: torch.nn.Module, quantize: bool = False
+):
     if not hasattr(module, "kv_cache"):
         module.register_module("kv_cache", QuantizedKVCache(module))
         module.register_forward_pre_hook(kv_cache_attention_hook, with_kwargs=True)
 
-    if quantize:
+    kv_cache: QuantizedKVCache = getattr(module, "kv_cache")
+    if quantize and not kv_cache._quantization_enabled:
         # initialize k scale
         # initialize v scale
-        kv_cache: QuantizedKVCache = getattr(module, "kv_cache")
-        kv_cache.quantization_enabled = True
+        kv_cache.enable_quantization()
 
 
 def kv_cache_attention_hook(module: torch.nn.Module, args, kwargs):
     kv_cache: QuantizedKVCache = getattr(module, "kv_cache")
+    kv_cache.past_key_value = kwargs.get("past_key_value", None)
     kwargs["past_key_value"] = kv_cache
-
-    # use cache if cache is enabled, but this is typically not used during calibration
-    kv_cache.use_cache = kwargs.get("use_cache", False)
 
     return args, kwargs
 
