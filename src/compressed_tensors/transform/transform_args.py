@@ -76,9 +76,6 @@ class TransformArgs(BaseModel, use_enum_values=True):
         return value
 
     def is_online(self) -> bool:
-        return self.location not in (
-            TransformLocation.WEIGHT_INPUT,
-            TransformLocation.WEIGHT_OUTPUT,
-        )
+        return TransformLocation(self.location).is_online()
 
     model_config = ConfigDict(extra="forbid")
