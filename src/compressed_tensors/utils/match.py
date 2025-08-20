@@ -38,7 +38,7 @@ FusedMappping = Mapping[str, Iterable[str]]
 
 def match_named_modules(
     model: torch.nn.Module,
-    targets: Optional[Iterable[str]] = None,
+    targets: Optional[Iterable[str]],
     ignore: Optional[Iterable[str]] = None,
     fused: Optional[FusedMappping] = None,
     warn_on_fail: bool = False,
@@ -77,7 +77,7 @@ def match_named_modules(
 
 def match_named_parameters(
     model: torch.nn.Module,
-    targets: Optional[Iterable[str]] = None,
+    targets: Optional[Iterable[str]],
     ignore: Optional[Iterable[str]] = None,
     fused: Optional[FusedMappping] = None,
     warn_on_fail: bool = False,
@@ -119,7 +119,7 @@ def match_named_parameters(
 
 
 def match_targets(
-    name: str, module: torch.nn.Module, targets: Iterable[str] | None = None
+    name: str, module: torch.nn.Module, targets: Optional[Iterable[str]]
 ) -> List[str]:
     """
     Returns the targets that match the given name and module.
@@ -158,7 +158,7 @@ def match_targets(
 
 def match_modules_set(
     model: torch.nn.Module,
-    targets: Optional[Iterable[str]] = None,
+    targets: Optional[Iterable[str]],
     ignore: Optional[Iterable[str]] = None,
 ) -> Generator[Iterable[torch.nn.Module]]:
     """
