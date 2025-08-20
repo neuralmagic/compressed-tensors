@@ -26,6 +26,7 @@ from compressed_tensors.quantization.lifecycle.compressed import (
 )
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
+    is_attention_module,
 )
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import (
@@ -38,12 +39,18 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     is_kv_cache_quant_scheme,
 )
-from compressed_tensors.utils.helpers import deprecated, replace_module
-from compressed_tensors.utils.match import match_named_modules, match_targets
-from compressed_tensors.utils.offload import update_parameter_data
-from compressed_tensors.utils.safetensors_load import get_safetensors_folder
+from compressed_tensors.utils import (
+    get_safetensors_folder,
+    is_narrow_match,
+    match_named_modules,
+    match_targets,
+    replace_module,
+    update_parameter_data,
+    deprecated,
+)
 from safetensors import safe_open
 from torch.nn import Module
+from transformers import PreTrainedModel
 
 
 __all__ = [
@@ -114,7 +121,9 @@ def load_pretrained_quantization_parameters(
 
 
 def apply_quantization_config(
-    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
+    model: PreTrainedModel,
+    config: Union[QuantizationConfig, None],
+    run_compressed: bool = False,
 ) -> Dict[str, QuantizationScheme]:
     """
     Initializes the model for quantization in-place based on the given config.
@@ -128,35 +137,36 @@ def apply_quantization_config(
     # Workaround for when HF Quantizer passes None, see PR #180
     if config is None:
         return dict()
-
-    # remove reference to the original `config`
-    # argument. This function can mutate it, and we'd
-    # like to keep the original `config` as it is.
     config = deepcopy(config)
+
     # build mapping of targets to schemes for easier matching
     # use ordered dict to preserve target ordering in config
-    target_to_scheme = OrderedDict()
-    config = process_quantization_config(config)
+    target_to_scheme = {
+        target: scheme
+        for scheme in config.config_groups.values()
+        for target in scheme.targets
+    }
     names_to_scheme = dict()
-    for scheme in config.config_groups.values():
-        for target in scheme.targets:
-            target_to_scheme[target] = scheme
+
+    # preprocessing for kv cache, TODO: fix
+    config = process_quantization_config(config)
 
     if run_compressed:
         from compressed_tensors.linear.compressed_linear import CompressedLinear
 
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in match_named_modules(
-        model, target_to_scheme, config.ignore, warn_on_fail=True
+        model, target_to_scheme, config.ignore or [], warn_on_fail=True
     ):
         # mark modules to be quantized by adding
         # quant scheme to the matching layers
         matched_targets = match_targets(name, submodule, target_to_scheme)
         scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
-        if run_compressed:
-            format = config.format
-            if format != CompressionFormat.dense.value:
-                if isinstance(submodule, torch.nn.Linear):
+
+        if isinstance(submodule, (torch.nn.Linear, torch.nn.Embedding)):
+            if run_compressed:
+                format = config.format
+                if format != CompressionFormat.dense.value:
                     # TODO: expand to more module types
                     compressed_linear = CompressedLinear.from_linear(
                         submodule,
@@ -165,10 +175,23 @@ def apply_quantization_config(
                     )
                     replace_module(model, name, compressed_linear)
 
-        # target matched - add layer and scheme to target list
-        submodule.quantization_scheme = scheme
+            # target matched - add layer and scheme to target list
+            setattr(submodule, "quantization_scheme", scheme)
+            names_to_scheme[name] = submodule.quantization_scheme
 
-        names_to_scheme[name] = submodule.quantization_scheme
+        elif is_attention_module(submodule) and is_narrow_match(
+            model, matched_targets, name
+        ):
+            # unlike linear, do initialization here
+            from compressed_tensors.modeling.attention import (
+                initialize_hooked_attention,
+            )
+
+            initialize_hooked_attention(model, submodule, quantize=True)
+
+            # target matched - add layer and scheme to target list
+            setattr(submodule, "quantization_scheme", scheme)
+            names_to_scheme[name] = submodule.quantization_scheme
 
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
@@ -265,14 +288,6 @@ def find_name_or_class_matches(
         )
 
     return match_targets(name, module, targets)
-
-
-def _infer_status(model: Module) -> Optional[QuantizationStatus]:
-    for module in model.modules():
-        status = getattr(module, "quantization_status", None)
-        if status is not None:
-            return status
-    return None
 
 
 def _load_quant_args_from_mapping(
