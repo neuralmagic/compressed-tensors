@@ -13,16 +13,24 @@
 # limitations under the License.
 
 import inspect
-from typing import Callable, Dict, Optional
+from typing import Callable, Optional
 
 import torch
 from compressed_tensors.modeling.kvcache import initialize_hooked_kv_cache
 from compressed_tensors.quantization import QuantizationScheme, forward_quantize
+from compressed_tensors.quantization.lifecycle.initialize import (
+    _initialize_scale_zero_point,
+)
+from compressed_tensors.utils import getattr_chain
 from torch.utils.hooks import RemovableHandle
 from transformers import AttentionInterface, PreTrainedModel
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 
 
+__all__ = ["IMPL_ATTR", "QuantizedAttentionImpl"]
+
+
+IMPL_ATTR = "impl"
 _original_impl = "eager"  # mutable
 
 
@@ -30,7 +38,7 @@ class QuantizedAttentionImpl(torch.nn.Module):
     def __init__(self, attn_module: torch.nn.Module):
         super().__init__()
         self.attn_module_container = [attn_module]  # avoid circular reference
-        self._quantization_enabled = False
+        self._qparams_initialized = False
 
     def forward(
         self,
@@ -44,19 +52,16 @@ class QuantizedAttentionImpl(torch.nn.Module):
         # quantization always gets applied last after hooks, in the same way that
         # quantized `wrapped_forward` always applies quantization last
         # because it does not use hooks
-        scheme: Optional[QuantizationScheme] = getattr(
-            module, "quantization_scheme", None
+        quant_args: Optional[QuantizationScheme] = getattr_chain(
+            module, "quantization_scheme.input_activations", None
         )
-        assert not self._quantization_enabled
-        if scheme is not None and self._quantization_enabled:
-            if scheme.input_activations is not None:
-                query = forward_quantize(module, query, "q", scheme.input_activations)
+        quant_enabled: Optional[QuantizationScheme] = getattr(
+            module, "quantization_enabled", True
+        )
 
-            if scheme.weights is not None:
-                raise ValueError("")
-
-            if scheme.output_activations is not None:
-                raise NotImplementedError("")
+        # apply quantization if applicable
+        if quant_args is not None and quant_enabled and self._qparams_initialized:
+            query = forward_quantize(module, query, "q", quant_args)
 
         return ALL_ATTENTION_FUNCTIONS[_original_impl](
             module,
@@ -67,12 +72,25 @@ class QuantizedAttentionImpl(torch.nn.Module):
             **kwargs,
         )
 
-    def enable_quantization(self):
-        self._quantization_enabled = True
+    def initialize_qparams_once(self, module: torch.nn.Module):
+        assert module is self.attn_module_container[0]
+        scheme: Optional[QuantizationScheme] = getattr(
+            module, "quantization_scheme", None
+        )
+
+        if not self._qparams_initialized and scheme.input_activations is not None:
+            _initialize_scale_zero_point(module, "q", scheme.input_activations)
+            self._qparams_initialized = True
+
+        if scheme.weights is not None:
+            raise ValueError("")
+
+        if scheme.output_activations is not None:
+            raise NotImplementedError("")
 
 
 def ct_hooked_attention(module: torch.nn.Module, *args, **kwargs):
-    if hasattr(module, "impl"):
+    if hasattr(module, IMPL_ATTR):
         return module.impl(module, *args, **kwargs)
     else:
         return ALL_ATTENTION_FUNCTIONS[_original_impl](module, *args, **kwargs)
@@ -81,8 +99,8 @@ def ct_hooked_attention(module: torch.nn.Module, *args, **kwargs):
 def initialize_hooked_attention(
     model: PreTrainedModel, module: torch.nn.Module, quantize: bool = True
 ):
-    if not hasattr(module, "impl"):
-        module.register_module("impl", QuantizedAttentionImpl(module))
+    if not hasattr(module, IMPL_ATTR):
+        module.register_module(IMPL_ATTR, QuantizedAttentionImpl(module))
         if model.config._attn_implementation != "ct_hooked_attention":
             # assumes only one model at a time
             global _original_impl
@@ -91,13 +109,11 @@ def initialize_hooked_attention(
             AttentionInterface.register("ct_hooked_attention", ct_hooked_attention)
             model.config._attn_implementation = "ct_hooked_attention"
 
-    impl: QuantizedAttentionImpl = getattr(module, "impl")
-    if quantize and not impl._quantization_enabled:
-        # initialize q scale
+    impl: QuantizedAttentionImpl = getattr(module, IMPL_ATTR)
+    if quantize:
+        impl.initialize_qparams_once(module)
 
-        impl.enable_quantization()
-
-    initialize_hooked_kv_cache(model, module, quantize=quantize)
+    initialize_hooked_kv_cache(module, quantize=quantize)
 
 
 def register_query_hook(module: torch.nn.Module, func: Callable) -> RemovableHandle:
@@ -105,7 +121,7 @@ def register_query_hook(module: torch.nn.Module, func: Callable) -> RemovableHan
     Registers a forward pre-hook on `module.impl` that replaces the `query` argument
     with `func(mod, query)` (handles both positional and keyword forms).
     """
-    impl = getattr(module, "impl")
+    impl = getattr(module, IMPL_ATTR)
 
     def _hook(mod: torch.nn.Module, args, kwargs):
         # Keyword case
