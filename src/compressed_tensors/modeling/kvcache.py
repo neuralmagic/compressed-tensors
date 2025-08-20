@@ -49,29 +49,23 @@ class QuantizedKVCache(torch.nn.Module):
         *args,
         **kwargs,
     ) -> Tuple[Tensor, Tensor]:
-        # quantization always gets applied last after hooks, in the same way that
-        # quantized `wrapped_forward` always applies quantization last
-        # because it does not use hooks
+        # quantization
         module = self.attn_module_container[0]
-        quant_args: Optional[QuantizationScheme] = getattr_chain(
-            module, "quantization_scheme.input_activations", None
-        )
-        quant_enabled: Optional[QuantizationScheme] = getattr(
-            module, "quantization_enabled", True
-        )
-
-        # apply quantization if applicable
+        quant_args_attr = "quantization_scheme.input_activations"
+        quant_args = getattr_chain(module, quant_args_attr, None)
+        quant_enabled = getattr(module, "quantization_enabled", True)
         if quant_args is not None and quant_enabled and self._qparams_initialized:
             key_states = forward_quantize(module, key_states, "k", quant_args)
             value_states = forward_quantize(module, value_states, "v", quant_args)
 
-        # use existing cache from `kv_cache_attention_hook` if applicable
+        # original cache
         if self.past_key_value is not None:
             ret = self.past_key_value.update(key_states, value_states, *args, **kwargs)
-            self.past_key_value = None
-            return ret
         else:
-            return key_states, value_states
+            ret = (key_states, value_states)
+
+        self.past_key_value = None
+        return ret
 
     def initialize_qparams_once(self, module: torch.nn.Module):
         assert module is self.attn_module_container[0]

@@ -49,20 +49,14 @@ class QuantizedAttentionImpl(torch.nn.Module):
         *args,
         **kwargs,
     ):
-        # quantization always gets applied last after hooks, in the same way that
-        # quantized `wrapped_forward` always applies quantization last
-        # because it does not use hooks
-        quant_args: Optional[QuantizationScheme] = getattr_chain(
-            module, "quantization_scheme.input_activations", None
-        )
-        quant_enabled: Optional[QuantizationScheme] = getattr(
-            module, "quantization_enabled", True
-        )
-
-        # apply quantization if applicable
+        # quantization
+        quant_args_attr = "quantization_scheme.input_activations"
+        quant_args = getattr_chain(module, quant_args_attr, None)
+        quant_enabled = getattr(module, "quantization_enabled", True)
         if quant_args is not None and quant_enabled and self._qparams_initialized:
             query = forward_quantize(module, query, "q", quant_args)
 
+        # original attention
         return ALL_ATTENTION_FUNCTIONS[_original_impl](
             module,
             query,
