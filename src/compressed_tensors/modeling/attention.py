@@ -89,6 +89,9 @@ class QuantizedAttentionImpl(torch.nn.Module):
             raise NotImplementedError("")
 
 
+# ----- initialize ----- #
+
+
 def ct_hooked_attention(module: torch.nn.Module, *args, **kwargs):
     if hasattr(module, IMPL_ATTR):
         return module.impl(module, *args, **kwargs)
@@ -114,6 +117,9 @@ def initialize_hooked_attention(
         impl.initialize_qparams_once(module)
 
     initialize_hooked_kv_cache(module, quantize=quantize)
+
+
+# ----- hooks ----- #
 
 
 def register_query_hook(module: torch.nn.Module, func: Callable) -> RemovableHandle:

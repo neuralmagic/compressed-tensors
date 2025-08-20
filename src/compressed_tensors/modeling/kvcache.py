@@ -91,6 +91,9 @@ class QuantizedKVCache(torch.nn.Module):
             raise NotImplementedError("")
 
 
+# ----- initialize ----- #
+
+
 def initialize_hooked_kv_cache(module: torch.nn.Module, quantize: bool = False):
     if not hasattr(module, KV_CACHE_ATTR):
         module.register_module(KV_CACHE_ATTR, QuantizedKVCache(module))
@@ -107,6 +110,9 @@ def kv_cache_attention_hook(module: torch.nn.Module, args, kwargs):
     kwargs["past_key_value"] = kv_cache
 
     return args, kwargs
+
+
+# ----- hooks ----- #
 
 
 def register_key_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandle:
@@ -137,16 +143,3 @@ def register_key_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandl
         return args, kwargs
 
     return kv_cache.register_forward_pre_hook(_hook, with_kwargs=True)
-
-
-def register_value_hook(
-    module: torch.nn.Module, func: Callable, **kwargs
-) -> RemovableHandle:
-    kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
-
-    def hook(module: torch.nn.Module, args, kwargs):
-        signature = inspect.signature(module.forward)
-        bound_args = signature.bind_partial(*args, **kwargs)
-        return func(module, bound_args.arguments["value_states"])
-
-    return kv_cache.register_forward_pre_hook(hook, with_kwargs=True)
