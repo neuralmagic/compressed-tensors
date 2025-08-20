@@ -256,3 +256,13 @@ def _match_class(module: torch.nn.Module, target: str) -> bool:
         )
         for cls in module.__class__.__mro__
     )
+
+
+def is_narrow_match(model: torch.nn.Module, targets: Iterable[str], name: str) -> bool:
+    module = model.get_submodule(name)
+    parent_name = name.rsplit(".", 1)[0]
+    parent = model.get_submodule(parent_name)
+
+    return is_match(name, module, targets) and not is_match(
+        parent_name, parent, targets
+    )
