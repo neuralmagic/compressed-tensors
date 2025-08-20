@@ -45,6 +45,12 @@ class TransformLocation(str, Enum):
     K_CACHE = "k_cache"
     Q_ATTN = "q_attn"
 
+    def is_online(self) -> bool:
+        return self not in (
+            TransformLocation.WEIGHT_INPUT,
+            TransformLocation.WEIGHT_OUTPUT,
+        )
+
 
 class TransformArgs(BaseModel, use_enum_values=True):
     """

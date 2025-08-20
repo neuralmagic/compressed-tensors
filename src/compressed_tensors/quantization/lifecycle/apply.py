@@ -14,14 +14,12 @@
 
 import logging
 import re
-from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
 from typing import Set, Union
 
 import torch
-from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.lifecycle.compressed import (
     compress_quantized_weights,
 )
@@ -39,11 +37,12 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     is_kv_cache_quant_scheme,
 )
-from compressed_tensors.utils.helpers import fix_fsdp_module_name, replace_module
+from compressed_tensors.utils import match_named_modules, replace_module
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
 from torch.nn import Module
+from transformers import PreTrainedModel
 
 
 __all__ = [
@@ -116,7 +115,9 @@ def load_pretrained_quantization_parameters(
 
 
 def apply_quantization_config(
-    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
+    model: PreTrainedModel,
+    config: Union[QuantizationConfig, None],
+    run_compressed: bool = False,
 ) -> Dict[str, QuantizationScheme]:
     """
     Initializes the model for quantization in-place based on the given config.
@@ -130,68 +131,60 @@ def apply_quantization_config(
     # Workaround for when HF Quantizer passes None, see PR #180
     if config is None:
         return dict()
-
-    # remove reference to the original `config`
-    # argument. This function can mutate it, and we'd
-    # like to keep the original `config` as it is.
     config = deepcopy(config)
-    # build mapping of targets to schemes for easier matching
-    # use ordered dict to preserve target ordering in config
-    target_to_scheme = OrderedDict()
+
+    # preprocessing for kv cache quantization
+    # TODO: KV cache-only uses this, attention uses standard targets
+    # perhaps the kv_cache targets have their own matching loop
     config = process_quantization_config(config)
-    names_to_scheme = dict()
+
     for scheme in config.config_groups.values():
-        for target in scheme.targets:
-            target_to_scheme[target] = scheme
+        for name, module in match_named_modules(model, scheme.targets):
+            # apply status
+            setattr(module, "quantization_status", config.quantization_status)
 
-    if run_compressed:
-        from compressed_tensors.linear.compressed_linear import CompressedLinear
+            if isinstance(module, torch.nn.Linear):
+                # can remove after meta model compression lands
+                force_zero_point_init = (
+                    config.quantization_status != QuantizationStatus.COMPRESSED
+                )
+                scale_dtype = None
+                if config.quantization_status == QuantizationStatus.FROZEN:
+                    if hasattr(model, "dtype"):
+                        scale_dtype = model.dtype
 
-    # list of submodules to ignore
-    ignored_submodules = defaultdict(list)
-    # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in model.named_modules():
-        # potentially fix module name to remove FSDP wrapper prefix
-        name = fix_fsdp_module_name(name)
-        if matches := find_name_or_class_matches(name, submodule, config.ignore):
-            for match in matches:
-                ignored_submodules[match].append(name)
-            continue  # layer matches ignore list, continue
+                # add quantization parameters, wrap forward
+                setattr(module, "quantization_scheme", scheme)
+                initialize_module_for_quantization(
+                    module,
+                    force_zero_point=force_zero_point_init,
+                    scale_dtype=scale_dtype,
+                )
 
-        targets = find_name_or_class_matches(name, submodule, target_to_scheme)
+                # hopefully we can remove this soon
+                # avoid circular dep
+                from compressed_tensors.linear.compressed_linear import CompressedLinear
 
-        if targets:
-            # mark modules to be quantized by adding
-            # quant scheme to the matching layers
-            scheme = _scheme_from_targets(target_to_scheme, targets, name)
-            if run_compressed:
-                format = config.format
-                if format != CompressionFormat.dense.value:
-                    if isinstance(submodule, torch.nn.Linear):
-                        # TODO: expand to more module types
-                        compressed_linear = CompressedLinear.from_linear(
-                            submodule,
-                            quantization_scheme=scheme,
-                            quantization_format=format,
-                        )
-                        replace_module(model, name, compressed_linear)
+                if run_compressed:
+                    compressed_linear = CompressedLinear.from_linear(
+                        module,
+                        quantization_scheme=scheme,
+                        quantization_format=format,
+                    )
+                    replace_module(model, name, compressed_linear)
 
-            # target matched - add layer and scheme to target list
-            submodule.quantization_scheme = scheme
+            elif name.endswith("self_attn"):
+                # avoid circular dep
+                from compressed_tensors.modeling.attention import (
+                    initialize_hooked_attention,
+                )
 
-            names_to_scheme[name] = submodule.quantization_scheme
+                initialize_hooked_attention(model, module, quantize=True)
 
-    if config.ignore is not None and ignored_submodules is not None:
-        if set(config.ignore) - set(ignored_submodules):
-            _LOGGER.warning(
-                "Some layers that were to be ignored were "
-                "not found in the model: "
-                f"{set(config.ignore) - set(ignored_submodules)}"
-            )
+            else:
+                raise ValueError(f"Cannot quantize unknown module type {type(module)}")
 
-    # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
-    return names_to_scheme
+    return {}  # hopefully can remove soon
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
