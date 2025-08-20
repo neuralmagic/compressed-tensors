@@ -39,8 +39,8 @@ FusedMappping = Mapping[str, Iterable[str]]
 
 def match_named_modules(
     model: torch.nn.Module,
-    targets: Iterable[str],
-    ignore: Iterable[str] = tuple(),
+    targets: Optional[Iterable[str]],
+    ignore: Optional[Iterable[str]] = None,
     fused: Optional[FusedMappping] = None,
     warn_on_fail: bool = False,
 ) -> Generator[Tuple[str, torch.nn.Module]]:
@@ -56,12 +56,15 @@ def match_named_modules(
     :param warn_on_fail: if True, warns if any targets do not match any modules in model
     :return: generator of module names and modules
     """
+    targets = targets or []
+    ignore = ignore or []
+
     unmatched_targets = set(targets)
+
     for name, module in model.named_modules():
         for target in targets:
             if is_match(name, module, target, fused=fused):
                 unmatched_targets -= {target}
-
                 if not is_match(name, module, ignore, fused=fused):
                     yield name, module
                 break
@@ -75,8 +78,8 @@ def match_named_modules(
 
 def match_named_parameters(
     model: torch.nn.Module,
-    targets: Iterable[str],
-    ignore: Iterable[str] = tuple(),
+    targets: Optional[Iterable[str]],
+    ignore: Optional[Iterable[str]] = None,
     fused: Optional[FusedMappping] = None,
     warn_on_fail: bool = False,
 ) -> Generator[Tuple[str, torch.nn.Module, torch.nn.Parameter]]:
@@ -92,6 +95,9 @@ def match_named_parameters(
     :param warn_on_fail: if True, warns if any targets do not match any params in model
     :return: generator of fully-qualified param names, parent modules, and params
     """
+    targets = targets or []
+    ignore = ignore or []
+
     unmatched_targets = set(targets)
     for module_name, module in model.named_modules():
         if isinstance(module, InternalModule):
@@ -114,10 +120,11 @@ def match_named_parameters(
 
 
 def match_targets(
-    name: str, module: torch.nn.Module, targets: Iterable[str] | None = None
+    name: str, module: torch.nn.Module, targets: Iterable[str] | None
 ) -> List[str]:
     """
     Returns the targets that match the given name and module.
+
     :param name: the name of the module
     :param module: the module to match
     :param targets: the target strings, potentially containing "re:" prefixes
@@ -151,8 +158,8 @@ def match_targets(
 
 def match_modules_set(
     model: torch.nn.Module,
-    targets: Iterable[str],
-    ignore: Iterable[str] = tuple(),
+    targets: Optional[Iterable[str]],
+    ignore: Optional[Iterable[str]] = None,
 ) -> Generator[Iterable[torch.nn.Module]]:
     """
     Yields modules grouped with the same order and size as `targets`.
@@ -190,6 +197,9 @@ def match_modules_set(
     :param targets: target strings, potentially containing "re:" prefixes
     :param ignore: targets to ignore, potentially containing "re:" prefixes
     """
+    targets = targets or []
+    ignore = ignore or []
+
     matches = dict.fromkeys(targets, None)
     for name, module in model.named_modules():
         # match until we get a full set

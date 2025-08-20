@@ -82,7 +82,7 @@ def initialize_module_for_quantization(
         # no scheme passed and layer not targeted for quantization - skip
         return
 
-    if not isinstance(module, torch.nn.Linear):
+    if not isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
         return
 
     if scheme.input_activations is not None:

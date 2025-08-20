@@ -13,24 +13,27 @@
 # limitations under the License.
 
 import logging
-import re
 from collections import OrderedDict
 from copy import deepcopy
 from typing import Dict, Iterable, List, Optional
 from typing import OrderedDict as OrderedDictType
-from typing import Set, Union
+from typing import Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization.quant_args import QuantizationArgs
-from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.quant_config import QuantizationConfig, QuantizationStatus
-
+from compressed_tensors.quantization.lifecycle.compressed import (
+    compress_quantized_weights,
+)
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
-    is_attention_module
+    is_attention_module,
 )
-from compressed_tensors.quantization.lifecycle.compressed import compress_quantized_weights
+from compressed_tensors.quantization.quant_args import QuantizationArgs
+from compressed_tensors.quantization.quant_config import (
+    QuantizationConfig,
+    QuantizationStatus,
+)
+from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     KV_CACHE_TARGETS,
     infer_quantization_status,
@@ -43,6 +46,7 @@ from compressed_tensors.utils import (
     match_targets,
     replace_module,
     update_parameter_data,
+    deprecated,
 )
 from safetensors import safe_open
 from torch.nn import Module
@@ -54,8 +58,6 @@ __all__ = [
     "apply_quantization_config",
     "apply_quantization_status",
     "find_name_or_class_matches",
-    "expand_target_names",
-    "is_target",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
@@ -161,7 +163,7 @@ def apply_quantization_config(
         matched_targets = match_targets(name, submodule, target_to_scheme)
         scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
 
-        if isinstance(submodule, torch.nn.Linear):
+        if isinstance(submodule, (torch.nn.Linear, torch.nn.Embedding)):
             if run_compressed:
                 format = config.format
                 if format != CompressionFormat.dense.value:
@@ -181,7 +183,10 @@ def apply_quantization_config(
             model, matched_targets, name
         ):
             # unlike linear, do initialization here
-            from compressed_tensors.modeling.attention import initialize_hooked_attention
+            from compressed_tensors.modeling.attention import (
+                initialize_hooked_attention,
+            )
+
             initialize_hooked_attention(model, submodule, quantize=True)
 
             # target matched - add layer and scheme to target list
@@ -261,54 +266,10 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
         model.apply(compress_quantized_weights)
 
 
-def expand_target_names(
-    model: Module,
-    targets: Optional[Iterable[str]] = None,
-    ignore: Optional[Iterable[str]] = None,
-) -> Set[str]:
-    """
-    Finds all unique module names in the model that match the given
-    targets and ignore lists.
-
-    Note: Targets must be regexes, layer types, or full layer names.
-
-    :param model: model to search for targets in
-    :param targets: Iterable of targets to search for
-    :param ignore: Iterable of targets to ignore
-    :return: set of all targets that match the given targets and should
-        not be ignored
-    """
-    return {
-        name
-        for name, module in model.named_modules()
-        if is_target(name, module, targets, ignore)
-    }
-
-
-def is_target(
-    name: str,
-    module: Module,
-    targets: Optional[Iterable[str]] = None,
-    ignore: Optional[Iterable[str]] = None,
-) -> bool:
-    """
-    Determines if a module should be included in the targets based on the
-    targets and ignore lists.
-
-    Note: Targets must be regexes, layer types, or full layer names.
-
-    :param name: name of the module
-    :param module: the module itself
-    :param targets: Iterable of targets to search for
-    :param ignore: Iterable of targets to ignore
-    :return: True if the module is a target and not ignored, False otherwise
-    """
-    return bool(
-        find_name_or_class_matches(name, module, targets or [])
-        and not find_name_or_class_matches(name, module, ignore or [])
-    )
-
-
+@deprecated(
+    message="This function is deprecated and will be removed in a future release."
+    "Please use `match_targets` from `compressed_tensors.utils.match` instead."
+)
 def find_name_or_class_matches(
     name: str, module: Module, targets: Iterable[str], check_contains: bool = False
 ) -> List[str]:
@@ -321,38 +282,12 @@ def find_name_or_class_matches(
         2. matches on regex patterns
         3. matches on module names
     """
-    from compressed_tensors import InternalModule
-
-    if isinstance(module, InternalModule):
-        return []
-
-    targets = sorted(targets, key=lambda x: ("re:" in x, x))
-    if isinstance(targets, Iterable):
-        matches = _find_matches(name, targets) + _find_matches(
-            module.__class__.__name__, targets, check_contains
+    if check_contains:
+        raise NotImplementedError(
+            "This function is deprecated, and the check_contains=True option has been removed."
         )
-        matches = [match for match in matches if match is not None]
-        return matches
 
-
-def _find_matches(
-    value: str, targets: Iterable[str], check_contains: bool = False
-) -> List[str]:
-    # returns all the targets that match value either
-    # exactly or as a regex after 're:'. if check_contains is set to True,
-    # additionally checks if the target string is contained with value.
-    matches = []
-    for target in targets:
-        if target.startswith("re:"):
-            pattern = target[3:]
-            if re.match(pattern, value):
-                matches.append(target)
-        elif check_contains:
-            if target.lower() in value.lower():
-                matches.append(target)
-        elif target == value:
-            matches.append(target)
-    return matches
+    return match_targets(name, module, targets)
 
 
 def _load_quant_args_from_mapping(
@@ -420,7 +355,6 @@ def _scheme_from_targets(
 def _merge_schemes(
     schemes_to_merge: List[QuantizationScheme], name: str
 ) -> QuantizationScheme:
-
     kv_cache_quantization_scheme = [
         scheme for scheme in schemes_to_merge if is_kv_cache_quant_scheme(scheme)
     ]
