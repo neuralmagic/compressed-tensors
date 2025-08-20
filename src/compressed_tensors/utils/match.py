@@ -38,8 +38,8 @@ FusedMappping = Mapping[str, Iterable[str]]
 
 def match_named_modules(
     model: torch.nn.Module,
-    targets: Iterable[str] | None,
-    ignore: Iterable[str] | None = None,
+    targets: Optional[Iterable[str]] = None,
+    ignore: Optional[Iterable[str]] = None,
     fused: Optional[FusedMappping] = None,
     warn_on_fail: bool = False,
 ) -> Generator[Tuple[str, torch.nn.Module]]:
@@ -77,8 +77,8 @@ def match_named_modules(
 
 def match_named_parameters(
     model: torch.nn.Module,
-    targets: Iterable[str] | None = None,
-    ignore: Iterable[str] | None = None,
+    targets: Optional[Iterable[str]] = None,
+    ignore: Optional[Iterable[str]] = None,
     fused: Optional[FusedMappping] = None,
     warn_on_fail: bool = False,
 ) -> Generator[Tuple[str, torch.nn.Module, torch.nn.Parameter]]:
@@ -158,8 +158,8 @@ def match_targets(
 
 def match_modules_set(
     model: torch.nn.Module,
-    targets: Iterable[str] | None = None,
-    ignore: Iterable[str] | None = None,
+    targets: Optional[Iterable[str]] = None,
+    ignore: Optional[Iterable[str]] = None,
 ) -> Generator[Iterable[torch.nn.Module]]:
     """
     Yields modules grouped with the same order and size as `targets`.

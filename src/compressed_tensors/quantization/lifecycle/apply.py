@@ -147,7 +147,7 @@ def apply_quantization_config(
 
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in match_named_modules(
-        model, target_to_scheme, config.ignore or [], warn_on_fail=True
+        model, target_to_scheme, config.ignore, warn_on_fail=True
     ):
         # mark modules to be quantized by adding
         # quant scheme to the matching layers
