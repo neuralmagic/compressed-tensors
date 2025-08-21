@@ -38,11 +38,7 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     is_kv_cache_quant_scheme,
 )
-from compressed_tensors.utils.helpers import (
-    fix_fsdp_module_name,
-    deprecated,
-    replace_module,
-)
+from compressed_tensors.utils.helpers import deprecated, replace_module
 from compressed_tensors.utils.match import match_named_modules, match_targets
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
@@ -150,9 +146,6 @@ def apply_quantization_config(
     for name, submodule in match_named_modules(
         model, target_to_scheme, config.ignore, warn_on_fail=True
     ):
-        # potentially fix module name to remove FSDP wrapper prefix
-        name = fix_fsdp_module_name(name)
-
         # mark modules to be quantized by adding
         # quant scheme to the matching layers
         scheme = _scheme_from_targets(target_to_scheme, scheme.targets, name)
@@ -161,9 +154,7 @@ def apply_quantization_config(
             and config.format != CompressionFormat.dense.value
             and isinstance(submodule, torch.nn.Linear)
         ):
-            from compressed_tensors.linear.compressed_linear import (
-                CompressedLinear,
-            )
+            from compressed_tensors.linear.compressed_linear import CompressedLinear
 
             compressed_linear = CompressedLinear.from_linear(
                 submodule,
