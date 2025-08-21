@@ -146,11 +146,7 @@ def match_targets(
     targets = sorted(targets, key=lambda x: ("re:" in x, x))
     matched_targets = []
     for target in targets:
-        if _match_name(name, target):
-            matched_targets.append(target)
-
-    for target in targets:
-        if _match_class(module, target) and target not in matched_targets:
+        if _match_name(name, target) or _match_class(module, target):
             matched_targets.append(target)
 
     return matched_targets
