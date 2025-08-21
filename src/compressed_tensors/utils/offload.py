@@ -31,10 +31,11 @@ import contextlib
 import warnings
 from functools import wraps
 from operator import attrgetter
-from typing import Any, Callable, Dict, Iterable, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Literal, Optional, Tuple, Union, List
 
 import torch
 from compressed_tensors.utils import patch_attr
+from transformers import PreTrainedModel
 
 
 try:
@@ -514,6 +515,7 @@ def offloaded_dispatch(
     module: torch.nn.Module,
     execution_device: torch.device,
     offload_device: Union[torch.device, Literal["disk"]] = torch.device("cpu"),
+    no_split_modules: Optional[List[str]] = None,
 ) -> torch.nn.Module:
     """
     Unlike `dispatch_model`, this function forces a module (and its submodules) to
@@ -523,6 +525,7 @@ def offloaded_dispatch(
     :param module: module containing parameters to offload
     :param execution_device: device that modules will onload and execute on
     :param offload_device: device that module parameters will offload to
+    TODO
     :return: module with offloading device hooks
     """
     if offload_device == "disk":
@@ -551,6 +554,7 @@ def offloaded_dispatch(
         offload=True,
         weights_map=weights_map,
         tied_params_map=tied_params_map,
+        preload_module_classes=no_split_modules,
     )
 
     # when saving a model, `PretrainedModel.save_pretrained` will only
