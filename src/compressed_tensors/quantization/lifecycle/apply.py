@@ -180,15 +180,6 @@ def apply_quantization_config(
         # apply current quantization status to each targeted submodule
         apply_quantization_status(submodule, config.quantization_status)
 
-    # TODO warn on ignore not being found, this is useful in debugging
-    # if config.ignore is not None and ignored_submodules is not None:
-    #     if set(config.ignore) - set(ignored_submodules):
-    #         _LOGGER.warning(
-    #             "Some layers that were to be ignored were "
-    #             "not found in the model: "
-    #             f"{set(config.ignore) - set(ignored_submodules)}"
-    #         )
-
     return names_to_scheme
 
 
