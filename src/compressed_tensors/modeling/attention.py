@@ -20,6 +20,7 @@ from compressed_tensors.modeling.kvcache import initialize_hooked_kv_cache
 from compressed_tensors.quantization import (
     QuantizationArgs,
     QuantizationScheme,
+    QuantizationStrategy,
     forward_quantize,
 )
 from compressed_tensors.quantization.lifecycle.initialize import (
@@ -71,7 +72,7 @@ class QuantizedAttentionImpl(InternalModule):
             **kwargs,
         )
 
-    def initialize_qparams_once(self, module: torch.nn.Module):
+    def initialize_qparams_once(self, model: PreTrainedModel, module: torch.nn.Module):
         assert module is self.attn_module_container[0]
         scheme: Optional[QuantizationScheme] = getattr(
             module, "quantization_scheme", None
@@ -85,6 +86,8 @@ class QuantizedAttentionImpl(InternalModule):
             and quant_args is not None
             and not scheme.kv_cache_only
         ):
+            # TODO: use model.config.num_attention_heads to find query_size
+            assert quant_args.strategy == QuantizationStrategy.TENSOR
             _initialize_scale_zero_point(module, "q", quant_args)
             self._qparams_initialized = True
 
@@ -114,9 +117,9 @@ def initialize_hooked_attention(
 
     impl: QuantizedAttentionImpl = getattr(module, IMPL_ATTR)
     if quantize:
-        impl.initialize_qparams_once(module)
+        impl.initialize_qparams_once(model, module)
 
-    initialize_hooked_kv_cache(module, quantize=quantize)
+    initialize_hooked_kv_cache(model, module, quantize=quantize)
 
 
 # ----- hooks ----- #

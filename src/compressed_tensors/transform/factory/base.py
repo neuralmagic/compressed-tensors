@@ -175,7 +175,7 @@ class TransformFactory(RegistryMixin, ABC):
 
         # other locations such as q_attn and k_attn have not been implemented
         elif args.location == TransformLocation.K_CACHE:
-            initialize_hooked_kv_cache(module, quantize=False)
+            initialize_hooked_kv_cache(model, module, quantize=False)
 
             def key_hook(_, key_states):
                 return transform(key_states)

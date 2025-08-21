@@ -16,7 +16,7 @@ import inspect
 from typing import Callable, Optional, Tuple
 
 import torch
-from compressed_tensors.quantization import QuantizationScheme, forward_quantize
+from compressed_tensors.quantization import QuantizationStrategy, forward_quantize
 from compressed_tensors.quantization.lifecycle.initialize import (
     _initialize_scale_zero_point,
 )
@@ -24,7 +24,7 @@ from compressed_tensors.utils import getattr_chain
 from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
 from torch.utils.hooks import RemovableHandle
-from transformers import Cache
+from transformers import Cache, PreTrainedModel
 
 
 __all__ = ["KV_CACHE_ATTR", "QuantizedKVCache"]
@@ -68,12 +68,14 @@ class QuantizedKVCache(InternalModule):
         self.past_key_value = None
         return ret
 
-    def initialize_qparams_once(self, module: torch.nn.Module):
+    def initialize_qparams_once(self, model: PreTrainedModel, module: torch.nn.Module):
         assert module is self.attn_module_container[0]
         scheme = getattr(module, "quantization_scheme", None)
         quant_args = getattr(scheme, "input_activations", None)
 
         if not self._qparams_initialized and quant_args is not None:
+            # TODO: use model.config.num_key_value_heads to find key_size, value_size
+            assert quant_args.strategy == QuantizationStrategy.TENSOR
             _initialize_scale_zero_point(module, "k", quant_args)
             _initialize_scale_zero_point(module, "v", quant_args)
             self._qparams_initialized = True
@@ -82,14 +84,16 @@ class QuantizedKVCache(InternalModule):
 # ----- initialize ----- #
 
 
-def initialize_hooked_kv_cache(module: torch.nn.Module, quantize: bool = False):
+def initialize_hooked_kv_cache(
+    model: PreTrainedModel, module: torch.nn.Module, quantize: bool = False
+):
     if not hasattr(module, KV_CACHE_ATTR):
         module.register_module(KV_CACHE_ATTR, QuantizedKVCache(module))
         module.register_forward_pre_hook(kv_cache_attention_hook, with_kwargs=True)
 
     kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
     if quantize:
-        kv_cache.initialize_qparams_once(module)
+        kv_cache.initialize_qparams_once(model, module)
 
 
 def kv_cache_attention_hook(module: torch.nn.Module, args, kwargs):
