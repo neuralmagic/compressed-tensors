@@ -209,7 +209,9 @@ def _initialize_scale_zero_point(
         expected_shape = 1
 
     # 3. Identify quantization scale and zp dtype
-    scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
+    scale_dtype = (
+        scale_dtype if scale_dtype is not None else next(module.parameters()).dtype
+    )
 
     if is_fp4(quantization_args=quantization_args):
         scale_dtype = zp_dtype = FP8_E4M3_DATA.dtype

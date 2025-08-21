@@ -40,7 +40,7 @@ __all__ = [
     "get_torch_bit_depth",
     "can_quantize",
     "parse_out_kv_cache_args",
-    "KV_CACHE_TARGETS",
+    "ATTN_TARGETS",
     "is_kv_cache_quant_scheme",
     "iter_named_leaf_modules",
     "iter_named_quantizable_modules",
@@ -51,9 +51,8 @@ __all__ = [
     "is_fp4",
 ]
 
-# target the self_attn layer
-# QuantizedKVParameterCache is responsible for obtaining the k_scale and v_scale
-KV_CACHE_TARGETS = ["re:.*self_attn$"]
+# note that this is a "narrow match", see quantization/apply.py
+ATTN_TARGETS = ["re:.*self_attn$"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -410,17 +409,17 @@ def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
     """
     Check whether the QuantizationScheme targets the kv cache.
     It does if all the following criteria are met:
-    - the scheme targets either exactly match the KV_CACHE_TARGETS
-        or the match KV_CACHE_TARGETS regex pattern
+    - the scheme targets either exactly match the ATTN_TARGETS
+        or the match ATTN_TARGETS regex pattern
     - the scheme quantizes output_activations (we want to quantize the
-        outputs from the KV_CACHE_TARGETS, as their correspond to the
+        outputs from the ATTN_TARGETS, as their correspond to the
         keys and values that are to be saved in the cache)
 
     :param scheme: The QuantizationScheme to investigate
     :return: boolean flag
     """
     for target in scheme.targets:
-        if target in KV_CACHE_TARGETS:
+        if target in ATTN_TARGETS:
             return True
 
     return False

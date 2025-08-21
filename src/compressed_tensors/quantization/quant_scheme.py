@@ -44,6 +44,7 @@ class QuantizationScheme(BaseModel):
     :param input_activations: quantization config for layer inputs
     :param output_activations: quantization config for layer outputs
     :param format: CompressionFormat for the layer
+    TODO
     """
 
     targets: List[str]
@@ -51,6 +52,7 @@ class QuantizationScheme(BaseModel):
     input_activations: Optional[QuantizationArgs] = None
     output_activations: Optional[QuantizationArgs] = None
     format: Optional[str] = None
+    kv_cache_only: Optional[bool] = None
 
     @model_validator(mode="after")
     def validate_model_after(model: "QuantizationScheme") -> "QuantizationScheme":

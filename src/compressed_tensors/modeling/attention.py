@@ -17,11 +17,16 @@ from typing import Callable, Optional
 
 import torch
 from compressed_tensors.modeling.kvcache import initialize_hooked_kv_cache
-from compressed_tensors.quantization import QuantizationScheme, forward_quantize
+from compressed_tensors.quantization import (
+    QuantizationArgs,
+    QuantizationScheme,
+    forward_quantize,
+)
 from compressed_tensors.quantization.lifecycle.initialize import (
     _initialize_scale_zero_point,
 )
 from compressed_tensors.utils import getattr_chain
+from compressed_tensors.utils.internal import InternalModule
 from torch.utils.hooks import RemovableHandle
 from transformers import AttentionInterface, PreTrainedModel
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
@@ -34,7 +39,7 @@ IMPL_ATTR = "impl"
 _original_impl = "eager"  # mutable
 
 
-class QuantizedAttentionImpl(torch.nn.Module):
+class QuantizedAttentionImpl(InternalModule):
     def __init__(self, attn_module: torch.nn.Module):
         super().__init__()
         self.attn_module_container = [attn_module]  # avoid circular reference
@@ -71,16 +76,18 @@ class QuantizedAttentionImpl(torch.nn.Module):
         scheme: Optional[QuantizationScheme] = getattr(
             module, "quantization_scheme", None
         )
+        quant_args: Optional[QuantizationArgs] = getattr(
+            scheme, "input_activations", None
+        )
 
-        if not self._qparams_initialized and scheme.input_activations is not None:
-            _initialize_scale_zero_point(module, "q", scheme.input_activations)
+        if (
+            not self._qparams_initialized
+            and quant_args is not None
+            and not scheme.kv_cache_only
+        ):
+            _initialize_scale_zero_point(module, "q", quant_args)
+            print("attn init")
             self._qparams_initialized = True
-
-        if scheme.weights is not None:
-            raise ValueError("")
-
-        if scheme.output_activations is not None:
-            raise NotImplementedError("")
 
 
 # ----- initialize ----- #
@@ -116,17 +123,17 @@ def initialize_hooked_attention(
 # ----- hooks ----- #
 
 
-def register_query_hook(module: torch.nn.Module, func: Callable) -> RemovableHandle:
+def register_query_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandle:
     """
     Registers a forward pre-hook on `module.impl` that replaces the `query` argument
-    with `func(mod, query)` (handles both positional and keyword forms).
+    with `hook(mod, query)` (handles both positional and keyword forms).
     """
     impl = getattr(module, IMPL_ATTR)
 
     def _hook(mod: torch.nn.Module, args, kwargs):
         # Keyword case
         if "query" in kwargs:
-            kwargs["query"] = func(mod, kwargs["query"])
+            kwargs["query"] = hook(mod, kwargs["query"])
             return args, kwargs
 
         # Positional case: find the index of `query` in impl.forward
@@ -140,7 +147,9 @@ def register_query_hook(module: torch.nn.Module, func: Callable) -> RemovableHan
 
         if idx < len(args):
             args = list(args)
-            args[idx] = func(mod, args[idx])
+            ret = hook(module, args[idx])
+            if ret is not None:
+                args[idx] = ret
             return tuple(args), kwargs
 
         # Not present explicitly (maybe defaulted)

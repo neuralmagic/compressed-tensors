@@ -354,6 +354,9 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         else:
             raise ValueError(f"Invalid quantization type {self.type}")
 
+    def is_online(self) -> bool:
+        return self.dynamic is True
+
     @deprecated("QuantizationArgs.observer")
     def get_observer(self) -> str:
         return self.observer

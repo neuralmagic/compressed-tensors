@@ -120,7 +120,7 @@ def match_named_parameters(
 
 
 def match_targets(
-    name: str, module: torch.nn.Module, targets: Iterable[str] | None
+    name: str, module: torch.nn.Module, targets: Optional[Iterable[str]]
 ) -> List[str]:
     """
     Returns the targets that match the given name and module.

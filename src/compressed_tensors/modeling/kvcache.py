@@ -21,6 +21,7 @@ from compressed_tensors.quantization.lifecycle.initialize import (
     _initialize_scale_zero_point,
 )
 from compressed_tensors.utils import getattr_chain
+from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
 from torch.utils.hooks import RemovableHandle
 from transformers import Cache
@@ -32,7 +33,7 @@ __all__ = ["KV_CACHE_ATTR", "QuantizedKVCache"]
 KV_CACHE_ATTR = "kv_cache"
 
 
-class QuantizedKVCache(torch.nn.Module):
+class QuantizedKVCache(InternalModule):
     def __init__(self, attn_module: torch.nn.Module):
         super().__init__()
         self.attn_module_container = [attn_module]  # avoid nn.Module circular reference
@@ -69,20 +70,15 @@ class QuantizedKVCache(torch.nn.Module):
 
     def initialize_qparams_once(self, module: torch.nn.Module):
         assert module is self.attn_module_container[0]
-        scheme: Optional[QuantizationScheme] = getattr(
-            module, "quantization_scheme", None
-        )
+        scheme = getattr(module, "quantization_scheme", None)
+        quant_args = getattr(scheme, "input_activations", None)
 
-        if not self._qparams_initialized and scheme.input_activations is not None:
-            _initialize_scale_zero_point(module, "k", scheme.input_activations)
-            _initialize_scale_zero_point(module, "v", scheme.input_activations)
+        print((type(module), self._qparams_initialized, quant_args))
+        if not self._qparams_initialized and quant_args is not None:
+            _initialize_scale_zero_point(module, "k", quant_args)
+            _initialize_scale_zero_point(module, "v", quant_args)
+            print("kv init")
             self._qparams_initialized = True
-
-        if scheme.weights is not None:
-            raise ValueError("")
-
-        if scheme.output_activations is not None:
-            raise NotImplementedError("")
 
 
 # ----- initialize ----- #
@@ -130,7 +126,41 @@ def register_key_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandl
         # If the position exists in args, replace it.
         if idx < len(args):
             args = list(args)
-            args[idx] = hook(mod, args[idx])
+            ret = hook(module, args[idx])
+            if ret is not None:
+                args[idx] = ret
+            return tuple(args), kwargs
+
+        # Not present positionally and not in kwargs (maybe defaulted) — do nothing.
+        return args, kwargs
+
+    return kv_cache.register_forward_pre_hook(_hook, with_kwargs=True)
+
+
+def register_value_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandle:
+    kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
+
+    def _hook(mod: torch.nn.Module, args, kwargs):
+        # If passed as keyword, this is easy.
+        if "value_states" in kwargs:
+            kwargs["value_states"] = hook(mod, kwargs["value_states"])
+            return args, kwargs
+
+        # Otherwise, find where value_states would be in positional args.
+        sig = inspect.signature(mod.forward)
+        param_names = tuple(sig.parameters.keys())
+        try:
+            idx = param_names.index("value_states")
+        except ValueError:
+            # forward has no value_states parameter; do nothing
+            return args, kwargs
+
+        # If the position exists in args, replace it.
+        if idx < len(args):
+            args = list(args)
+            ret = hook(module, args[idx])
+            if ret is not None:
+                args[idx] = ret
             return tuple(args), kwargs
 
         # Not present positionally and not in kwargs (maybe defaulted) — do nothing.
