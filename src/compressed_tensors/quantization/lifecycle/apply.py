@@ -146,38 +146,39 @@ def apply_quantization_config(
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
-        # mark appropriate layers for quantization by setting their quantization schemes
-        for name, submodule in match_named_modules(
-            model, scheme.targets, config.ignore, warn_on_fail=True
+    # mark appropriate layers for quantization by setting their quantization schemes
+    for name, submodule in match_named_modules(
+        model, target_to_scheme, config.ignore, warn_on_fail=True
+    ):
+        # potentially fix module name to remove FSDP wrapper prefix
+        name = fix_fsdp_module_name(name)
+
+        # mark modules to be quantized by adding
+        # quant scheme to the matching layers
+        scheme = _scheme_from_targets(target_to_scheme, scheme.targets, name)
+        if (
+            run_compressed
+            and config.format != CompressionFormat.dense.value
+            and isinstance(submodule, torch.nn.Linear)
         ):
-            # potentially fix module name to remove FSDP wrapper prefix
-            name = fix_fsdp_module_name(name)
+            from compressed_tensors.linear.compressed_linear import (
+                CompressedLinear,
+            )
 
-            # mark modules to be quantized by adding
-            # quant scheme to the matching layers
-            scheme = _scheme_from_targets(target_to_scheme, scheme.targets, name)
-            if run_compressed:
-                format = config.format
-                if format != CompressionFormat.dense.value:
-                    if isinstance(submodule, torch.nn.Linear):
-                        from compressed_tensors.linear.compressed_linear import (
-                            CompressedLinear,
-                        )
+            compressed_linear = CompressedLinear.from_linear(
+                submodule,
+                quantization_scheme=scheme,
+                quantization_format=config.format,
+            )
+            replace_module(model, name, compressed_linear)
 
-                        compressed_linear = CompressedLinear.from_linear(
-                            submodule,
-                            quantization_scheme=scheme,
-                            quantization_format=format,
-                        )
-                        replace_module(model, name, compressed_linear)
+        # target matched - add layer and scheme to target list
+        submodule.quantization_scheme = scheme
 
-            # target matched - add layer and scheme to target list
-            submodule.quantization_scheme = scheme
+        names_to_scheme[name] = submodule.quantization_scheme
 
-            names_to_scheme[name] = submodule.quantization_scheme
-
-            # apply current quantization status to each targeted submodule
-            apply_quantization_status(submodule, config.quantization_status)
+        # apply current quantization status to each targeted submodule
+        apply_quantization_status(submodule, config.quantization_status)
 
     # TODO warn on ignore not being found, this is useful in debugging
     # if config.ignore is not None and ignored_submodules is not None:
