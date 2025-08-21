@@ -73,11 +73,9 @@ class QuantizedKVCache(InternalModule):
         scheme = getattr(module, "quantization_scheme", None)
         quant_args = getattr(scheme, "input_activations", None)
 
-        print((type(module), self._qparams_initialized, quant_args))
         if not self._qparams_initialized and quant_args is not None:
             _initialize_scale_zero_point(module, "k", quant_args)
             _initialize_scale_zero_point(module, "v", quant_args)
-            print("kv init")
             self._qparams_initialized = True
 
 

@@ -86,7 +86,6 @@ class QuantizedAttentionImpl(InternalModule):
             and not scheme.kv_cache_only
         ):
             _initialize_scale_zero_point(module, "q", quant_args)
-            print("attn init")
             self._qparams_initialized = True
 
 
