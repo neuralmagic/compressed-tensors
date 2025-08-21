@@ -38,7 +38,11 @@ from compressed_tensors.quantization.utils import (
     infer_quantization_status,
     is_kv_cache_quant_scheme,
 )
-from compressed_tensors.utils.helpers import deprecated, replace_module
+from compressed_tensors.utils.helpers import (
+    fix_fsdp_module_name,
+    deprecated,
+    replace_module,
+)
 from compressed_tensors.utils.match import match_named_modules, match_targets
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
@@ -142,36 +146,48 @@ def apply_quantization_config(
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
-    if run_compressed:
-        from compressed_tensors.linear.compressed_linear import CompressedLinear
+        # mark appropriate layers for quantization by setting their quantization schemes
+        for name, submodule in match_named_modules(
+            model, scheme.targets, config.ignore, warn_on_fail=True
+        ):
+            # potentially fix module name to remove FSDP wrapper prefix
+            name = fix_fsdp_module_name(name)
 
-    # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in match_named_modules(
-        model, target_to_scheme, config.ignore, warn_on_fail=True
-    ):
-        # mark modules to be quantized by adding
-        # quant scheme to the matching layers
-        matched_targets = match_targets(name, submodule, target_to_scheme)
-        scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
-        if run_compressed:
-            format = config.format
-            if format != CompressionFormat.dense.value:
-                if isinstance(submodule, torch.nn.Linear):
-                    # TODO: expand to more module types
-                    compressed_linear = CompressedLinear.from_linear(
-                        submodule,
-                        quantization_scheme=scheme,
-                        quantization_format=format,
-                    )
-                    replace_module(model, name, compressed_linear)
+            # mark modules to be quantized by adding
+            # quant scheme to the matching layers
+            scheme = _scheme_from_targets(target_to_scheme, scheme.targets, name)
+            if run_compressed:
+                format = config.format
+                if format != CompressionFormat.dense.value:
+                    if isinstance(submodule, torch.nn.Linear):
+                        from compressed_tensors.linear.compressed_linear import (
+                            CompressedLinear,
+                        )
 
-        # target matched - add layer and scheme to target list
-        submodule.quantization_scheme = scheme
+                        compressed_linear = CompressedLinear.from_linear(
+                            submodule,
+                            quantization_scheme=scheme,
+                            quantization_format=format,
+                        )
+                        replace_module(model, name, compressed_linear)
 
-        names_to_scheme[name] = submodule.quantization_scheme
+            # target matched - add layer and scheme to target list
+            submodule.quantization_scheme = scheme
 
-    # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
+            names_to_scheme[name] = submodule.quantization_scheme
+
+            # apply current quantization status to each targeted submodule
+            apply_quantization_status(submodule, config.quantization_status)
+
+    # TODO warn on ignore not being found, this is useful in debugging
+    # if config.ignore is not None and ignored_submodules is not None:
+    #     if set(config.ignore) - set(ignored_submodules):
+    #         _LOGGER.warning(
+    #             "Some layers that were to be ignored were "
+    #             "not found in the model: "
+    #             f"{set(config.ignore) - set(ignored_submodules)}"
+    #         )
+
     return names_to_scheme
 
 
