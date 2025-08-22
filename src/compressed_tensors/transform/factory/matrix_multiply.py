@@ -21,9 +21,8 @@ from compressed_tensors.transform.utils.matrix import (
     apply_transform_weight,
     get_transform_size,
 )
-from compressed_tensors.utils import get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
-from torch import Tensor, device, dtype
+from torch import Tensor
 from torch.nn import Module, Parameter
 
 
@@ -41,6 +40,7 @@ class RandomMatrixFactory(TransformFactory):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
         self.inverses = ParameterizedDefaultDict(self._create_inverse)
+        self._shared_tensors_device = None
 
     def create_transform(self, module: Module, args: TransformArgs):
         """
@@ -52,19 +52,20 @@ class RandomMatrixFactory(TransformFactory):
         """
         assert hasattr(module, "weight")
         size = get_transform_size(module, args.location, self.scheme.head_dim)
-        dtype = self.scheme.precision
-        device = get_offloaded_device(module)
 
-        weight = self.weights[size, dtype, device]
+        weight = self.weights.get(size)
         if args.inverse:
             weight = self.inverses[weight]
 
         return RandomMatrixTransform(weight, self.scheme, args, type(module))
 
-    def _create_weight(self, size: int, dtype: dtype, device: device) -> Parameter:
-        # TODO: verify that weight is invertible (has non-zero determinant)
+    def _create_weight(self, size: int) -> Parameter:
+        # TODO: construct such that weight is invertible (has non-zero determinant)
         data = torch.rand(
-            (size, size), generator=self.generator, dtype=dtype, device=device
+            (size, size),
+            generator=self.generator,
+            dtype=self.scheme.precision,
+            device=torch.device("cpu"),
         )
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
@@ -90,8 +91,9 @@ class RandomMatrixTransform(TransformBase):
         self._precision = scheme.precision if args.is_online() else torch.float64
 
     def forward(self, value: Tensor) -> Parameter:
+        # onloading is done by accelerate if parent module is offloaded
         return apply_transform_weight(
-            self.weight.to(self._precision),
+            self.weight.to(dtype=self._precision, device=value.device),
             value.to(self._precision),
             self.args.location,
             self.module_type,
@@ -100,7 +102,7 @@ class RandomMatrixTransform(TransformBase):
     def right_inverse(self, value: Tensor) -> Tensor:
         inverse = high_precision_invert(self.weight)
         return apply_transform_weight(
-            inverse.to(self._precision),
+            inverse.to(dtype=self._precision, device=value.device),
             value.to(self._precision),
             self.args.location,
             self.module_type,
