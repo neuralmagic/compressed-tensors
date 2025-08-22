@@ -14,7 +14,7 @@
 
 from compressed_tensors.transform import HadamardFactory, TransformFactory
 from compressed_tensors.transform.utils.hadamard import random_hadamard_matrix
-from torch import device, dtype
+from torch import device
 from torch.nn import Parameter
 
 
@@ -31,11 +31,10 @@ class RandomHadamardFactory(HadamardFactory):
     def _create_weight(
         self,
         size: int,
-        device: device,
         construct_device: device,
     ) -> Parameter:
         # construct on execution device, cache on offload device
         precision = self.scheme.precision
         data = random_hadamard_matrix(size, precision, construct_device, self.generator)
-        data = data.to(device=device)
+        data = data.to(device="cpu")
         return Parameter(data, requires_grad=self.scheme.requires_grad)

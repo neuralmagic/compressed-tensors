@@ -21,9 +21,8 @@ from compressed_tensors.transform.utils.matrix import (
     apply_transform_weight,
     get_transform_size,
 )
-from compressed_tensors.utils import get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
-from torch import Tensor, device, dtype
+from torch import Tensor
 from torch.nn import Module, Parameter
 
 
@@ -53,34 +52,20 @@ class RandomMatrixFactory(TransformFactory):
         """
         assert hasattr(module, "weight")
         size = get_transform_size(module, args.location, self.scheme.head_dim)
-        device = get_offloaded_device(module)
 
-        factory_kwargs = {"device": device}
-        weight = self.weights.get(size, factory_kwargs=factory_kwargs)
+        weight = self.weights.get(size)
         if args.inverse:
             weight = self.inverses[weight]
 
         return RandomMatrixTransform(weight, self.scheme, args, type(module))
 
-    def _create_weight(self, size: int, device: device) -> Parameter:
-        # check that shared tensors device is consistent
-        if self._shared_tensors_device is None:
-            self._shared_tensors_device = device
-
-        if device != self._shared_tensors_device:
-            raise NotImplementedError(
-                "Creating multi-gpu transform weights are not supported as of now due "
-                "to the limitations of shared tensors across GPUs"
-                # in the future, tensors can be shared within GPUs,
-                # and can be all-reduced during updates and compression
-            )
-
+    def _create_weight(self, size: int) -> Parameter:
         # TODO: construct such that weight is invertible (has non-zero determinant)
         data = torch.rand(
             (size, size),
             generator=self.generator,
             dtype=self.scheme.precision,
-            device=device,
+            device=torch.device("cpu"),
         )
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
@@ -106,8 +91,9 @@ class RandomMatrixTransform(TransformBase):
         self._precision = scheme.precision if args.is_online() else torch.float64
 
     def forward(self, value: Tensor) -> Parameter:
+        # onloading is done by accelerate if parent module is offloaded
         return apply_transform_weight(
-            self.weight.to(self._precision),
+            self.weight.to(dtype=self._precision, device=value.device),
             value.to(self._precision),
             self.args.location,
             self.module_type,
@@ -116,7 +102,7 @@ class RandomMatrixTransform(TransformBase):
     def right_inverse(self, value: Tensor) -> Tensor:
         inverse = high_precision_invert(self.weight)
         return apply_transform_weight(
-            inverse.to(self._precision),
+            inverse.to(dtype=self._precision, device=value.device),
             value.to(self._precision),
             self.args.location,
             self.module_type,
