@@ -205,8 +205,7 @@ def _process_quantization(
     q_min, q_max = calculate_range(args, x.device)
     group_size = args.group_size
 
-    # blockwise FP8: quantize per 2D block, supports block_structure for static block
-    # quantization
+    # blockwise FP8: quantize per 2D block, supports block_structure for static block quant
     if args.strategy == QuantizationStrategy.BLOCK:
         original_shape = x.shape
         rows, cols = x.shape[-2], x.shape[-1]
@@ -215,8 +214,8 @@ def _process_quantization(
         # Ensure exact division (tensor dimensions must be divisible by block size)
         if rows % block_height != 0:
             raise ValueError(
-                f"Tensor height {rows} is not divisible by block_height {block_height}."
-                f" Block quantization requires exact division."
+                f"Tensor height {rows} is not divisible by block_height {block_height}. "
+                f"Block quantization requires exact division."
             )
         if cols % block_width != 0:
             raise ValueError(
@@ -259,14 +258,22 @@ def _process_quantization(
             )
         # restore original shape
         output = x_blocks.transpose(1, 2).reshape(original_shape)
+        
+        # Ensure output has correct dtype for consistency with other strategies
+        output_dtype = dtype if dtype is not None else x.dtype
+        output = output.to(output_dtype)
     elif args.strategy in (
         QuantizationStrategy.GROUP,
         QuantizationStrategy.TENSOR_GROUP,
     ):
+        original_shape = x.shape
+        n_dims = x.shape
+        if len(n_dims) > 2:
+            x = x.squeeze(0)
 
         output_dtype = dtype if dtype is not None else x.dtype
         output = torch.zeros_like(x).to(output_dtype)
-        columns = output.shape[-1]
+        columns = output.shape[1]
 
         # TODO: make validation step for inputs
 
@@ -296,12 +303,14 @@ def _process_quantization(
             perm = torch.argsort(g_idx)
             x = safe_permute(x, perm, dim=1)
 
-        # Maintain all dimensions except the last dim, which is divided by group_size
-        reshaped_dims = (
-            ceil(x.shape[-1] / group_size),
-            group_size,
+        x = torch.reshape(
+            x,
+            (
+                x.shape[0],
+                ceil(x.shape[1] / group_size),
+                group_size,
+            ),
         )
-        x = x.unflatten(-1, reshaped_dims)
 
         if do_quantize:
             output = _quantize(
@@ -324,7 +333,9 @@ def _process_quantization(
                 global_scale=global_scale,
             )
 
-        output = output.flatten(start_dim=-2)
+        # restore original shape
+        output = torch.reshape(output, original_shape)
+
         output = output.to(output_dtype)
 
         if not is_column_order:
@@ -376,6 +387,34 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
             # prehook should calibrate activations before forward call
             input_ = forward_quantize(module, input_, "input", scheme.input_activations)
 
+        # For compressed models with FP8 weights, dequantize for computation
+        original_weight = None
+        if (
+            module.quantization_status == QuantizationStatus.COMPRESSED
+            and hasattr(module, 'weight')
+            and module.weight.dtype == torch.float8_e4m3fn
+        ):
+            # Dequantize FP8 weights back to original precision for computation
+            # This properly restores the quantized values
+            original_weight = module.weight.data.clone()
+            weight_scale = getattr(module, "weight_scale", None)
+            weight_zero_point = getattr(module, "weight_zero_point", None)
+            
+            if weight_scale is not None:
+                # Dequantize the weights properly
+                module.weight.data = dequantize(
+                    x_q=module.weight.data,
+                    scale=weight_scale,
+                    zero_point=weight_zero_point,
+                    args=scheme.weights,
+                    dtype=torch.bfloat16,  # Use bfloat16 for computation
+                )
+            else:
+                # Fallback: just cast to bfloat16 if no scale available
+                module.weight.data = module.weight.to(torch.bfloat16)
+            
+            input_ = input_.to(torch.bfloat16)
+
         if scheme.weights is not None and not compressed:
             # calibrate and (fake) quantize weights when applicable
             unquantized_weight = self.weight.data.clone()
@@ -387,6 +426,10 @@ def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
         output = forward_func_orig.__get__(module, module.__class__)(
             input_, *args[1:], **kwargs
         )
+        
+        # Restore original weight if we modified it
+        if original_weight is not None:
+            module.weight.data = original_weight
 
         # restore back to unquantized_value
         if scheme.weights is not None and not compressed:

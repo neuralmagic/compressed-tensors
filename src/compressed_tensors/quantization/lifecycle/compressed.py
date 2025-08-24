@@ -59,13 +59,17 @@ def compress_quantized_weights(module: Module):
         return
 
     module.weight.requires_grad = False  # cannot use auto grad after compression
+    
+    # Use the correct dtype based on the quantization scheme
+    compression_dtype = scheme.weights.pytorch_dtype()
+    
     module.weight.data = quantize(
         x=weight,
         scale=scale,
         zero_point=zero_point,
         g_idx=g_idx,
         args=scheme.weights,
-        dtype=torch.int8,
+        dtype=compression_dtype,
     )
 
     module.quantization_status = QuantizationStatus.COMPRESSED
