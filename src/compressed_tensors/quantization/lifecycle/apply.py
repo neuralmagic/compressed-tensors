@@ -13,11 +13,8 @@
 # limitations under the License.
 
 import logging
-from collections import OrderedDict
 from copy import deepcopy
-from typing import Any, Dict, Iterable, List, Optional
-from typing import OrderedDict as OrderedDictType
-from typing import Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
@@ -28,7 +25,6 @@ from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
     is_attention_module,
 )
-from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import (
     QuantizationConfig,
     QuantizationStatus,
@@ -37,7 +33,6 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     ATTN_TARGETS,
     infer_quantization_status,
-    is_kv_cache_quant_scheme,
 )
 from compressed_tensors.utils import (
     deprecated,
@@ -124,7 +119,7 @@ def apply_quantization_config(
     model: PreTrainedModel,
     config: Union[QuantizationConfig, None],
     run_compressed: bool = False,
-) -> Dict[str, QuantizationScheme]:
+):
     """
     Initializes the model for quantization in-place based on the given config.
     Optionally coverts quantizable modules to compressed_linear modules
@@ -134,32 +129,27 @@ def apply_quantization_config(
     :param run_compressed: Whether the model will be run in compressed mode or
         decompressed fully on load
     """
-    # Workaround for when HF Quantizer passes None, see PR #180
-    if config is None:
-        return dict()
+    from compressed_tensors.linear.compressed_linear import CompressedLinear
+    from compressed_tensors.modeling.attention import initialize_hooked_attention
+
     config = deepcopy(config)
+    if config is None:  # see PR #180
+        return dict()
 
-    # build mapping of targets to schemes for easier matching
-    # use ordered dict to preserve target ordering in config
-    target_to_scheme = {
-        target: scheme
-        for scheme in config.config_groups.values()
-        for target in scheme.targets
-    }
-    names_to_scheme = dict()
-
-    # preprocessing for kv cache, TODO: fix
+    # preprocess to support kv cache scheme
     config = process_quantization_config(config)
-
-    if run_compressed:
-        from compressed_tensors.linear.compressed_linear import CompressedLinear
 
     # mark appropriate layers for quantization by setting their quantization schemes
     for scheme in config.config_groups.values():
         for name, submodule in match_named_modules(
             model, scheme.targets, config.ignore or [], warn_on_fail=True
         ):
-            if isinstance(submodule, (torch.nn.Linear, torch.nn.Embedding)):
+            # attach scheme to module (with merging)
+            attach_scheme(submodule, scheme)
+
+            # replace with run compressed if applicable
+            # FUTURE: move this to model compressor
+            if isinstance(submodule, torch.nn.Linear):
                 if run_compressed:
                     format = config.format
                     if format != CompressionFormat.dense.value:
@@ -171,43 +161,26 @@ def apply_quantization_config(
                         )
                         replace_module(model, name, compressed_linear)
 
-                # attach scheme to module for later steps
-                _scheme = attach_scheme(submodule, scheme)
-
-            elif is_attention_module(submodule) and is_narrow_match(
+            # replace attention implementation and kvcache with hookable modules
+            if is_attention_module(submodule) and is_narrow_match(
                 model, scheme.targets, name
             ):
-                from compressed_tensors.modeling.attention import (
-                    initialize_hooked_attention,
-                )
-
-                # silently throw away weight and output quantization for attention
-                _scheme = QuantizationScheme(
-                    targets=scheme.targets,
-                    input_activations=scheme.input_activations,
-                    format=scheme.format,
-                    kv_cache_only=scheme.kv_cache_only,
-                )
-
-                # attach scheme to module for later steps
-                _scheme = attach_scheme(submodule, _scheme)
-
-                # unlike linear, do initialization here
+                # unlike linear, do qparam initialization here
                 initialize_hooked_attention(model, submodule, quantize=True)
 
-            else:
-                continue
-
-            names_to_scheme[name] = _scheme
-
-    # apply current quantization status across all targeted layers
+    # apply current quantization status across all targeted linear/embedding layers
     apply_quantization_status(model, config.quantization_status)
-    return names_to_scheme
+
+    # attach for serialization
+    # do merginging using from_pretrained
+    if existing_config := getattr(model, "quantization_config", None):
+        config = config.merge(existing_config)
+    setattr(model, "quantization_config", config)
 
 
 def attach_scheme(module: Module, scheme: QuantizationScheme) -> QuantizationScheme:
     if existing_scheme := getattr(module, "quantization_scheme", None):
-        scheme = merge_schemes(existing_scheme, scheme)
+        scheme = scheme.merge(existing_scheme)
 
     setattr(module, "quantization_scheme", scheme)
     return scheme
@@ -343,38 +316,3 @@ def _load_quant_args_from_mapping(
                 state_dict_zp = f.get_tensor(f"{module_name}.{zp_name}")
 
         update_parameter_data(module, state_dict_zp, zp_name)
-
-
-def merge_schemes(
-    scheme_a: QuantizationScheme, scheme_b: QuantizationScheme
-) -> QuantizationScheme:
-    def merge_field(field_name: str, value_a: Any, value_b: Any) -> Any:
-        if field_name == "targets":
-            return value_a + value_b
-
-        if field_name == "kv_cache_only":
-            # nones defer to other value
-            if value_a is None:
-                return value_b
-            if value_b is None:
-                return value_a
-
-            # kv_cache_only=True overrides
-            return not ((not value_a) or (not value_b))
-
-        raise ValueError(
-            "The following fields have overlapping targets and conflicting values for"
-            f"{field_name}. Please modify your config to resolve this ambiguity.\n"
-            f"{scheme_a}\n"
-            f"{scheme_b}"
-        )
-
-    dict_a = scheme_a.model_dump()
-    dict_b = scheme_b.model_dump()
-
-    assert dict_a.keys() == dict_b.keys()
-    merged_dump = {
-        key: merge_field(key, dict_a[key], dict_b[key]) for key in dict_a.keys()
-    }
-
-    return QuantizationScheme.model_validate(merged_dump)
