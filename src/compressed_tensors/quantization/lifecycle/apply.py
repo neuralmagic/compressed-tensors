@@ -142,9 +142,6 @@ def apply_quantization_config(
         for target in scheme.targets:
             target_to_scheme[target] = scheme
 
-    if run_compressed:
-        from compressed_tensors.linear.compressed_linear import CompressedLinear
-
     # mark appropriate layers for quantization by setting their quantization schemes
     for name, submodule in match_named_modules(
         model, target_to_scheme, config.ignore, warn_on_fail=True
@@ -153,25 +150,28 @@ def apply_quantization_config(
         # quant scheme to the matching layers
         matched_targets = match_targets(name, submodule, target_to_scheme)
         scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
-        if run_compressed:
-            format = config.format
-            if format != CompressionFormat.dense.value:
-                if isinstance(submodule, torch.nn.Linear):
-                    # TODO: expand to more module types
-                    compressed_linear = CompressedLinear.from_linear(
-                        submodule,
-                        quantization_scheme=scheme,
-                        quantization_format=format,
-                    )
-                    replace_module(model, name, compressed_linear)
+        if (
+            run_compressed
+            and config.format != CompressionFormat.dense.value
+            and isinstance(submodule, torch.nn.Linear)
+        ):
+            from compressed_tensors.linear.compressed_linear import CompressedLinear
+
+            compressed_linear = CompressedLinear.from_linear(
+                submodule,
+                quantization_scheme=scheme,
+                quantization_format=config.format,
+            )
+            replace_module(model, name, compressed_linear)
 
         # target matched - add layer and scheme to target list
         submodule.quantization_scheme = scheme
 
         names_to_scheme[name] = submodule.quantization_scheme
 
-    # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
+        # apply current quantization status to each targeted submodule
+        apply_quantization_status(submodule, config.quantization_status)
+
     return names_to_scheme
 
 
