@@ -165,7 +165,7 @@ def apply_quantization_config(
             if is_attention_module(submodule) and is_narrow_match(
                 model, scheme.targets, name
             ):
-                # unlike linear, do qparam initialization here
+                # unlike linear, do qparam initialization (idempotent to reapplication)
                 initialize_hooked_attention(model, submodule, quantize=True)
 
     # apply current quantization status across all targeted linear/embedding layers
