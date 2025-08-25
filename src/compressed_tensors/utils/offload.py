@@ -127,11 +127,17 @@ def get_offloaded_device(module: torch.nn.Module) -> torch.device:
     :param module: module to check
     :return: device module is offloaded to onto after forward pass
     """
-    if has_offloaded_params(module):
-        first_key = list(module._hf_hook.weights_map.keys())[0]
-        prefix_dataset = module._hf_hook.weights_map.dataset
-        return prefix_dataset[first_key].device
-    return next(module.parameters()).device
+    for submodule in module.modules():
+        name, param = next(submodule.named_parameters(recurse=False), (None, None))
+        if has_offloaded_params(submodule) and name is not None:
+            return cast_to_device(submodule._hf_hook.weights_map[name].device)
+
+        if param is not None:
+            assert param.device != torch.device("meta")
+            return param.device
+
+    warnings.warn(f"Unable to get offload device of {module}, falling back to CPU")
+    return torch.device("cpu")
 
 
 @check_accelerate(fallback=None)

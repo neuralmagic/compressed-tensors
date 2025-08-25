@@ -53,7 +53,14 @@ class RandomMatrixFactory(TransformFactory):
         assert hasattr(module, "weight")
         size = get_transform_size(module, args.location, self.scheme.head_dim)
         dtype = self.scheme.precision
-        device = get_offloaded_device(module)
+        exec_device = get_execution_device(module)
+
+        # if the parent is offloaded, then weight will be placed in the weights_map
+        # if the parent is not offloaded, then the weight will stay on the exec device
+        if has_offloaded_params(module):
+            device = get_offloaded_device(module)
+        else:
+            device = exec_device
 
         weight = self.weights[size, dtype, device]
         if args.inverse:

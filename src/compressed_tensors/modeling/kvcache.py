@@ -16,12 +16,14 @@ import inspect
 from typing import Callable, Optional, Tuple
 
 import torch
+import transformers
 from compressed_tensors.quantization import QuantizationStrategy, forward_quantize
 from compressed_tensors.quantization.lifecycle.initialize import (
     _initialize_scale_zero_point,
 )
 from compressed_tensors.utils import getattr_chain
 from compressed_tensors.utils.internal import InternalModule
+from packaging import version
 from torch import Tensor
 from torch.utils.hooks import RemovableHandle
 from transformers import Cache, PreTrainedModel
@@ -37,7 +39,7 @@ class QuantizedKVCache(InternalModule):
     def __init__(self, attn_module: torch.nn.Module):
         super().__init__()
         self.attn_module_container = [attn_module]  # avoid nn.Module circular reference
-        self.past_key_value: Optional[Cache] = None
+        self.past_key_values: Optional[Cache] = None
         self._qparams_initialized = False
 
     def update(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
@@ -60,12 +62,12 @@ class QuantizedKVCache(InternalModule):
             value_states = forward_quantize(module, value_states, "v", quant_args)
 
         # original cache
-        if self.past_key_value is not None:
-            ret = self.past_key_value.update(key_states, value_states, *args, **kwargs)
+        if self.past_key_values is not None:
+            ret = self.past_key_values.update(key_states, value_states, *args, **kwargs)
         else:
             ret = (key_states, value_states)
 
-        self.past_key_value = None
+        self.past_key_values = None
         return ret
 
     def initialize_qparams_once(self, model: PreTrainedModel, module: torch.nn.Module):
@@ -98,8 +100,13 @@ def initialize_hooked_kv_cache(
 
 def kv_cache_attention_hook(module: torch.nn.Module, args, kwargs):
     kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
-    kv_cache.past_key_value = kwargs.get("past_key_value", None)
-    kwargs["past_key_value"] = kv_cache
+    _past_kv_name = (
+        "past_key_value"
+        if version.parse(transformers.__version__) <= version.parse("4.55.4")
+        else "past_key_values"  # transformers#39956
+    )
+    kv_cache.past_key_values = kwargs.get(_past_kv_name, None)
+    kwargs[_past_kv_name] = kv_cache
 
     return args, kwargs
 

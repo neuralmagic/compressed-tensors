@@ -125,6 +125,7 @@ class TransformFactory(RegistryMixin, ABC):
         transform_name = f"{self.name}_{args.location}"
         transform = self.create_transform(module, args)
         self.transforms.append(transform)
+
         register_offload_module(module, transform_name, transform)
 
         # register input transformation hook
