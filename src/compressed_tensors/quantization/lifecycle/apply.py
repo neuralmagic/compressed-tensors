@@ -173,11 +173,8 @@ def apply_quantization_config(
     # apply current quantization status across all targeted linear/embedding layers
     apply_quantization_status(model, config.quantization_status)
 
-    # attach for serialization
-    # do merginging using from_pretrained
-    if existing_config := getattr(model, "quantization_config", None):
-        config = config.merge(existing_config)
-    setattr(model, "quantization_config", config)
+    # attach config for serialization
+    attach_config(model, config)
 
 
 def attach_scheme(module: Module, scheme: QuantizationScheme) -> QuantizationScheme:
@@ -186,6 +183,12 @@ def attach_scheme(module: Module, scheme: QuantizationScheme) -> QuantizationSch
 
     setattr(module, "quantization_scheme", scheme)
     return scheme
+
+
+def attach_config(model: PreTrainedModel, config: QuantizationConfig):
+    if existing_config := getattr(model, "quantization_config", None):
+        config = config.merge(existing_config)
+    setattr(model, "quantization_config", config)
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:

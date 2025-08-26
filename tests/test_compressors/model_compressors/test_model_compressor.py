@@ -399,7 +399,8 @@ def _get_combined_config(s_config, q_config):
 )
 def test_compress_model(model_stub, q_format, s_config, tmpdir):
     model = AutoModelForCausalLM.from_pretrained(model_stub, torch_dtype=torch.float32)
-    compressor = ModelCompressor.from_pretrained_model(model, s_config, [q_format])
+    qformats = None if q_format is None else [q_format]  # FUTURE: remove nullability
+    compressor = ModelCompressor.from_pretrained_model(model, s_config, qformats)
 
     # compress model by eagerly compressing state dict
     true_compressed = dict(compressor.compress(model))
@@ -446,8 +447,9 @@ def test_compress_model_meta(model_stub, q_format, s_config):
     cpu_model = AutoModelForCausalLM.from_pretrained(
         model_stub, torch_dtype=torch.float32
     )
+    qformats = None if q_format is None else [q_format]  # FUTURE: remove nullability
     reference_compressor = ModelCompressor.from_pretrained_model(
-        cpu_model, s_config, [q_format]
+        cpu_model, s_config, qformats
     )
     # Only stores dtype because meta model does not store values
     expected = {k: v.dtype for k, v in reference_compressor.compress(cpu_model).items()}
@@ -463,7 +465,7 @@ def test_compress_model_meta(model_stub, q_format, s_config):
             module.to_empty(device="meta")
 
     # Compress in-place on meta model
-    compressor = ModelCompressor.from_pretrained_model(meta_model, s_config, [q_format])
+    compressor = ModelCompressor.from_pretrained_model(meta_model, s_config, qformats)
     compressor.compress_model(meta_model)
 
     # Compare keys and dtypes

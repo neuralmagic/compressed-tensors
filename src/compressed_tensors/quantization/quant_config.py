@@ -35,6 +35,7 @@ __all__ = [
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
     "DEFAULT_QUANTIZATION_METHOD",
+    "DEFAULT_QUANTIZATION_FORMAT",
 ]
 
 
@@ -60,8 +61,6 @@ class QuantizationStatus(str, Enum):
     def __ge__(self, other):
         if other is None:
             return True
-        if isinstance(other, str):
-            other = self.__class__(other)
         if not isinstance(other, self.__class__):
             raise NotImplementedError
         return LIFECYCLE_ORDER.index(self) >= LIFECYCLE_ORDER.index(other)
@@ -69,8 +68,6 @@ class QuantizationStatus(str, Enum):
     def __gt__(self, other):
         if other is None:
             return True
-        if isinstance(other, str):
-            other = self.__class__(other)
         if not isinstance(other, self.__class__):
             raise NotImplementedError
         return LIFECYCLE_ORDER.index(self) > LIFECYCLE_ORDER.index(other)
@@ -78,8 +75,6 @@ class QuantizationStatus(str, Enum):
     def __lt__(self, other):
         if other is None:
             return False
-        if isinstance(other, str):
-            other = self.__class__(other)
         if not isinstance(other, self.__class__):
             raise NotImplementedError
         return LIFECYCLE_ORDER.index(self) < LIFECYCLE_ORDER.index(other)
@@ -87,8 +82,6 @@ class QuantizationStatus(str, Enum):
     def __le__(self, other):
         if other is None:
             return False
-        if isinstance(other, str):
-            other = self.__class__(other)
         if not isinstance(other, self.__class__):
             raise NotImplementedError
         return LIFECYCLE_ORDER.index(self) <= LIFECYCLE_ORDER.index(other)
@@ -102,6 +95,7 @@ LIFECYCLE_ORDER = [
 ]
 
 DEFAULT_QUANTIZATION_METHOD = "compressed-tensors"
+DEFAULT_QUANTIZATION_FORMAT = "fakequant"  # TODO: remove
 
 
 class QuantizationConfig(BaseModel):
@@ -137,7 +131,7 @@ class QuantizationConfig(BaseModel):
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
     quant_method: str = DEFAULT_QUANTIZATION_METHOD
     kv_cache_scheme: Optional[QuantizationArgs] = None
-    format: str = CompressionFormat.dense.value
+    format: str = DEFAULT_QUANTIZATION_FORMAT
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
@@ -158,27 +152,6 @@ class QuantizationConfig(BaseModel):
                 targets=targets_or_scheme,
             )
 
-    @field_validator("format", mode="before")
-    def validate_format(cls, value: Any) -> str:
-        if value is None:
-            return CompressionFormat.dense.value
-
-        if isinstance(value, list):
-            if len(value) == 0:
-                return CompressionFormat.dense.value
-
-            if len(value) == 1:
-                assert isinstance(value[0], str)
-                return CompressionFormat(value[0]).value
-
-            else:
-                return CompressionFormat.mixed_precision.value
-
-        if isinstance(value, str):
-            return CompressionFormat(value).value
-
-        return str(value)
-
     def to_dict(self):
         # for compatibility with HFQuantizer
         return self.model_dump()
@@ -186,7 +159,7 @@ class QuantizationConfig(BaseModel):
     def merge(self, other: "QuantizationConfig") -> "QuantizationConfig":
         def merge_field(field_name: str, value_a: Any, value_b: Any) -> Any:
             if field_name == "config_groups":
-                return value_a + value_b
+                return value_a | value_b
 
             if field_name == "ignore":
                 if value_a is not None and value_b is None:
@@ -235,7 +208,15 @@ class QuantizationConfig(BaseModel):
         config = getattr(model, "quantization_config", default_config)
 
         # silently override format
-        config.format = cls.validate_format(format)
+        if isinstance(format, list):
+            format = (
+                CompressionFormat.mixed_precision.value
+                if len(format) > 1
+                else format[0]
+            )
+        if format is None:
+            format = CompressionFormat.dense.value
+        config.format = format
         return config
 
     def requires_calibration_data(self):

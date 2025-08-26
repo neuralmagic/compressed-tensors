@@ -133,7 +133,6 @@ def get_offloaded_device(module: torch.nn.Module) -> torch.device:
             return cast_to_device(submodule._hf_hook.weights_map[name].device)
 
         if param is not None:
-            assert param.device != torch.device("meta")
             return param.device
 
     warnings.warn(f"Unable to get offload device of {module}, falling back to CPU")
