@@ -24,7 +24,7 @@ from compressed_tensors.transform.utils.matrix import (
 )
 from compressed_tensors.utils import get_execution_device, get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
-from torch import Tensor, device, dtype
+from torch import Tensor, device
 from torch.nn import Module, Parameter
 
 

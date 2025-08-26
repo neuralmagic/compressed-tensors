@@ -41,7 +41,6 @@ class RandomMatrixFactory(TransformFactory):
         super().__init__(name, scheme, seed)
         self.weights = ParameterizedDefaultDict(self._create_weight)
         self.inverses = ParameterizedDefaultDict(self._create_inverse)
-        self._shared_tensors_device = None
 
     def create_transform(self, module: Module, args: TransformArgs):
         """
