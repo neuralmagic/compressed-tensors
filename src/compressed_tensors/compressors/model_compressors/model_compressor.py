@@ -264,23 +264,18 @@ class ModelCompressor:
 
         return quantization_config
 
-    def _fetch_unique_quantization_formats(self) -> List[str]:
+    def _fetch_unique_quantization_formats(self) -> List[Optional[str]]:
         """
         Get all unique compression formats present in a model.
         :return: list of quantization formats
         """
-        quantization_formats = []
-        for _, scheme in self.quantization_config.config_groups.items():
-            if scheme.format is not None and scheme.format not in quantization_formats:
-                quantization_formats.append(scheme.format)
+        quantization_formats = set(
+            scheme.format for scheme in self.quantization_config.config_groups.values()
+        )
+        quantization_formats.add(self.quantization_config.format)
 
-        if (
-            len(quantization_formats) == 0
-            and self.quantization_config.format
-            != CompressionFormat.mixed_precision.value
-        ):
-            quantization_formats.append(self.quantization_config.format)
-        return quantization_formats
+        quantization_formats -= {CompressionFormat.mixed_precision.value, None}
+        return list(quantization_formats)
 
     def __init__(
         self,
@@ -314,6 +309,9 @@ class ModelCompressor:
 
             self.quantization_compressor = {}
             for format in self.compression_formats:
+                if format is None:
+                    format = CompressionFormat.dense.value
+
                 self.quantization_compressor[
                     format
                 ] = BaseCompressor.load_from_registry(
@@ -814,6 +812,8 @@ class ModelCompressor:
 
             params_device = next(module.parameters()).device
             device = "cpu" if has_offloaded_params(module) else params_device
+            if not hasattr(module, param_name):
+                breakpoint()
             delattr(module, param_name)
             requires_grad = data.dtype in (torch.float16, torch.float32, torch.bfloat16)
             param = torch.nn.Parameter(data.to(device), requires_grad=requires_grad)

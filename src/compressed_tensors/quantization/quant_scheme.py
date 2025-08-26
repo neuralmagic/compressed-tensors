@@ -14,7 +14,7 @@
 
 import warnings
 from copy import deepcopy
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_args import (
@@ -23,7 +23,7 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationStrategy,
     QuantizationType,
 )
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 __all__ = [
@@ -50,6 +50,8 @@ class QuantizationScheme(BaseModel):
     weights: Optional[QuantizationArgs] = None
     input_activations: Optional[QuantizationArgs] = None
     output_activations: Optional[QuantizationArgs] = None
+
+    # set exclusively by infer_and_set_per_module_quantization_format
     format: Optional[str] = None
 
     @model_validator(mode="after")
@@ -90,6 +92,51 @@ class QuantizationScheme(BaseModel):
             )
 
         return model
+
+    @field_validator("format", mode="before")
+    def validate_format(cls, value: Any) -> str:
+        if value is None:
+            return None
+
+        return CompressionFormat(value).value
+
+    def merge(self, other: "QuantizationScheme") -> "QuantizationScheme":
+        def merge_field(field_name: str, value_a: Any, value_b: Any) -> Any:
+            if field_name == "targets":
+                return list(set(value_a + value_b))
+
+            if field_name == "kv_cache_only":
+                # nones defer to other value
+                if value_a is None:
+                    return value_b
+                if value_b is None:
+                    return value_a
+
+                # kv_cache_only=True overrides
+                return not ((not value_a) or (not value_b))
+
+            if value_a is not None and value_b is None:
+                return value_a
+
+            if value_a is None and value_b is not None:
+                return value_b
+
+            if value_a == value_b:
+                return value_a
+
+            raise ValueError(
+                "The following fields have overlapping targets and conflicting values "
+                f"for `{field_name}`. Please modify your config to resolve this "
+                f"ambiguity.\n{self}\n{other}"
+            )
+
+        dict_a = self.model_dump()
+        dict_b = other.model_dump()
+
+        assert dict_a.keys() == dict_b.keys()
+        return self.model_validate(
+            {key: merge_field(key, dict_a[key], dict_b[key]) for key in dict_a.keys()}
+        )
 
     model_config = ConfigDict(extra="forbid")
 

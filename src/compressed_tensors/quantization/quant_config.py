@@ -21,12 +21,7 @@ from compressed_tensors.quantization.quant_scheme import (
     QuantizationScheme,
     preset_name_to_scheme,
 )
-from compressed_tensors.quantization.utils import (
-    is_module_quantized,
-    module_type,
-    parse_out_kv_cache_args,
-)
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from torch.nn import Module
 
 
@@ -35,7 +30,6 @@ __all__ = [
     "QuantizationConfig",
     "LIFECYCLE_ORDER",
     "DEFAULT_QUANTIZATION_METHOD",
-    "DEFAULT_QUANTIZATION_FORMAT",
 ]
 
 
@@ -102,7 +96,6 @@ LIFECYCLE_ORDER = [
 ]
 
 DEFAULT_QUANTIZATION_METHOD = "compressed-tensors"
-DEFAULT_QUANTIZATION_FORMAT = "fakequant"
 
 
 class QuantizationConfig(BaseModel):
@@ -138,7 +131,7 @@ class QuantizationConfig(BaseModel):
     config_groups: Dict[str, Union[QuantizationScheme, List[str]]]
     quant_method: str = DEFAULT_QUANTIZATION_METHOD
     kv_cache_scheme: Optional[QuantizationArgs] = None
-    format: str = DEFAULT_QUANTIZATION_FORMAT
+    format: str = CompressionFormat.dense.value
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
@@ -159,96 +152,74 @@ class QuantizationConfig(BaseModel):
                 targets=targets_or_scheme,
             )
 
-    def to_dict(self):
-        # for compatibility with HFQuantizer
-        return self.model_dump()
+    @field_validator("format", mode="before")
+    def validate_format(cls, value: Any) -> str:
+        if value is None:
+            return CompressionFormat.dense.value
 
-    @staticmethod
-    def from_pretrained(
-        model: Module, format: Optional[str] = None
-    ) -> Optional["QuantizationConfig"]:
-        """
-        Converts a model into its associated QuantizationConfig based on the
-        QuantizationScheme attached to each quantized module
+        if isinstance(value, list):
+            if len(value) == 0:
+                return CompressionFormat.dense.value
 
-        :param model: model to calculate quantization scheme of
-        :return: filled out QuantizationScheme for the input model
-        """
-        quant_scheme_to_layers = []
-        quantization_status = None
-        ignore = {}
-        quantization_type_names = set()
-        for name, submodule in model.named_modules():
-            layer_type = module_type(submodule)
-            if not is_module_quantized(submodule):
-                if layer_type not in ignore:
-                    ignore[layer_type] = []
-                ignore[layer_type].append(name)
+            if all(v == value[0] for v in value):
+                return QuantizationScheme.validate_format(value[0])
+
             else:
-                quantization_status = submodule.quantization_status
-                scheme = submodule.quantization_scheme
-                quantization_type_names.add(layer_type)
+                return CompressionFormat.mixed_precision.value
 
-                match_found = False
-                for existing_scheme in quant_scheme_to_layers:
-                    if scheme == existing_scheme:
-                        match_found = True
-                        break
-                if not match_found:
-                    quant_scheme_to_layers.append(scheme)
+        return CompressionFormat(value).value
 
-        if len(quant_scheme_to_layers) == 0:  # No quantized layers
-            return None
+    def merge(self, other: "QuantizationConfig") -> "QuantizationConfig":
+        def merge_field(field_name: str, value_a: Any, value_b: Any) -> Any:
+            if field_name == "config_groups":
+                return value_a + value_b
 
-        # kv-cache only, no weight/activation quantization
-        if (
-            len(quantization_type_names) == 1
-            and "attention" in list(quantization_type_names)[0].lower()
-        ):
-            quantization_type_names.add("Linear")
+            if field_name == "format":
+                return self.validate_format([value_a, value_b])
 
-        # clean up ignore list, we can leave out layers types if none of the
-        # instances are quantized
-        consolidated_ignore = []
-        for layer_type, ignore_names in ignore.items():
-            if layer_type in quantization_type_names:
-                # specific layers of a quantized type are ignored
-                consolidated_ignore += ignore_names
-            # else we leave it off the ignore list, doesn't fall under any of the
-            # existing quantization schemes so it won't be quantized
+            if value_a is not None and value_b is None:
+                return value_a
 
-        kv_cache_args, quant_scheme_to_layers = parse_out_kv_cache_args(
-            quant_scheme_to_layers
-        )
-        kv_cache_scheme = (
-            kv_cache_args.model_dump() if kv_cache_args is not None else kv_cache_args
-        )
+            if value_a is None and value_b is not None:
+                return value_b
 
-        config_groups = {}
-        for idx, scheme in enumerate(quant_scheme_to_layers):
-            group_name = "group_" + str(idx)
-            config_groups[group_name] = scheme
+            if value_a == value_b:
+                return value_a
 
-        if format is None:
-            if quantization_status == QuantizationStatus.COMPRESSED:
-                format = CompressionFormat.int_quantized.value
-            else:
-                format = CompressionFormat.dense.value
-        elif isinstance(format, list):
-            format = (
-                CompressionFormat.mixed_precision.value
-                if len(format) > 1
-                else format[0]
+            if field_name == "ignore":
+                if set(value_a) == set(value_b):
+                    return value_a
+
+                raise NotImplementedError(
+                    "Cannot merge quantization configs with non-identical ignore lists "
+                    "Please modify your config to resolve this ambiguity."
+                    f"\n{self}\n{other}"
+                )
+
+            raise ValueError(
+                "The following fields have overlapping targets and conflicting values "
+                f"for `{field_name}`. Please modify your config to resolve this "
+                f"ambiguity.\n{self}\n{other}"
             )
 
-        return QuantizationConfig(
-            config_groups=config_groups,
-            quantization_status=quantization_status,
-            kv_cache_scheme=kv_cache_scheme,
-            global_compression_ratio=None,
-            format=format,
-            ignore=consolidated_ignore,
+        dict_a = self.model_dump()
+        dict_b = other.model_dump()
+
+        assert dict_a.keys() == dict_b.keys()
+        return self.model_validate(
+            {key: merge_field(key, dict_a[key], dict_b[key]) for key in dict_a.keys()}
         )
+
+    @classmethod
+    def from_pretrained(
+        cls, model: Module, format: Optional[str] = None
+    ) -> "QuantizationConfig":
+        default_config = QuantizationConfig(config_groups={})
+        config = getattr(model, "quantization_config", default_config)
+
+        # silently override format
+        config.format = cls.validate_format(format)
+        return config
 
     def requires_calibration_data(self):
         if self.kv_cache_scheme is not None:
@@ -263,6 +234,10 @@ class QuantizationConfig(BaseModel):
                     return True
 
         return False
+
+    def to_dict(self):
+        # for compatibility with HFQuantizer
+        return self.model_dump()
 
     # TODO set `extra="forbid"` when upstream transformers is compatible
     model_config = ConfigDict(extra="ignore")

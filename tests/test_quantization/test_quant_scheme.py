@@ -61,3 +61,39 @@ def test_defaults():
     assert output.input_activations is None
     assert output.output_activations is None
     assert output.format is None
+
+
+@pytest.mark.parametrize(
+    "a,b,exp",
+    [
+        (
+            QuantizationScheme(
+                targets=["Linear"], weights=QuantizationArgs(num_bits=4)
+            ),
+            QuantizationScheme(
+                targets=["Attention"], input_activations=QuantizationArgs()
+            ),
+            QuantizationScheme(
+                targets=["Linear", "Attention"],
+                weights=QuantizationArgs(num_bits=4),
+                input_activations=QuantizationArgs(),
+            ),
+        ),
+        (
+            QuantizationScheme(
+                targets=["Linear"], input_activations=QuantizationArgs(num_bits=4)
+            ),
+            QuantizationScheme(
+                targets=["model.layer.0.self_attn.q_proj"],
+                input_activations=QuantizationArgs(),
+            ),
+            "error",
+        ),
+    ],
+)
+def test_merge(a, b, exp):
+    if exp == "error":
+        with pytest.raises(ValueError):
+            a.merge(b)
+    else:
+        assert a.merge(b) == exp, (a, exp)

@@ -13,11 +13,8 @@
 # limitations under the License.
 
 import logging
-from collections import OrderedDict
 from copy import deepcopy
-from typing import Dict, Iterable, List, Optional
-from typing import OrderedDict as OrderedDictType
-from typing import Union
+from typing import Dict, Iterable, List, Optional, Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
@@ -36,7 +33,6 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     KV_CACHE_TARGETS,
     infer_quantization_status,
-    is_kv_cache_quant_scheme,
 )
 from compressed_tensors.utils.helpers import deprecated, replace_module
 from compressed_tensors.utils.match import match_named_modules, match_targets
@@ -44,12 +40,15 @@ from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
 from torch.nn import Module
+from transformers import PreTrainedModel
 
 
 __all__ = [
     "load_pretrained_quantization_parameters",
     "apply_quantization_config",
     "apply_quantization_status",
+    "attach_scheme",
+    "attach_config",
     "find_name_or_class_matches",
 ]
 
@@ -114,7 +113,9 @@ def load_pretrained_quantization_parameters(
 
 
 def apply_quantization_config(
-    model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
+    model: PreTrainedModel,
+    config: Union[QuantizationConfig, None],
+    run_compressed: bool = False,
 ):
     """
     Initializes the model for quantization in-place based on the given config.
@@ -134,40 +135,45 @@ def apply_quantization_config(
     # preprocess to support kv cache scheme
     config = process_quantization_config(config)
 
-    # build mapping of targets to schemes for easier matching
-    # use ordered dict to preserve target ordering in config
-    target_to_scheme = OrderedDict()
-    for scheme in config.config_groups.values():
-        for target in scheme.targets:
-            target_to_scheme[target] = scheme
-
     # mark appropriate layers for quantization by setting their quantization schemes
-    for name, submodule in match_named_modules(
-        model, target_to_scheme, config.ignore, warn_on_fail=True
-    ):
-        # mark modules to be quantized by adding
-        # quant scheme to the matching layers
-        matched_targets = match_targets(name, submodule, target_to_scheme)
-        scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
-        # target matched - add layer and scheme to target list
-        submodule.quantization_scheme = scheme
+    for scheme in config.config_groups.values():
+        for name, submodule in match_named_modules(
+            model, scheme.targets, config.ignore or [], warn_on_fail=True
+        ):
+            # attach scheme to module (with merging)
+            attach_scheme(submodule, scheme)
 
-        # replace with run compressed if applicable
-        # FUTURE: move this to model compressor
-        if isinstance(submodule, torch.nn.Linear) and run_compressed:
-            format = config.format
-            if format != CompressionFormat.dense.value:
-                if isinstance(submodule, torch.nn.Linear):
-                    # TODO: expand to more module types
-                    compressed_linear = CompressedLinear.from_linear(
-                        submodule,
-                        quantization_scheme=scheme,
-                        quantization_format=format,
-                    )
-                    replace_module(model, name, compressed_linear)
+            # replace with run compressed if applicable
+            # FUTURE: move this to model compressor
+            if isinstance(submodule, torch.nn.Linear) and run_compressed:
+                format = config.format
+                if format != CompressionFormat.dense.value:
+                    if isinstance(submodule, torch.nn.Linear):
+                        # TODO: expand to more module types
+                        compressed_linear = CompressedLinear.from_linear(
+                            submodule,
+                            quantization_scheme=scheme,
+                            quantization_format=format,
+                        )
+                        replace_module(model, name, compressed_linear)
 
     # apply current quantization status across all targeted layers
     apply_quantization_status(model, config.quantization_status)
+
+    # attach config for serialization
+    attach_config(model, config)
+
+
+def attach_scheme(module: Module, scheme: QuantizationScheme):
+    if existing_scheme := getattr(module, "quantization_scheme", None):
+        scheme = scheme.merge(existing_scheme)
+    setattr(module, "quantization_scheme", scheme)
+
+
+def attach_config(model: PreTrainedModel, config: QuantizationConfig):
+    if existing_config := getattr(model, "quantization_config", None):
+        config = config.merge(existing_config)
+    setattr(model, "quantization_config", config)
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
@@ -263,14 +269,6 @@ def find_name_or_class_matches(
     return match_targets(name, module, targets)
 
 
-def _infer_status(model: Module) -> Optional[QuantizationStatus]:
-    for module in model.modules():
-        status = getattr(module, "quantization_status", None)
-        if status is not None:
-            return status
-    return None
-
-
 def _load_quant_args_from_mapping(
     base_name: str, module_name: str, module: Module, mapping: Dict
 ):
@@ -313,67 +311,3 @@ def _load_quant_args_from_mapping(
                 state_dict_zp = f.get_tensor(f"{module_name}.{zp_name}")
 
         update_parameter_data(module, state_dict_zp, zp_name)
-
-
-def _scheme_from_targets(
-    target_to_scheme: OrderedDictType[str, QuantizationScheme],
-    targets: List[str],
-    name: str,
-) -> QuantizationScheme:
-    if len(targets) == 1:
-        # if `targets` iterable contains a single element
-        # use it as the key
-        return target_to_scheme[targets[0]]
-
-    # otherwise, we need to merge QuantizationSchemes corresponding
-    # to multiple targets. This is most likely because `name` module
-    # is being target both as an ordinary quantization target, as well
-    # as kv cache quantization target
-    schemes_to_merge = [target_to_scheme[target] for target in targets]
-    return _merge_schemes(schemes_to_merge, name)
-
-
-def _merge_schemes(
-    schemes_to_merge: List[QuantizationScheme], name: str
-) -> QuantizationScheme:
-    kv_cache_quantization_scheme = [
-        scheme for scheme in schemes_to_merge if is_kv_cache_quant_scheme(scheme)
-    ]
-    if not kv_cache_quantization_scheme:
-        # if the schemes_to_merge do not contain any
-        # kv cache QuantizationScheme
-        # return the first scheme (the prioritized one,
-        # since the order of schemes_to_merge matters)
-        return schemes_to_merge[0]
-    else:
-        # fetch the kv cache QuantizationScheme and the highest
-        # priority non-kv cache QuantizationScheme and merge them
-        kv_cache_quantization_scheme = kv_cache_quantization_scheme[0]
-        quantization_scheme = [
-            scheme
-            for scheme in schemes_to_merge
-            if not is_kv_cache_quant_scheme(scheme)
-        ][0]
-        schemes_to_merge = [kv_cache_quantization_scheme, quantization_scheme]
-        merged_scheme = {}
-        for scheme in schemes_to_merge:
-            scheme_dict = {
-                k: v for k, v in scheme.model_dump().items() if v is not None
-            }
-            # when merging multiple schemes, the final target will be
-            # the `name` argument - hence erase the original targets
-            del scheme_dict["targets"]
-            # make sure that schemes do not "clash" with each other
-            overlapping_keys = set(merged_scheme.keys()) & set(scheme_dict.keys())
-            if overlapping_keys:
-                raise ValueError(
-                    f"The module: {name} is being modified by two clashing "
-                    f"quantization schemes, that jointly try to override "
-                    f"properties: {overlapping_keys}. Fix the quantization config "
-                    "so that it is not ambiguous."
-                )
-            merged_scheme.update(scheme_dict)
-
-        merged_scheme.update(targets=[name])
-
-        return QuantizationScheme(**merged_scheme)
