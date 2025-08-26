@@ -117,31 +117,11 @@ def kv_cache_attention_hook(module: torch.nn.Module, args, kwargs):
 def register_key_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandle:
     kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
 
-    def _hook(mod: torch.nn.Module, args, kwargs):
-        # If passed as keyword, this is easy.
-        if "key_states" in kwargs:
-            kwargs["key_states"] = hook(mod, kwargs["key_states"])
-            return args, kwargs
+    def _hook(cache: QuantizedKVCache, args, kwargs):
+        bound = inspect.signature(cache.forward).bind(*args, **kwargs)
+        bound.arguments["key_states"] = hook(cache, bound.arguments["key_states"])
 
-        # Otherwise, find where key_states would be in positional args.
-        sig = inspect.signature(mod.forward)
-        param_names = tuple(sig.parameters.keys())
-        try:
-            idx = param_names.index("key_states")
-        except ValueError:
-            # forward has no key_states parameter; do nothing
-            return args, kwargs
-
-        # If the position exists in args, replace it.
-        if idx < len(args):
-            args = list(args)
-            ret = hook(module, args[idx])
-            if ret is not None:
-                args[idx] = ret
-            return tuple(args), kwargs
-
-        # Not present positionally and not in kwargs (maybe defaulted) — do nothing.
-        return args, kwargs
+        return bound.args, bound
 
     return kv_cache.register_forward_pre_hook(_hook, with_kwargs=True)
 
@@ -149,30 +129,10 @@ def register_key_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandl
 def register_value_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandle:
     kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
 
-    def _hook(mod: torch.nn.Module, args, kwargs):
-        # If passed as keyword, this is easy.
-        if "value_states" in kwargs:
-            kwargs["value_states"] = hook(mod, kwargs["value_states"])
-            return args, kwargs
+    def _hook(cache: QuantizedKVCache, args, kwargs):
+        bound = inspect.signature(cache.forward).bind(*args, **kwargs)
+        bound.arguments["value_states"] = hook(cache, bound.arguments["value_states"])
 
-        # Otherwise, find where value_states would be in positional args.
-        sig = inspect.signature(mod.forward)
-        param_names = tuple(sig.parameters.keys())
-        try:
-            idx = param_names.index("value_states")
-        except ValueError:
-            # forward has no value_states parameter; do nothing
-            return args, kwargs
-
-        # If the position exists in args, replace it.
-        if idx < len(args):
-            args = list(args)
-            ret = hook(module, args[idx])
-            if ret is not None:
-                args[idx] = ret
-            return tuple(args), kwargs
-
-        # Not present positionally and not in kwargs (maybe defaulted) — do nothing.
-        return args, kwargs
+        return bound.args, bound
 
     return kv_cache.register_forward_pre_hook(_hook, with_kwargs=True)

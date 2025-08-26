@@ -132,29 +132,10 @@ def register_query_hook(module: torch.nn.Module, hook: Callable) -> RemovableHan
     """
     impl = getattr(module, IMPL_ATTR)
 
-    def _hook(mod: torch.nn.Module, args, kwargs):
-        # Keyword case
-        if "query" in kwargs:
-            kwargs["query"] = hook(mod, kwargs["query"])
-            return args, kwargs
+    def _hook(cache: QuantizedAttentionImpl, args, kwargs):
+        bound = inspect.signature(cache.forward).bind(*args, **kwargs)
+        bound.arguments["query"] = hook(cache, bound.arguments["query"])
 
-        # Positional case: find the index of `query` in impl.forward
-        sig = inspect.signature(mod.forward)
-        param_names = tuple(sig.parameters.keys())
-        try:
-            idx = param_names.index("query")
-        except ValueError:
-            # No `query` parameter; nothing to do
-            return args, kwargs
-
-        if idx < len(args):
-            args = list(args)
-            ret = hook(module, args[idx])
-            if ret is not None:
-                args[idx] = ret
-            return tuple(args), kwargs
-
-        # Not present explicitly (maybe defaulted)
-        return args, kwargs
+        return bound.args, bound
 
     return impl.register_forward_pre_hook(_hook, with_kwargs=True)
