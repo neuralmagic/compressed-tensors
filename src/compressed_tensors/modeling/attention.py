@@ -133,9 +133,11 @@ def register_query_hook(module: torch.nn.Module, hook: Callable) -> RemovableHan
     impl = getattr(module, IMPL_ATTR)
 
     def _hook(impl: QuantizedAttentionImpl, args, kwargs):
-        bound = inspect.signature(impl.forward).bind(*args, **kwargs)
-        bound.arguments["query"] = hook(impl, bound.arguments["query"])
+        bound = inspect.signature(module.forward).bind(*args, **kwargs)
+        value = hook(module, bound.arguments["query"])
+        if value is not None:
+            bound.arguments["query"] = value
 
-        return bound.args, bound
+        return bound.args, bound.kwargs
 
     return impl.register_forward_pre_hook(_hook, with_kwargs=True)

@@ -119,9 +119,11 @@ def register_key_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandl
 
     def _hook(cache: QuantizedKVCache, args, kwargs):
         bound = inspect.signature(cache.forward).bind(*args, **kwargs)
-        bound.arguments["key_states"] = hook(cache, bound.arguments["key_states"])
+        value = hook(module, bound.arguments["key_states"])
+        if value is not None:
+            bound.arguments["key_states"] = value
 
-        return bound.args, bound
+        return bound.args, bound.kwargs
 
     return kv_cache.register_forward_pre_hook(_hook, with_kwargs=True)
 
@@ -131,8 +133,10 @@ def register_value_hook(module: torch.nn.Module, hook: Callable) -> RemovableHan
 
     def _hook(cache: QuantizedKVCache, args, kwargs):
         bound = inspect.signature(cache.forward).bind(*args, **kwargs)
-        bound.arguments["value_states"] = hook(cache, bound.arguments["value_states"])
+        value = hook(module, bound.arguments["value_states"])
+        if value is not None:
+            bound.arguments["value_states"] = value
 
-        return bound.args, bound
+        return bound.args, bound.kwargs
 
     return kv_cache.register_forward_pre_hook(_hook, with_kwargs=True)
