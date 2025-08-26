@@ -95,30 +95,20 @@ def initialize_module_for_quantization(
         )
 
     if scheme.weights is not None:
-        if hasattr(module, "weight"):
-            weight_shape = None
-            if isinstance(module, torch.nn.Linear):
-                weight_shape = module.weight.shape
-            _initialize_scale_zero_point(
-                module,
-                "weight",
-                scheme.weights,
-                weight_shape=weight_shape,
-                force_zero_point=force_zero_point,
-                scale_dtype=scale_dtype,
-            )
-        else:
-            _LOGGER.warning(
-                f"module type {type(module)} targeted for weight quantization but "
-                "has no attribute weight, skipping weight quantization "
-                f"for {type(module)}"
-            )
+        weight_shape = module.weight.shape
+        _initialize_scale_zero_point(
+            module,
+            "weight",
+            scheme.weights,
+            weight_shape=weight_shape,
+            force_zero_point=force_zero_point,
+            scale_dtype=scale_dtype,
+        )
 
     if scheme.output_activations is not None:
-        if not is_kv_cache_quant_scheme(scheme):
-            _initialize_scale_zero_point(
-                module, "output", scheme.output_activations, scale_dtype=scale_dtype
-            )
+        _initialize_scale_zero_point(
+            module, "output", scheme.output_activations, scale_dtype=scale_dtype
+        )
 
     module.quantization_scheme = scheme
     module.quantization_status = QuantizationStatus.INITIALIZED
@@ -180,7 +170,8 @@ def _initialize_scale_zero_point(
             num_groups = math.ceil(weight_shape[1] / quantization_args.group_size)
             expected_shape = (weight_shape[0], max(num_groups, 1))
         elif quantization_args.strategy == QuantizationStrategy.BLOCK:
-            # For block quantization, scale shape should match number of blocks - only for weights
+            # For block quantization, scale shape should match number of blocks - only
+            # for weights
             if quantization_args.block_structure is None:
                 raise ValueError(
                     "Block quantization requires block_structure to be specified"
@@ -193,9 +184,10 @@ def _initialize_scale_zero_point(
             # Warn if dimensions don't divide evenly
             if rows % block_height != 0 or cols % block_width != 0:
                 warnings.warn(
-                    f"Block quantization: tensor shape {weight_shape} does not divide evenly "
-                    f"by block structure {quantization_args.block_structure}. "
-                    f"Some blocks will be incomplete which may affect quantization quality.",
+                    f"Block quantization: tensor shape {weight_shape} does not divide"
+                    f"evenly by block structure {quantization_args.block_structure}. "
+                    f"Some blocks will be incomplete which may affect quantization"
+                    "quality.",
                     UserWarning,
                 )
 

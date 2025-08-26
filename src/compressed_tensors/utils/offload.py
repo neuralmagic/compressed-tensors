@@ -301,7 +301,6 @@ def disable_hf_hook(module: torch.nn.Module):
     hooks = {}
 
     def collect_hooks(module):
-        nonlocal hooks
         if hasattr(module, "_hf_hook"):
             hooks[module] = module._hf_hook
             remove_hook_from_module(module)
