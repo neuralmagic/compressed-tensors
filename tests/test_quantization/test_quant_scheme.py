@@ -74,7 +74,7 @@ def test_defaults():
                 targets=["Attention"], input_activations=QuantizationArgs()
             ),
             QuantizationScheme(
-                targets=["Linear", "Attention"],
+                targets=["Attention", "Linear"],
                 weights=QuantizationArgs(num_bits=4),
                 input_activations=QuantizationArgs(),
             ),
@@ -96,4 +96,4 @@ def test_merge(a, b, exp):
         with pytest.raises(ValueError):
             a.merge(b)
     else:
-        assert a.merge(b) == exp, (a, exp)
+        assert a.merge(b) == exp
