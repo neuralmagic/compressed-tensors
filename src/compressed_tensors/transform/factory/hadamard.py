@@ -107,7 +107,7 @@ class HadamardTransform(TransformBase):
 
         return (
             apply_transform_weight(
-                weight.to(dtype=self._precision),
+                weight.to(self._precision),
                 value.to(self._precision),
                 self.args.location,
                 self.module_type,

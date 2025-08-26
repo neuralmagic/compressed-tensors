@@ -95,7 +95,7 @@ class RandomMatrixTransform(TransformBase):
 
     def forward(self, value: Tensor) -> Parameter:
         return apply_transform_weight(
-            self.weight.to(dtype=self._precision),
+            self.weight.to(self._precision),
             value.to(self._precision),
             self.args.location,
             self.module_type,
