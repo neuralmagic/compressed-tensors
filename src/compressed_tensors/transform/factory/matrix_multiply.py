@@ -103,7 +103,7 @@ class RandomMatrixTransform(TransformBase):
     def right_inverse(self, value: Tensor) -> Tensor:
         inverse = high_precision_invert(self.weight)
         return apply_transform_weight(
-            inverse.to(dtype=self._precision),
+            inverse.to(self._precision),
             value.to(self._precision),
             self.args.location,
             self.module_type,
