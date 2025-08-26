@@ -22,7 +22,7 @@ from compressed_tensors.transform.utils.matrix import (
     apply_transform_weight,
     get_transform_size,
 )
-from compressed_tensors.utils import get_execution_device
+from compressed_tensors.utils import get_execution_device, get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
 from torch import Tensor, device, dtype
 from torch.nn import Module, Parameter
@@ -54,8 +54,9 @@ class HadamardFactory(TransformFactory):
         assert hasattr(module, "weight")
         size = get_transform_size(module, args.location, self.scheme.head_dim)
         exec_device = get_execution_device(module)
+        device = get_offloaded_device(module)
 
-        factory_kwargs = {"construct_device": exec_device}
+        factory_kwargs = {"device": device, "construct_device": exec_device}
         weight = self.weights.get(size, factory_kwargs=factory_kwargs)
         # TODO: permutations should be keyed by fused modules, not weight
         perm = self.perms[weight] if self.scheme.randomize else None
@@ -64,12 +65,12 @@ class HadamardFactory(TransformFactory):
     def _create_weight(
         self,
         size: int,
+        device: device,
         construct_device: device,
     ) -> Parameter:
-        # construct on execution device, cache shared tensor on cpu
         precision = self.scheme.precision
         data = deterministic_hadamard_matrix(size, precision, construct_device)
-        data = data.to(device="cpu")
+        data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
     def _create_permutation(self, weight: Parameter) -> Parameter:
@@ -104,10 +105,9 @@ class HadamardTransform(TransformBase):
         if self.args.inverse:
             weight = weight.T
 
-        # onloading is done by accelerate if parent module is offloaded
         return (
             apply_transform_weight(
-                weight.to(dtype=self._precision, device=value.device),
+                weight.to(dtype=self._precision),
                 value.to(self._precision),
                 self.args.location,
                 self.module_type,

@@ -31,10 +31,10 @@ class RandomHadamardFactory(HadamardFactory):
     def _create_weight(
         self,
         size: int,
+        device: device,
         construct_device: device,
     ) -> Parameter:
-        # construct on execution device, cache on offload device
         precision = self.scheme.precision
         data = random_hadamard_matrix(size, precision, construct_device, self.generator)
-        data = data.to(device="cpu")
+        data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
