@@ -161,12 +161,14 @@ def apply_quantization_config(
                         )
                         replace_module(model, name, compressed_linear)
 
-            # replace attention implementation and kvcache with hookable modules
-            if is_attention_module(submodule) and is_narrow_match(
-                model, scheme.targets, name
-            ):
-                # unlike linear, do qparam initialization (idempotent to reapplication)
-                initialize_hooked_attention(model, submodule, quantize=True)
+            # attention quantization and/or kv cache quantization
+            if is_attention_module(submodule):
+                if is_narrow_match(model, scheme.targets, name):
+                    # unlike linear, do qparam initialization here (once)
+                    initialize_hooked_attention(model, submodule, quantize=True)
+                else:
+                    # do not quantize attention unless specifically targeted
+                    delattr(submodule, "quantization_scheme")
 
     # apply current quantization status across all targeted linear/embedding layers
     apply_quantization_status(model, config.quantization_status)
