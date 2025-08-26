@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_args import DynamicType, QuantizationArgs
@@ -26,7 +26,7 @@ from compressed_tensors.quantization.utils import (
     module_type,
     parse_out_kv_cache_args,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from torch.nn import Module
 
 
@@ -142,6 +142,9 @@ class QuantizationConfig(BaseModel):
     quantization_status: QuantizationStatus = QuantizationStatus.INITIALIZED
     global_compression_ratio: Optional[float] = None
     ignore: Optional[List[str]] = Field(default_factory=list)
+    # `run_compressed` is a dummy, unused arg for backwards compatibility
+    # see: https://github.com/huggingface/transformers/pull/39324
+    run_compressed: Annotated[Any, Field(exclude=True)] = None
 
     def model_post_init(self, __context):
         """
@@ -231,6 +234,12 @@ class QuantizationConfig(BaseModel):
                 format = CompressionFormat.int_quantized.value
             else:
                 format = CompressionFormat.dense.value
+        elif isinstance(format, list):
+            format = (
+                CompressionFormat.mixed_precision.value
+                if len(format) > 1
+                else format[0]
+            )
 
         return QuantizationConfig(
             config_groups=config_groups,
@@ -254,3 +263,6 @@ class QuantizationConfig(BaseModel):
                     return True
 
         return False
+
+    # TODO set `extra="forbid"` when upstream transformers is compatible
+    model_config = ConfigDict(extra="ignore")

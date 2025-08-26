@@ -19,7 +19,6 @@ from typing import List, Optional, Set, Tuple
 import torch
 import torch.nn.utils.parametrize as P
 import tqdm
-from compressed_tensors import InternalModule
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
@@ -35,6 +34,7 @@ from compressed_tensors.utils import (
     register_offload_module,
     update_offload_parameter,
 )
+from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
 from torch.nn import Module, Parameter
 

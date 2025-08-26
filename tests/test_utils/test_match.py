@@ -26,6 +26,15 @@ from compressed_tensors.utils import (
     match_named_parameters,
 )
 from compressed_tensors.utils.match import _match_class, _match_name
+from transformers import AutoModelForCausalLM
+
+
+@pytest.fixture
+def llama_stories_model():
+    return AutoModelForCausalLM.from_pretrained(
+        "Xenova/llama2.c-stories15M",
+        torch_dtype="auto",
+    )
 
 
 class DummyModel(nn.Module):
@@ -74,43 +83,35 @@ class TestMatchName:
 
     def test_exact_match(self):
         """Test exact string matching"""
-        assert _match_name("layer1", "layer1") == True
-        assert _match_name("layer1", "layer2") == False
-        assert (
-            _match_name(
-                "transformer.layers.0.self_attn.q_proj",
-                "transformer.layers.0.self_attn.q_proj",
-            )
-            == True
+        assert _match_name("layer1", "layer1")
+        assert not _match_name("layer1", "layer2")
+        assert _match_name(
+            "transformer.layers.0.self_attn.q_proj",
+            "transformer.layers.0.self_attn.q_proj",
         )
 
     def test_regex_match(self):
         """Test regex matching with "re:" prefix"""
-        assert _match_name("layer1", "re:layer.*") == True
-        assert _match_name("layer1", "re:^layer1$") == True
-        assert _match_name("layer1", "re:layer2") == False
-        assert (
-            _match_name("transformer.layers.0.self_attn.q_proj", "re:.*q_proj") == True
-        )
-        assert (
-            _match_name(
-                "transformer.layers.0.self_attn.q_proj",
-                "re:transformer\\.layers\\.\\d+\\.self_attn\\..*_proj$",
-            )
-            == True
+        assert _match_name("layer1", "re:layer.*")
+        assert _match_name("layer1", "re:^layer1$")
+        assert not _match_name("layer1", "re:layer2")
+        assert _match_name("transformer.layers.0.self_attn.q_proj", "re:.*q_proj")
+        assert _match_name(
+            "transformer.layers.0.self_attn.q_proj",
+            "re:transformer\\.layers\\.\\d+\\.self_attn\\..*_proj$",
         )
 
     def test_empty_strings(self):
         """Test edge cases with empty strings"""
-        assert _match_name("", "") == True
-        assert _match_name("layer1", "") == False
-        assert _match_name("", "layer1") == False
+        assert _match_name("", "")
+        assert not _match_name("layer1", "")
+        assert not _match_name("", "layer1")
 
     def test_regex_special_characters(self):
         """Test regex with special characters"""
-        assert _match_name("layer.1", "re:layer\\.1") == True
-        assert _match_name("layer.1", "re:layer.1") == True  # . matches any char
-        assert _match_name("layer_1", "re:layer_1") == True
+        assert _match_name("layer.1", "re:layer\\.1")
+        assert _match_name("layer.1", "re:layer.1")  # . matches any char
+        assert _match_name("layer_1", "re:layer_1")
 
 
 class TestMatchClass:
@@ -119,32 +120,32 @@ class TestMatchClass:
     def test_direct_class_match(self):
         """Test matching direct class names"""
         linear = nn.Linear(10, 20)
-        assert _match_class(linear, "Linear") == True
-        assert _match_class(linear, "Conv2d") == False
+        assert _match_class(linear, "Linear")
+        assert not _match_class(linear, "Conv2d")
 
         norm = nn.LayerNorm(10)
-        assert _match_class(norm, "LayerNorm") == True
-        assert _match_class(norm, "BatchNorm1d") == False
+        assert _match_class(norm, "LayerNorm")
+        assert not _match_class(norm, "BatchNorm1d")
 
     def test_parent_class_match(self):
         """Test matching parent class names"""
         linear = nn.Linear(10, 20)
-        assert _match_class(linear, "Module") == True
+        assert _match_class(linear, "Module")
 
         conv = nn.Conv2d(3, 16, 3)
-        assert _match_class(conv, "Module") == True
-        assert _match_class(conv, "_ConvNd") == True
+        assert _match_class(conv, "Module")
+        assert _match_class(conv, "_ConvNd")
 
     def test_non_torch_module(self):
         """Test with non-torch modules"""
         regular_object = object()
-        assert _match_class(regular_object, "object") == False  # not a torch.nn.Module
+        assert not _match_class(regular_object, "object")  # not a torch.nn.Module
 
     def test_custom_module(self):
         """Test with custom module classes"""
         model = DummyModel()
-        assert _match_class(model, "DummyModel") == True
-        assert _match_class(model, "Module") == True
+        assert _match_class(model, "DummyModel")
+        assert _match_class(model, "Module")
 
     def test_linear_base(self):
         """Test matching against vllm's LinearBase class"""
@@ -153,7 +154,7 @@ class TestMatchClass:
             pass
 
         linear = LinearBase()
-        assert _match_class(linear, "Linear") == True
+        assert _match_class(linear, "Linear")
 
 
 class TestIsMatch:
@@ -162,27 +163,27 @@ class TestIsMatch:
     def test_name_match(self):
         """Test matching by name"""
         linear = nn.Linear(10, 20)
-        assert is_match("layer1", linear, "layer1") == True
-        assert is_match("layer1", linear, "layer2") == False
+        assert is_match("layer1", linear, "layer1")
+        assert not is_match("layer1", linear, "layer2")
 
     def test_class_match(self):
         """Test matching by class"""
         linear = nn.Linear(10, 20)
-        assert is_match("layer1", linear, "Linear") == True
-        assert is_match("layer1", linear, "Conv2d") == False
+        assert is_match("layer1", linear, "Linear")
+        assert not is_match("layer1", linear, "Conv2d")
 
     def test_combined_match(self):
         """Test that either name or class match works"""
         linear = nn.Linear(10, 20)
-        assert is_match("layer1", linear, "layer1") == True  # name match
-        assert is_match("layer1", linear, "Linear") == True  # class match
-        assert is_match("layer1", linear, "layer2") == False  # no match
+        assert is_match("layer1", linear, "layer1")  # name match
+        assert is_match("layer1", linear, "Linear")  # class match
+        assert not is_match("layer1", linear, "layer2")  # no match
 
     def test_regex_in_name_match(self):
         """Test regex matching in name"""
         linear = nn.Linear(10, 20)
-        assert is_match("layer1", linear, "re:layer.*") == True
-        assert is_match("layer1", linear, "re:conv.*") == False
+        assert is_match("layer1", linear, "re:layer.*")
+        assert not is_match("layer1", linear, "re:conv.*")
 
     def test_internal_module_match(self):
         """Test not matching internal modules"""
@@ -191,7 +192,7 @@ class TestIsMatch:
             pass
 
         linear = InternalLinear(10, 20)
-        assert is_match("layer1", linear, "re:layer.*") == False
+        assert not is_match("layer1", linear, "re:layer.*")
 
     def test_fused_mapping(self):
         """"""
@@ -201,14 +202,14 @@ class TestIsMatch:
             "gate_up_proj": ["gate_proj", "up_proj"],
         }
 
-        assert is_match("dummy.qkv_proj", linear, "re:.*q_proj", mapping) == True
-        assert is_match("dummy.qkv_proj", linear, "re:.*k_proj", mapping) == True
-        assert is_match("dummy.qkv_proj", linear, "re:.*v_proj", mapping) == True
-        assert is_match("dummy.qkv_proj", linear, "Linear", mapping) == True
+        assert is_match("dummy.qkv_proj", linear, "re:.*q_proj", fused=mapping)
+        assert is_match("dummy.qkv_proj", linear, "re:.*k_proj", fused=mapping)
+        assert is_match("dummy.qkv_proj", linear, "re:.*v_proj", fused=mapping)
+        assert is_match("dummy.qkv_proj", linear, "Linear", fused=mapping)
 
-        assert is_match("dummy.gate_up_proj", linear, "re:.*gate_proj", mapping) == True
-        assert is_match("dummy.gate_up_proj", linear, "re:.*up_proj", mapping) == True
-        assert is_match("dummy.gate_up_proj", linear, "Linear", mapping) == True
+        assert is_match("dummy.gate_up_proj", linear, "re:.*gate_proj", fused=mapping)
+        assert is_match("dummy.gate_up_proj", linear, "re:.*up_proj", fused=mapping)
+        assert is_match("dummy.gate_up_proj", linear, "Linear", fused=mapping)
 
 
 class TestMatchNamedModules:
@@ -284,6 +285,58 @@ class TestMatchNamedModules:
         linear = InternalLinear(10, 20)
         matches = list(match_named_modules(linear, ["re:.*"]))
         assert len(matches) == 0
+
+    @pytest.mark.parametrize(
+        "targets, ignore, expected_targets",
+        [
+            (
+                ["re:model.layers.[01].self_attn.q_proj"],
+                ["re:model.layers.1.self_attn.q_proj"],
+                set(["model.layers.0.self_attn.q_proj"]),
+            ),
+            (
+                ["re:model.layers.[01].self_attn.q_proj"],
+                [],
+                set(
+                    [
+                        "model.layers.0.self_attn.q_proj",
+                        "model.layers.1.self_attn.q_proj",
+                    ]
+                ),
+            ),
+            (
+                ["re:model.layers.[0-2].self_attn.q_proj"],
+                ["re:model.layers.1.self_attn.q_proj"],
+                set(
+                    [
+                        "model.layers.0.self_attn.q_proj",
+                        "model.layers.2.self_attn.q_proj",
+                    ]
+                ),
+            ),
+            (
+                ["model.layers.0.self_attn.q_proj"],
+                ["model.layers.0.self_attn.q_proj"],
+                set(),
+            ),
+            (
+                ["re:model.layers.*.self_attn.q_proj"],
+                ["re:model.layers.[01].self_attn.q_proj"],
+                set(
+                    f"model.layers.{layer_idx}.self_attn.q_proj"
+                    for layer_idx in range(2, 6)
+                ),
+            ),
+        ],
+    )
+    def test_expand_targets_with_llama_stories(
+        self, llama_stories_model, targets, ignore, expected_targets
+    ):
+        expanded_targets = {
+            name
+            for name, _ in match_named_modules(llama_stories_model, targets, ignore)
+        }
+        assert expanded_targets == expected_targets
 
 
 class TestMatchNamedParameters:
@@ -394,7 +447,7 @@ class TestMatchModulesSet:
         for module_set in matches:
             # Check that modules are returned in target order (v, q, k)
             v_proj, q_proj, k_proj = module_set
-            # We can"t easily check the exact modules, but we can check they"re all Linear
+            # We can't easily check the exact modules, but can check they're all Linear
             assert all(isinstance(m, nn.Linear) for m in [v_proj, q_proj, k_proj])
 
     def test_incomplete_set_error(self):
