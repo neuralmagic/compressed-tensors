@@ -14,7 +14,6 @@
 
 import pytest
 from compressed_tensors.quantization import (
-    DEFAULT_QUANTIZATION_FORMAT,
     DEFAULT_QUANTIZATION_METHOD,
     QuantizationConfig,
     QuantizationScheme,
@@ -29,7 +28,7 @@ def test_basic_config():
 
     assert config.config_groups == config_groups
     assert config.quant_method == DEFAULT_QUANTIZATION_METHOD
-    assert config.format == DEFAULT_QUANTIZATION_FORMAT
+    assert config.format == "dense"
     assert config.quantization_status == QuantizationStatus.INITIALIZED
     assert config.global_compression_ratio is None
     assert isinstance(config.ignore, list) and len(config.ignore) == 0

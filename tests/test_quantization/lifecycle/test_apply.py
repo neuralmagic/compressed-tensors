@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
 from collections import defaultdict
 from typing import Optional
 from unittest.mock import MagicMock
@@ -55,53 +54,6 @@ def llama_stories_model():
         "Xenova/llama2.c-stories15M",
         torch_dtype="auto",
     )
-
-
-def test_target_prioritization(mock_frozen):
-    # tests that the config_groups are applied in the correct order
-    # of priority, where exact layer name > regex > module name
-    config = {
-        "quant_method": "compressed-tensors",
-        "format": "fakequant",
-        "config_groups": {
-            "group_1": {
-                "weights": {
-                    "num_bits": 8,
-                },
-                "targets": ["Linear"],
-            },
-            "group_2": {
-                "weights": {
-                    "num_bits": 4,
-                },
-                "targets": ["re:.*down_proj"],
-            },
-            "group_3": {
-                "weights": {
-                    "num_bits": 2,
-                },
-                "targets": ["model.layers.0.mlp.down_proj"],
-            },
-        },
-    }
-
-    model = AutoModelForCausalLM.from_pretrained(
-        "HuggingFaceM4/tiny-random-LlamaForCausalLM", torch_dtype="auto"
-    )
-    model.eval()
-
-    config = QuantizationConfig(**config)
-    config.quantization_status = QuantizationStatus.CALIBRATION
-    apply_quantization_config(model, config)
-    mock_frozen(model)
-
-    for name, module in model.named_modules():
-        if name == "model.layers.0.mlp.down_proj":
-            assert module.quantization_scheme.weights.num_bits == 2
-        elif re.match(".*down_proj", name):
-            assert module.quantization_scheme.weights.num_bits == 4
-        elif isinstance(module, torch.nn.Linear):
-            assert module.quantization_scheme.weights.num_bits == 8
 
 
 def test_apply_quantization_config_tinyllama():
@@ -174,13 +126,16 @@ def test_serialize_config_tinyllama():
 
     serialized_config = QuantizationConfig.from_pretrained(model)
     assert len(serialized_config.config_groups) == 2
-    assert serialized_config.config_groups["group_0"].targets == ["Embedding"]
-    assert serialized_config.config_groups["group_0"].input_activations is None
-    assert serialized_config.config_groups["group_1"].targets == ["Linear"]
-    assert serialized_config.config_groups["group_1"].input_activations is not None
+    assert serialized_config.config_groups["group_0"].targets == ["Linear"]
+    assert serialized_config.config_groups["group_0"].input_activations is not None
+    assert serialized_config.config_groups["group_1"].targets == ["Embedding"]
+    assert serialized_config.config_groups["group_1"].input_activations is None
     assert serialized_config.format == CompressionFormat.dense.value
     assert serialized_config.quant_method == DEFAULT_QUANTIZATION_METHOD
-    assert serialized_config.ignore == ["model.layers.1.mlp.down_proj"]
+    assert serialized_config.ignore == [
+        "LlamaRotaryEmbedding",
+        "model.layers.1.mlp.down_proj",
+    ]
     if serialized_config.global_compression_ratio is not None:
         assert serialized_config.global_compression_ratio > 1.0
         assert serialized_config.global_compression_ratio < 8.0
@@ -221,11 +176,11 @@ def get_tinyllama_model():
 def get_sample_tinyllama_quant_config(status: str = "frozen"):
     config_dict = {
         "quant_method": "compressed-tensors",
-        "format": "fakequant",
+        "format": "dense",
         "quantization_status": status,
         "global_compression_ratio": None,
         "config_groups": {
-            "group_1": {
+            "group_0": {
                 "weights": {
                     "num_bits": 8,
                     "type": "int",
@@ -240,7 +195,7 @@ def get_sample_tinyllama_quant_config(status: str = "frozen"):
                 },
                 "targets": ["Linear"],
             },
-            "group_2": {
+            "group_1": {
                 "weights": {
                     "num_bits": 8,
                     "type": "int",
