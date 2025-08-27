@@ -15,7 +15,6 @@
 import inspect
 from typing import Callable, Optional
 
-import torch
 from compressed_tensors.modeling.kvcache import initialize_hooked_kv_cache
 from compressed_tensors.quantization import (
     QuantizationArgs,
@@ -28,30 +27,51 @@ from compressed_tensors.quantization.lifecycle.initialize import (
 )
 from compressed_tensors.utils import getattr_chain
 from compressed_tensors.utils.internal import InternalModule
+from torch import Tensor
+from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 from transformers import AttentionInterface, PreTrainedModel
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 
 
-__all__ = ["IMPL_ATTR", "QuantizedAttentionImpl"]
+__all__ = [
+    "QuantizedAttentionImpl",
+    "initialize_hooked_attention",
+    "register_query_hook",
+]
 
 
 IMPL_ATTR = "impl"
-_original_impl = "eager"  # mutable
+_original_impl = "eager"  # mutable, assumes only one model at a time
 
 
 class QuantizedAttentionImpl(InternalModule):
-    def __init__(self, attn_module: torch.nn.Module):
+    """
+    QuantizedAttentionImpl module which wraps the functionality of the original
+    attention implementation. Unlike the original attention function, this
+    implementation is a `torch.nn.Module` which can be hooked to trigger
+    transforms and calibration hooks.
+
+    This module works by being registered as a submodule to attention modules via
+    `initialize_hooked_attention`, registering a new attention implementation function
+    which calls this module, then setting the model attention implementation to the new
+    function. After triggering hooks and quantization, this module calls the original
+    attention implementation function.
+
+    :param attn_module: parent attention module
+    """
+
+    def __init__(self, attn_module: Module):
         super().__init__()
         self.attn_module_container = [attn_module]  # avoid circular reference
         self._qparams_initialized = False
 
     def forward(
         self,
-        module: torch.nn.Module,
-        query: torch.Tensor,
-        key: torch.Tensor,
-        value: torch.Tensor,
+        module: Module,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
         *args,
         **kwargs,
     ):
@@ -72,7 +92,15 @@ class QuantizedAttentionImpl(InternalModule):
             **kwargs,
         )
 
-    def initialize_qparams_once(self, model: PreTrainedModel, module: torch.nn.Module):
+    def initialize_qparams_once(self, model: PreTrainedModel, module: Module):
+        """
+        Initialize attention quantization parameters if they have not already been
+        intialized. KV cache quantization parameters are initialized by the
+        `QuantizedKVCache`
+
+        :param model: parent model of attention module
+        :param module: attention module to initialize with
+        """
         assert module is self.attn_module_container[0]
         scheme: Optional[QuantizationScheme] = getattr(
             module, "quantization_scheme", None
@@ -86,7 +114,6 @@ class QuantizedAttentionImpl(InternalModule):
             and quant_args is not None
             and not scheme.kv_cache_only
         ):
-            # TODO: use model.config.num_attention_heads to find query_size
             assert quant_args.strategy == QuantizationStrategy.TENSOR
             _initialize_scale_zero_point(module, "q", quant_args)
             self._qparams_initialized = True
@@ -95,7 +122,7 @@ class QuantizedAttentionImpl(InternalModule):
 # ----- initialize ----- #
 
 
-def ct_hooked_attention(module: torch.nn.Module, *args, **kwargs):
+def _ct_hooked_attention(module: Module, *args, **kwargs):
     if hasattr(module, IMPL_ATTR):
         return module.impl(module, *args, **kwargs)
     else:
@@ -103,8 +130,16 @@ def ct_hooked_attention(module: torch.nn.Module, *args, **kwargs):
 
 
 def initialize_hooked_attention(
-    model: PreTrainedModel, module: torch.nn.Module, quantize: bool = True
+    model: PreTrainedModel, module: Module, quantize: bool = True
 ):
+    """
+    Initialize `QuantizedAttentionImpl` and `QuantizedKVCache` instances
+    attached to attention
+
+    :param model: parent model of attention module
+    :param module: attention module to initialize with
+    :param quantize: initialize attention quantization parameters
+    """
     if not hasattr(module, IMPL_ATTR):
         module.register_module(IMPL_ATTR, QuantizedAttentionImpl(module))
         if model.config._attn_implementation != "ct_hooked_attention":
@@ -112,7 +147,7 @@ def initialize_hooked_attention(
             global _original_impl
             _original_impl = model.config._attn_implementation
 
-            AttentionInterface.register("ct_hooked_attention", ct_hooked_attention)
+            AttentionInterface.register("ct_hooked_attention", _ct_hooked_attention)
             model.config._attn_implementation = "ct_hooked_attention"
 
     impl: QuantizedAttentionImpl = getattr(module, IMPL_ATTR)
@@ -125,10 +160,15 @@ def initialize_hooked_attention(
 # ----- hooks ----- #
 
 
-def register_query_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandle:
+def register_query_hook(
+    module: Module, hook: Callable[[Module, Tensor], Optional[Tensor]]
+) -> RemovableHandle:
     """
-    Registers a forward pre-hook on `module.impl` that replaces the `query` argument
-    with `hook(mod, query)` (handles both positional and keyword forms).
+    Register a hook which takes post-rope query states as an argument and
+    returns the modified query states or `None`
+
+    :param module: attention module to add hook to
+    :param hook: query hook function
     """
     impl = getattr(module, IMPL_ATTR)
 

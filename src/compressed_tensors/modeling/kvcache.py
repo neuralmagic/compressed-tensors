@@ -15,30 +15,46 @@
 import inspect
 from typing import Callable, Optional, Tuple
 
-import torch
-import transformers
 from compressed_tensors.quantization import QuantizationStrategy, forward_quantize
 from compressed_tensors.quantization.lifecycle.initialize import (
     _initialize_scale_zero_point,
 )
 from compressed_tensors.utils import getattr_chain
 from compressed_tensors.utils.internal import InternalModule
-from packaging import version
 from torch import Tensor
+from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 from transformers import Cache, PreTrainedModel
 
 
-__all__ = ["KV_CACHE_ATTR", "QuantizedKVCache"]
+__all__ = [
+    "QuantizedKVCache",
+    "initialize_hooked_kv_cache",
+    "register_key_hook",
+    "register_value_hook",
+]
 
 
 KV_CACHE_ATTR = "kv_cache"
 
 
 class QuantizedKVCache(InternalModule):
-    def __init__(self, attn_module: torch.nn.Module):
+    """
+    QuantizedKVCache module which wraps the functionality of any existing kvcache args.
+    Unlike transform Cache instances, this cache is a `torch.nn.Module` which can be
+    hooked to trigger transforms and calibration hooks.
+
+    This module works by being registered as a submodule to attention modules via
+    `initialize_hooked_kv_cache`, then adding a hook which replaces `past_key_values`
+    kwargs with this module. This module adopts the functionality of the replaced cache,
+    preserving caching functionality such as sliding window attention, ect.
+
+    :param attn_module: parent attention module
+    """
+
+    def __init__(self, attn_module: Module):
         super().__init__()
-        self.attn_module_container = [attn_module]  # avoid nn.Module circular reference
+        self.attn_module_container = [attn_module]  # avoid circular reference
         self.past_key_values: Optional[Cache] = None
         self._qparams_initialized = False
 
@@ -70,13 +86,19 @@ class QuantizedKVCache(InternalModule):
         self.past_key_values = None
         return ret
 
-    def initialize_qparams_once(self, model: PreTrainedModel, module: torch.nn.Module):
+    def initialize_qparams_once(self, model: PreTrainedModel, module: Module):
+        """
+        Initialize kv cache quantization parameters if they have not already been
+        intialized
+
+        :param model: parent model of attention module
+        :param module: attention module to initialize with
+        """
         assert module is self.attn_module_container[0]
         scheme = getattr(module, "quantization_scheme", None)
         quant_args = getattr(scheme, "input_activations", None)
 
         if not self._qparams_initialized and quant_args is not None:
-            # TODO: use model.config.num_key_value_heads to find key_size, value_size
             assert quant_args.strategy == QuantizationStrategy.TENSOR
             _initialize_scale_zero_point(module, "k", quant_args)
             _initialize_scale_zero_point(module, "v", quant_args)
@@ -86,19 +108,7 @@ class QuantizedKVCache(InternalModule):
 # ----- initialize ----- #
 
 
-def initialize_hooked_kv_cache(
-    model: PreTrainedModel, module: torch.nn.Module, quantize: bool = False
-):
-    if not hasattr(module, KV_CACHE_ATTR):
-        module.register_module(KV_CACHE_ATTR, QuantizedKVCache(module))
-        module.register_forward_pre_hook(kv_cache_attention_hook, with_kwargs=True)
-
-    kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
-    if quantize:
-        kv_cache.initialize_qparams_once(model, module)
-
-
-def kv_cache_attention_hook(module: torch.nn.Module, args, kwargs):
+def _kv_cache_attention_hook(module: Module, args, kwargs):
     kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
     _past_kv_name = (
         "past_key_values"  # transformers#39956
@@ -111,10 +121,38 @@ def kv_cache_attention_hook(module: torch.nn.Module, args, kwargs):
     return args, kwargs
 
 
+def initialize_hooked_kv_cache(
+    model: PreTrainedModel, module: Module, quantize: bool = False
+):
+    """
+    Initialize a `QuantizedKVCache` instance attached to attention
+
+    :param model: parent model of attention module
+    :param module: attention module to initialize with
+    :param quantize: initialize kv cache quantization parameters
+    """
+    if not hasattr(module, KV_CACHE_ATTR):
+        module.register_module(KV_CACHE_ATTR, QuantizedKVCache(module))
+        module.register_forward_pre_hook(_kv_cache_attention_hook, with_kwargs=True)
+
+    kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
+    if quantize:
+        kv_cache.initialize_qparams_once(model, module)
+
+
 # ----- hooks ----- #
 
 
-def register_key_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandle:
+def register_key_hook(
+    module: Module, hook: Callable[[Module, Tensor], Optional[Tensor]]
+) -> RemovableHandle:
+    """
+    Register a hook which takes post-rope key states as an argument and
+    returns the modified key states or `None`
+
+    :param module: attention module to add hook to
+    :param hook: key hook function
+    """
     kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
 
     def _hook(cache: QuantizedKVCache, args, kwargs):
@@ -128,7 +166,16 @@ def register_key_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandl
     return kv_cache.register_forward_pre_hook(_hook, with_kwargs=True)
 
 
-def register_value_hook(module: torch.nn.Module, hook: Callable) -> RemovableHandle:
+def register_value_hook(
+    module: Module, hook: Callable[[Module, Tensor], Optional[Tensor]]
+) -> RemovableHandle:
+    """
+    Register a hook which takes value states as an argument and
+    returns the modified value states or `None`
+
+    :param module: attention module to add hook to
+    :param hook: value hook function
+    """
     kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
 
     def _hook(cache: QuantizedKVCache, args, kwargs):

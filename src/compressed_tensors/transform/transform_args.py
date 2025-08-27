@@ -46,6 +46,10 @@ class TransformLocation(str, Enum):
     Q_ATTN = "q_attn"
 
     def is_online(self) -> bool:
+        """
+        Returns True if the transform location is online
+        (applied at runtime), False otherwise
+        """
         return self not in (
             TransformLocation.WEIGHT_INPUT,
             TransformLocation.WEIGHT_OUTPUT,
