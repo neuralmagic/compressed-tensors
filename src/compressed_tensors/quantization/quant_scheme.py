@@ -163,6 +163,16 @@ NVFP4A16 = dict(
     )
 )
 
+MXFP4 = dict(
+    weights=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.GROUP,
+        symmetric=True,
+        dynamic=False, 
+        group_size=32
+    )
+)
 
 NVFP4 = dict(
     weights=QuantizationArgs(
