@@ -24,7 +24,7 @@ from compressed_tensors.transform.utils.matrix import (
 )
 from compressed_tensors.utils import get_execution_device, get_offloaded_device
 from compressed_tensors.utils.helpers import ParameterizedDefaultDict
-from torch import Tensor, device
+from torch import Tensor, device, dtype
 from torch.nn import Module, Parameter
 
 
@@ -55,8 +55,13 @@ class HadamardFactory(TransformFactory):
         size = get_transform_size(module, args.location, self.scheme.head_dim)
         exec_device = get_execution_device(module)
         device = get_offloaded_device(module)
+        precision = self.scheme.precision if args.is_online() else torch.float64
 
-        factory_kwargs = {"device": device, "construct_device": exec_device}
+        factory_kwargs = {
+            "device": device,
+            "construct_device": exec_device,
+            "precision": precision,
+        }
         weight = self.weights.get(size, factory_kwargs=factory_kwargs)
         # TODO: permutations should be keyed by fused modules, not weight
         perm = self.perms[weight] if self.scheme.randomize else None
@@ -67,8 +72,8 @@ class HadamardFactory(TransformFactory):
         size: int,
         device: device,
         construct_device: device,
+        precision: dtype,
     ) -> Parameter:
-        precision = self.scheme.precision
         data = deterministic_hadamard_matrix(size, precision, construct_device)
         data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
@@ -93,8 +98,7 @@ class HadamardTransform(TransformBase):
         self.scheme = scheme
         self.args = args
         self.module_type = module_type
-        self._scale = torch.tensor(weight.size(0), dtype=self.scheme.precision).sqrt()
-        self._precision = scheme.precision if args.is_online() else torch.float64
+        self._scale = torch.tensor(weight.size(0), dtype=torch.float64).sqrt()
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -107,8 +111,8 @@ class HadamardTransform(TransformBase):
 
         return (
             apply_transform_weight(
-                weight.to(dtype=self._precision, device=value.device),
-                value.to(self._precision),
+                weight.to(device=value.device),
+                value.to(dtype=weight.dtype),
                 self.args.location,
                 self.module_type,
             )
