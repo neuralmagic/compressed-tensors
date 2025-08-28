@@ -215,7 +215,6 @@ MXFP4 = dict(
     ),
 )
 
-
 # 8 bit integer weights and 8 bit activations quantization
 INT8_W8A8 = dict(
     weights=QuantizationArgs(
