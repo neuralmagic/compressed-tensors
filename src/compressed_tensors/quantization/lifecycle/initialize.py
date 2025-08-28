@@ -216,7 +216,11 @@ def _initialize_scale_zero_point(
     scale_dtype = scale_dtype if scale_dtype is not None else module.weight.dtype
 
     if is_fp4(quantization_args=quantization_args):
-        scale_dtype = zp_dtype = FP8_E4M3_DATA.dtype
+        if quantization_args.group_size == 16:
+            scale_dtype = zp_dtype = FP8_E4M3_DATA.dtype
+        else:
+            # group_size 32
+            scale_dtype = zp_dtype = torch.uint8
     else:
         # TODO: consider erroring out in the future as if the dtype if not one of these,
         # there is likely bug
