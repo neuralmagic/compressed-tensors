@@ -125,6 +125,7 @@ def apply_quantization_config(
     :param run_compressed: Whether the model will be run in compressed mode or
         decompressed fully on load
     """
+    from compressed_tensors.linear.compressed_linear import CompressedLinear
 
     config = deepcopy(config)
     if config is None:  # see PR #180
@@ -148,7 +149,6 @@ def apply_quantization_config(
         # quant scheme to the matching layers
         matched_targets = match_targets(name, submodule, target_to_scheme)
         scheme = _scheme_from_targets(target_to_scheme, matched_targets, name)
-
         # target matched - add layer and scheme to target list
         submodule.quantization_scheme = scheme
 
@@ -159,8 +159,6 @@ def apply_quantization_config(
             and isinstance(submodule, torch.nn.Linear)
             and config.format != CompressionFormat.dense.value
         ):
-            from compressed_tensors.linear.compressed_linear import CompressedLinear
-
             # TODO: expand to more module types
             compressed_linear = CompressedLinear.from_linear(
                 submodule,
@@ -168,9 +166,6 @@ def apply_quantization_config(
                 quantization_format=config.format,
             )
             replace_module(model, name, compressed_linear)
-
-        # target matched - add layer and scheme to target list
-        submodule.quantization_scheme = scheme
 
         # apply current quantization status to each targeted submodule
         apply_quantization_status(submodule, config.quantization_status)
