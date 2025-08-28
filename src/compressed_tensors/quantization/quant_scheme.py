@@ -163,24 +163,6 @@ NVFP4A16 = dict(
     )
 )
 
-MXFP4 = dict(
-    weights=QuantizationArgs(
-        num_bits=4,
-        type=QuantizationType.FLOAT,
-        strategy=QuantizationStrategy.GROUP,
-        symmetric=True,
-        dynamic=False,
-        group_size=32,
-    ),
-    input_activations=QuantizationArgs(
-        num_bits=4,
-        type=QuantizationType.FLOAT,
-        strategy=QuantizationStrategy.GROUP,
-        dynamic=True,
-        symmetric=True,
-        group_size=32,
-    ),
-)
 
 NVFP4 = dict(
     weights=QuantizationArgs(
@@ -202,6 +184,37 @@ NVFP4 = dict(
         observer="static_minmax",
     ),
 )
+
+MXFP4A16 = dict(
+    weights=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.GROUP,
+        symmetric=True,
+        dynamic=False,
+        group_size=32,
+    )
+)
+
+MXFP4 = dict(
+    weights=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.GROUP,
+        symmetric=True,
+        dynamic=False,
+        group_size=32,
+    ),
+    input_activations=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.GROUP,
+        dynamic=True,
+        symmetric=True,
+        group_size=32,
+    ),
+)
+
 
 # 8 bit integer weights and 8 bit activations quantization
 INT8_W8A8 = dict(
