@@ -169,9 +169,17 @@ MXFP4 = dict(
         type=QuantizationType.FLOAT,
         strategy=QuantizationStrategy.GROUP,
         symmetric=True,
-        dynamic=False, 
-        group_size=32
-    )
+        dynamic=False,
+        group_size=32,
+    ),
+    input_activations=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.GROUP,
+        dynamic=True,
+        symmetric=True,
+        group_size=32,
+    ),
 )
 
 NVFP4 = dict(
