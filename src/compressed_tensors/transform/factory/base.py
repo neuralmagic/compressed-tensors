@@ -19,6 +19,14 @@ from typing import List, Optional, Set, Tuple
 import torch
 import torch.nn.utils.parametrize as P
 import tqdm
+from compressed_tensors.modeling.attention import (
+    initialize_hooked_attention,
+    register_query_hook,
+)
+from compressed_tensors.modeling.kvcache import (
+    initialize_hooked_kv_cache,
+    register_key_hook,
+)
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
@@ -37,6 +45,7 @@ from compressed_tensors.utils import (
 from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
 from torch.nn import Module, Parameter
+from transformers import PreTrainedModel
 
 
 __all__ = ["TransformFactory", "TransformBase"]
@@ -85,7 +94,7 @@ class TransformFactory(RegistryMixin, ABC):
         """
         raise NotImplementedError()
 
-    def apply_to_model(self, model: Module, use_tqdm=True):
+    def apply_to_model(self, model: PreTrainedModel, use_tqdm=True):
         """
         Create transforms and apply them to the model
 
@@ -99,11 +108,13 @@ class TransformFactory(RegistryMixin, ABC):
 
         desc = f"Applying {self.name} transforms"
         for module, arg in tqdm.tqdm(modules_args, desc=desc, disable=(not use_tqdm)):
-            self._apply_to_module(module, arg)
+            self._apply_to_module(module, arg, model)
 
         self._update_tied_weights()
 
-    def _apply_to_module(self, module: Module, args: TransformArgs):
+    def _apply_to_module(
+        self, module: Module, args: TransformArgs, model: PreTrainedModel
+    ):
         """
         Create transforms and apply them to the module
 
@@ -161,7 +172,24 @@ class TransformFactory(RegistryMixin, ABC):
 
             module.register_forward_hook(output_hook)
 
-        # other locations such as q_attn and k_attn have not been implemented
+        # register query hook to attention
+        elif args.location == TransformLocation.Q_ATTN:
+            initialize_hooked_attention(model, module, quantize=False)
+
+            def query_hook(_, query_states):
+                return transform(query_states)
+
+            register_query_hook(module, query_hook)
+
+        # register key hook to kvcache
+        elif args.location == TransformLocation.K_CACHE:
+            initialize_hooked_kv_cache(model, module, quantize=False)
+
+            def key_hook(_, key_states):
+                return transform(key_states)
+
+            register_key_hook(module, key_hook)
+
         else:
             raise NotImplementedError()
 
