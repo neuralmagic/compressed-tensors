@@ -14,6 +14,7 @@
 
 from typing import List, Optional
 
+import torch
 from compressed_tensors.config import CompressionFormat, SparsityStructure
 from compressed_tensors.quantization import (
     QuantizationArgs,
@@ -31,7 +32,18 @@ def _get_quant_compression_format(
     input_args: QuantizationArgs,
     weight_args: QuantizationArgs,
     sparsity_structure: Optional[str] = None,
-):
+) -> CompressionFormat: 
+    """
+    Using the weight and input quantization args as well as an optional
+    sparsity structure, determine the compression format that should be 
+    applied to a given module
+
+    :param input_args: input quantization parameters
+    :param weight_args: weight quantization parameters
+    :param sparsity_structure: optional (global) modle sparsity
+        structure
+    :return CompresssionFormat for the module
+    """
     is_24_structure = (
         SparsityStructure(sparsity_structure) == SparsityStructure.TWO_FOUR
     )
@@ -69,57 +81,58 @@ def _get_quant_compression_format(
         return CompressionFormat.naive_quantized
 
 
+def set_per_module_format(
+    module: torch.nn.Module, sparsity_structure: Optional[str] = None
+):
+    """
+    Determine and set the per module quantization format given quantization args
+    and sparsity structure.
+
+    :param module: module which has its quantization inferred
+    :param sparisty_structure: optional sparsity applied to the module
+
+    """
+    weight_scheme = module.quantization_scheme.weights
+    input_scheme = module.quantization_scheme.input_activations
+    if weight_scheme is None:
+        return  # no weight quant - nothing to compress
+    compression_format = _get_quant_compression_format(
+        input_scheme, weight_scheme, sparsity_structure
+    )
+
+    # If set, we check if it matches our inferred one
+    if module.quantization_scheme.format is not None:
+        # If it does not, warn the user
+        if module.quantization_scheme.format != compression_format.value:
+            logger.warning(
+                "The provided format for the module does not match the "
+                "inferred format. Compression may fail "
+            )
+    else:
+        # If not set, we set ours
+        module.quantization_scheme.format = compression_format.value
+
+
 def infer_and_set_per_module_quantization_format(
-    model,
-    quantization_format: Optional[str] = None,
-    save_compressed: bool = False,
+    model: torch.nn.Module,
     sparsity_structure: Optional[str] = None,
 ) -> Optional[List[str]]:
     """
     Infers the quantization format for a model based on its state and provided
-    compression arguments. Also updates thhe quantization_scheme.format value
+    compression arguments. Updates thhe quantization_scheme.format value
     based on the inferred format. Returns the unique list of formats in the model
     or None if empty list
 
     For a summary of the formats, see `docs/guides/compression_formats.md`.
 
-    :param model: model to check for quantization, if the model is not quantized no
-        quantization format is returned
-    :param quantization_format: user provided quantization format, supercedes any
-        inferred quantization format
-    :param save_compressed: used to infer a quantization format if None is provided
+    :param model: model to check for quantization
+    :param sparisty_structure: optional sparsity applied to the module
     :return compression format appropriate for model
     """
-
-    if not save_compressed:
-        return None
-
-    if quantization_format:
-        return [quantization_format]
-
     unique_formats = []
     for submodule in model.modules():
         if is_module_quantized(submodule):
-            weight_scheme = submodule.quantization_scheme.weights
-            input_scheme = submodule.quantization_scheme.input_activations
-            if weight_scheme is None:
-                continue  # no weight quant - nothing to compress
-            compression_format = _get_quant_compression_format(
-                input_scheme, weight_scheme, sparsity_structure
-            )
-
-            # If set, we check if it matches our inferred one
-            if submodule.quantization_scheme.format is not None:
-                # If it does not, warn the user
-                if submodule.quantization_scheme.format != compression_format.value:
-                    logger.warning(
-                        "The provided format for the module does not match the "
-                        "inferred format. Compression may fail "
-                    )
-            else:
-                # If not set, we set ours
-                submodule.quantization_scheme.format = compression_format.value
-
+            set_per_module_format(submodule, sparsity_structure)
             if submodule.quantization_scheme.format not in unique_formats:
                 unique_formats.append(submodule.quantization_scheme.format)
 

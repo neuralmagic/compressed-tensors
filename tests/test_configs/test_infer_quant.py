@@ -60,6 +60,6 @@ def test_infer_quant_format(preset, sparsity_structure, expected_format):
         module.quantization_scheme = quant_scheme
 
     inferred_format = infer_and_set_per_module_quantization_format(
-        dummy_model, save_compressed=True, sparsity_structure=sparsity_structure
+        dummy_model, sparsity_structure=sparsity_structure
     )
     assert inferred_format[0] == expected_format
