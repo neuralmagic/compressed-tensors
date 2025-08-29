@@ -1,10 +1,25 @@
-import pytest
-from compressed_tensors.quantization import preset_name_to_scheme
+# Copyright (c) 2021 - present / Neuralmagic, Inc. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from compressed_tensors.config.formats import (
+from collections import OrderedDict
+
+import pytest
+import torch
+from compressed_tensors.config.format import (
     infer_and_set_per_module_quantization_format,
 )
-import torch
+from compressed_tensors.quantization import preset_name_to_scheme
 
 
 @pytest.mark.parametrize(
@@ -22,14 +37,14 @@ def test_infer_quant_format(preset, sparsity_structure, expected_format):
     quant_scheme = preset_name_to_scheme(preset, targets=["Linear"])
 
     dummy_model = torch.nn.Sequential(
-        torch.nn.OrderedDict(
+        OrderedDict(
             [
-                ("fc1", torch.nnLinear(8, 16, bias=True)),
+                ("fc1", torch.nn.Linear(8, 16, bias=True)),
                 ("fc2", torch.nn.Linear(16, 32, bias=True)),
                 (
                     "block1",
                     torch.nn.Sequential(
-                        torch.nn.OrderedDict(
+                        OrderedDict(
                             [
                                 ("fc1", torch.nn.Linear(32, 16, bias=True)),
                                 ("fc2", torch.nn.Linear(16, 8, bias=True)),
