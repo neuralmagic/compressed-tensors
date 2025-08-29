@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import torch
 from compressed_tensors.config import CompressionFormat, SparsityStructure
@@ -116,7 +116,7 @@ def set_per_module_format(
 def infer_and_set_per_module_quantization_format(
     model: torch.nn.Module,
     sparsity_structure: Optional[str] = None,
-) -> Optional[List[str]]:
+) -> Union[str, List[str]]:
     """
     Infers the quantization format for a model based on its state and provided
     compression arguments. Updates thhe quantization_scheme.format value
@@ -138,4 +138,4 @@ def infer_and_set_per_module_quantization_format(
 
     if len(unique_formats) > 0:
         return unique_formats
-    return None
+    return CompressionFormat.dense.value
