@@ -32,10 +32,10 @@ def _get_quant_compression_format(
     input_args: QuantizationArgs,
     weight_args: QuantizationArgs,
     sparsity_structure: Optional[str] = None,
-) -> CompressionFormat: 
+) -> CompressionFormat:
     """
     Using the weight and input quantization args as well as an optional
-    sparsity structure, determine the compression format that should be 
+    sparsity structure, determine the compression format that should be
     applied to a given module
 
     :param input_args: input quantization parameters
