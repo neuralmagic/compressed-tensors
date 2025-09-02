@@ -14,6 +14,7 @@
 
 import inspect
 from typing import Callable, Optional
+from weakref import ref
 
 from compressed_tensors.modeling.kvcache import initialize_hooked_kv_cache
 from compressed_tensors.quantization import (
@@ -42,7 +43,7 @@ __all__ = [
 
 
 IMPL_ATTR = "impl"
-_original_impl = "eager"  # mutable, assumes only one model at a time
+HOOKED_ATTENTION_NAME = "ct_hooked_attention"
 
 
 class QuantizedAttentionImpl(InternalModule):
@@ -63,7 +64,7 @@ class QuantizedAttentionImpl(InternalModule):
 
     def __init__(self, attn_module: Module):
         super().__init__()
-        self.attn_module_container = [attn_module]  # avoid circular reference
+        self.attn_module = ref(attn_module)  # avoid circular references
         self._qparams_initialized = False
 
     def forward(
@@ -95,13 +96,14 @@ class QuantizedAttentionImpl(InternalModule):
     def initialize_qparams_once(self, model: PreTrainedModel, module: Module):
         """
         Initialize attention quantization parameters if they have not already been
-        intialized. KV cache quantization parameters are initialized by the
+        initialized. KV cache quantization parameters are initialized by the
         `QuantizedKVCache`
 
         :param model: parent model of attention module
         :param module: attention module to initialize with
         """
-        assert module is self.attn_module_container[0]
+        # TODO: move to initialize.py
+        assert module is self.attn_module()
         scheme: Optional[QuantizationScheme] = getattr(
             module, "quantization_scheme", None
         )
@@ -142,13 +144,13 @@ def initialize_hooked_attention(
     """
     if not hasattr(module, IMPL_ATTR):
         module.register_module(IMPL_ATTR, QuantizedAttentionImpl(module))
-        if model.config._attn_implementation != "ct_hooked_attention":
+        if model.config._attn_implementation != HOOKED_ATTENTION_NAME:
             # assumes only one model at a time
             global _original_impl
             _original_impl = model.config._attn_implementation
 
-            AttentionInterface.register("ct_hooked_attention", _ct_hooked_attention)
-            model.config._attn_implementation = "ct_hooked_attention"
+            AttentionInterface.register(HOOKED_ATTENTION_NAME, _ct_hooked_attention)
+            model.config._attn_implementation = HOOKED_ATTENTION_NAME
 
     impl: QuantizedAttentionImpl = getattr(module, IMPL_ATTR)
     if quantize:

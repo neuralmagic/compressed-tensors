@@ -14,6 +14,7 @@
 
 import inspect
 from typing import Callable, Optional, Tuple
+from weakref import ref
 
 from compressed_tensors.quantization import QuantizationStrategy, forward_quantize
 from compressed_tensors.quantization.lifecycle.initialize import (
@@ -54,7 +55,7 @@ class QuantizedKVCache(InternalModule):
 
     def __init__(self, attn_module: Module):
         super().__init__()
-        self.attn_module_container = [attn_module]  # avoid circular reference
+        self.attn_module = ref(attn_module)  # avoid circular reference
         self.past_key_values: Optional[Cache] = None
         self._qparams_initialized = False
 
@@ -69,7 +70,7 @@ class QuantizedKVCache(InternalModule):
         **kwargs,
     ) -> Tuple[Tensor, Tensor]:
         # quantization
-        module = self.attn_module_container[0]
+        module = self.attn_module()
         quant_args_attr = "quantization_scheme.input_activations"
         quant_args = getattr_chain(module, quant_args_attr, None)
         quant_enabled = getattr(module, "quantization_enabled", True)
@@ -89,12 +90,13 @@ class QuantizedKVCache(InternalModule):
     def initialize_qparams_once(self, model: PreTrainedModel, module: Module):
         """
         Initialize kv cache quantization parameters if they have not already been
-        intialized
+        initialized
 
         :param model: parent model of attention module
         :param module: attention module to initialize with
         """
-        assert module is self.attn_module_container[0]
+        # TODO: move to initialize.py
+        assert module is self.attn_module()
         scheme = getattr(module, "quantization_scheme", None)
         quant_args = getattr(scheme, "input_activations", None)
 
