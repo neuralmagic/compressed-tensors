@@ -201,11 +201,9 @@ class ModelCompressor:
             sparsity_config=sparsity_config,
             quantization_config=quantization_config,
             transform_config=transform_config,
-            compression_formats=(
-                [quantization_format]
-                if isinstance(quantization_format, str)
-                else quantization_format
-            ),
+            compression_formats=[quantization_format]
+            if isinstance(quantization_format, str)
+            else quantization_format,
         )
 
     @staticmethod
