@@ -235,7 +235,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
             )
         )
 
-    if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
+    if status >= QuantizationStatus.COMPRESSED > current_status:
         model.apply(compress_quantized_weights)
 
 
