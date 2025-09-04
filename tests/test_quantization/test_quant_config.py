@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pytest
+from compressed_tensors import CompressionFormat
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_FORMAT,
     DEFAULT_QUANTIZATION_METHOD,

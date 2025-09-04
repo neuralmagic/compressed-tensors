@@ -30,6 +30,7 @@ __all__ = [
     "match_targets",
     "match_modules_set",
     "is_match",
+    "is_narrow_match",
 ]
 
 
@@ -128,7 +129,6 @@ def match_targets(
     :param module: the module to match
     :param targets: the target strings, potentially containing "re:" prefixes
     :return: the targets that match the given name and module
-
     Outputs are ordered by type: exact name match, regex name match, class name match
     """
     targets = targets or []
@@ -304,4 +304,14 @@ def _match_class(module: torch.nn.Module, target: str) -> bool:
             )
         )
         for cls in module.__class__.__mro__
+    )
+
+
+def is_narrow_match(model: torch.nn.Module, targets: Iterable[str], name: str) -> bool:
+    module = model.get_submodule(name)
+    parent_name = name.rsplit(".", 1)[0]
+    parent = model.get_submodule(parent_name)
+
+    return is_match(name, module, targets) and not is_match(
+        parent_name, parent, targets
     )
