@@ -167,6 +167,16 @@ def _initialize_scale_zero_point(
     # 2. Infer expected scale/zero point shape
     if quantization_args.strategy == QuantizationStrategy.TOKEN:
         expected_shape = (1, 1)
+    elif quantization_args.strategy == QuantizationStrategy.ATTN_HEAD:
+        # supports only GQA models, support others when/if needed
+        if base_name == "q":
+            expected_shape = module.config.num_attention_heads
+        elif base_name in ("k", "v"):
+            expected_shape = module.config.num_key_value_heads
+        else:
+            raise ValueError(
+                f"Unsupported target {type(module)} for per-attention-head quantization"
+            )
     else:
         expected_shape = 1
 
