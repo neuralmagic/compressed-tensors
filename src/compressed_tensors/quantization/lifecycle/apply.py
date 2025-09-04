@@ -154,20 +154,21 @@ def apply_quantization_config(
 
         # replace with run compressed if applicable
         # FUTURE: move this to model compressor
-        if isinstance(submodule, torch.nn.Linear) and run_compressed:
-            format = config.format
-            if format != CompressionFormat.dense.value:
-                if isinstance(submodule, torch.nn.Linear):
-                    # TODO: expand to more module types
-                    compressed_linear = CompressedLinear.from_linear(
-                        submodule,
-                        quantization_scheme=scheme,
-                        quantization_format=format,
-                    )
-                    replace_module(model, name, compressed_linear)
+        if (
+            run_compressed
+            and isinstance(submodule, torch.nn.Linear)
+            and config.format != CompressionFormat.dense.value
+        ):
+            # TODO: expand to more module types
+            compressed_linear = CompressedLinear.from_linear(
+                submodule,
+                quantization_scheme=scheme,
+                quantization_format=config.format,
+            )
+            replace_module(model, name, compressed_linear)
 
-    # apply current quantization status across all targeted layers
-    apply_quantization_status(model, config.quantization_status)
+        # apply current quantization status to each targeted submodule
+        apply_quantization_status(submodule, config.quantization_status)
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
@@ -234,7 +235,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
             )
         )
 
-    if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
+    if status >= QuantizationStatus.COMPRESSED > current_status:
         model.apply(compress_quantized_weights)
 
 
