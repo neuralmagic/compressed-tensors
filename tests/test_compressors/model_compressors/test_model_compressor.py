@@ -537,6 +537,7 @@ def test_decompress_model(model_stub, comp_stub):
     true_decompressed_model = AutoModelForCausalLM.from_pretrained(
         comp_stub,
         quantization_config=CompressedTensorsConfig(run_compressed=False),
+        torch_dtype=torch.float32,
     )
     true_decompressed = dict(true_decompressed_model.state_dict())
     true_decompressed = remove_empty_weight_zero_points(true_decompressed)  # see above
@@ -545,7 +546,7 @@ def test_decompress_model(model_stub, comp_stub):
     # NOTE there is no other way to load a compressed model into memory, since
     # there is no way to turn off decompression for sparse models
     # https://github.com/huggingface/transformers/blob/main/src/transformers/quantizers/quantizer_compressed_tensors.py#L133
-    model = AutoModelForCausalLM.from_pretrained(model_stub)
+    model = AutoModelForCausalLM.from_pretrained(model_stub, torch_dtype=torch.float32)
     compressor = ModelCompressor.from_pretrained(comp_stub)
     compressor.compress_model(model)
     compressor.decompress_model(model)
