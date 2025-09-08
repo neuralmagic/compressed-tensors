@@ -49,10 +49,19 @@ def _get_quant_compression_format(
     )
     is_weight_only = weight_args is not None and input_args is None
 
+    # w4a16, w4a4, fp4
     if weight_args.num_bits == 4 and weight_args.type == QuantizationType.FLOAT.value:
-        return CompressionFormat.nvfp4_pack_quantized
+        if weight_args.strategy in (
+            QuantizationStrategy.TENSOR_GROUP.value,
+            QuantizationStrategy.GROUP.value,
+        ):
+            return CompressionFormat.nvfp4_pack_quantized
+        else:
+            if is_weight_only:
+                return CompressionFormat.naive_quantized 
+            return CompressionFormat.float_quantized
 
-    if is_weight_only:  # w4a16 and w8a16
+    if is_weight_only:  # w4a16 and w8a16, int
         is_valid_pack = (
             weight_args.num_bits in [4, 8]
             and weight_args.type == QuantizationType.INT.value
