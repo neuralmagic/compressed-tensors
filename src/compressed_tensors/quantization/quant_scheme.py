@@ -73,7 +73,8 @@ class QuantizationScheme(BaseModel):
                     and inputs.dynamic is True
                 ):
                     raise NotImplementedError(
-                        "Static and local group-wise quantization is not supported"
+                        "Static and local group-wise activation "
+                        "quantization is not supported"
                     )
 
 >>>>>>> db46c84 (satisfy quality checker)
