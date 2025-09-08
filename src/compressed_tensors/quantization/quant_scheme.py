@@ -68,7 +68,7 @@ class QuantizationScheme(BaseModel):
             ):
                 if (
                     inputs.strategy == QuantizationStrategy.GROUP
-                    and inputs.dynamic != True
+                    and inputs.dynamic is True
                 ):
                     raise NotImplementedError(
                         "Static and local group-wise quantization is not supported"
