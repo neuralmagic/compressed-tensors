@@ -53,12 +53,13 @@ def _get_quant_compression_format(
     if weight_args.num_bits == 4 and weight_args.type == QuantizationType.FLOAT.value:
         if weight_args.strategy in (
             QuantizationStrategy.TENSOR_GROUP.value,
+            QuantizationStrategy.CHANNEL.value,
             QuantizationStrategy.GROUP.value,
         ):
             return CompressionFormat.nvfp4_pack_quantized
         else:
             if is_weight_only:
-                return CompressionFormat.naive_quantized 
+                return CompressionFormat.naive_quantized
             return CompressionFormat.float_quantized
 
     if is_weight_only:  # w4a16 and w8a16, int
