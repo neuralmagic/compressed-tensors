@@ -89,9 +89,10 @@ def set_per_module_format(
     and sparsity structure.
 
     :param module: module which has its quantization inferred
-    :param sparisty_structure: optional sparsity applied to the module
-
+    :param sparsity_structure: optional sparsity applied to the module
     """
+    assert hasattr(module, "quantization_scheme")
+
     weight_scheme = module.quantization_scheme.weights
     input_scheme = module.quantization_scheme.input_activations
     if weight_scheme is None:
@@ -126,7 +127,7 @@ def infer_and_set_per_module_quantization_format(
     For a summary of the formats, see `docs/guides/compression_formats.md`.
 
     :param model: model to check for quantization
-    :param sparisty_structure: optional sparsity applied to the module
+    :param sparsity_structure: optional sparsity applied to the module
     :return compression format appropriate for model
     """
     unique_formats = []

@@ -43,7 +43,9 @@ class QuantizationScheme(BaseModel):
     :param weights: quantization config for layer weights
     :param input_activations: quantization config for layer inputs
     :param output_activations: quantization config for layer outputs
-    :param format: CompressionFormat for the layer
+    :param format: format used to compress modules to which this scheme is applied.
+        A `None` value means that this value will be inferred and set by
+        `infer_and_set_per_module_quantization_format` before compression
     """
 
     targets: List[str]
