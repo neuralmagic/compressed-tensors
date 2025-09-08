@@ -44,8 +44,6 @@ def test_serialization(type, randomize, model_apply, tmp_path, offload=False):
 
 
 @pytest.mark.skip(reason="Requires changes in upstream transformers")
-# https://github.com/huggingface/transformers/pull/39280
-# https://github.com/huggingface/transformers/pull/39263
 @requires_gpu
 @requires_accelerate()
 @pytest.mark.parametrize("type", ("hadamard", "random-hadamard"))
