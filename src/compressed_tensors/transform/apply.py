@@ -16,6 +16,7 @@ from collections import defaultdict
 from typing import List, Tuple
 
 import torch
+from accelerate.utils import has_offloaded_params
 from compressed_tensors import TRANSFORM_CONFIG_NAME
 from compressed_tensors.transform import TransformConfig, TransformFactory
 
@@ -46,13 +47,19 @@ def apply_transform_config(model: torch.nn.Module, config: TransformConfig):
 
 def _tie_offloaded_tensors(model: torch.nn.Module):
     """
-    Populate the `_dynamic_tied_weights_keys` attribute of transforms,
-    which is used by transformers to detect and remove shared pointers
-    during saving
-    """
-    from compressed_tensors.utils import has_offloaded_params
+    When accelerate replaces tensors with meta tensors during offloading, the meta
+    tensors may not be identical, even if the offloaded values are identical.
 
-    # map from  to keys
+    However, transformers can only serialize correctly if meta tensors are identical
+    (see transformers#39263).
+
+    This function collects all meta tensors which have shared offloaded values and sets
+    those tensors to be identical so that they can be removed during serialization
+
+    :param model: model potentially containing offloaded meta tensors to fix
+    """
+
+    # map from offloaded tensor pointers to module-key locations
     offloaded_ptrs: dict[int, List[Tuple[torch.nn.Module, str]]] = defaultdict(list)
     for module in model.modules():
         # NOTE: previously asserted that parent._hf_hook.place_submodules=False
@@ -61,12 +68,12 @@ def _tie_offloaded_tensors(model: torch.nn.Module):
                 param = module._hf_hook.weights_map[key]
                 offloaded_ptrs[id(param)].append((module, key))
 
-    # populate `_dynamic_tied_weights_keys` if there is more than one key
-    # and ensure that they share tensors. In the case of offloading, this
+    # ensure that if a location shares an offloaded tensor pointers, that the
+    # meta tensor is also identical (assigned to the first element of the set)
     for shared_keys in offloaded_ptrs.values():
-        if len(shared_keys) > 1:
-            first_tensor = getattr(shared_keys[0][0], shared_keys[0][1])
-            assert first_tensor.device.type == "meta"
-            for module, key in shared_keys:
-                assert getattr(module, key).device.type == "meta"
-                setattr(module, key, first_tensor)
+        assert len(shared_keys) >= 1
+        first_tensor = getattr(shared_keys[0][0], shared_keys[0][1])
+        assert first_tensor.device.type == "meta"
+        for module, key in shared_keys:
+            assert getattr(module, key).device.type == "meta"
+            setattr(module, key, first_tensor)
