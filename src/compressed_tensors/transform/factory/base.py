@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Set
+from typing import List, Optional
 
 import torch
 import torch.nn.utils.parametrize as P
@@ -56,7 +56,6 @@ class TransformFactory(RegistryMixin, ABC):
         self.name = name
         self.scheme = scheme
         self.generator = torch.Generator()
-        self.transforms = list()
         if seed is not None:
             self.generator.manual_seed(seed)
 
@@ -117,7 +116,6 @@ class TransformFactory(RegistryMixin, ABC):
         # create transform as submodule
         transform_name = f"{self.name}_{args.location}"
         transform = self.create_transform(module, args)
-        self.transforms.append(transform)
         register_offload_module(module, transform_name, transform)
 
         # register input transformation hook
