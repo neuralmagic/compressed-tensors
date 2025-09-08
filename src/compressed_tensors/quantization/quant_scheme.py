@@ -63,9 +63,18 @@ class QuantizationScheme(BaseModel):
             if inputs.strategy not in (
                 QuantizationStrategy.TOKEN,
                 QuantizationStrategy.TENSOR,
+                QuantizationStrategy.GROUP,
                 QuantizationStrategy.TENSOR_GROUP,
             ):
-                raise ValueError(
+                if (
+                    inputs.strategy == QuantizationStrategy.GROUP
+                    and inputs.dynamic != True
+                ):
+                    raise NotImplementedError(
+                        "Static and local group-wise quantization is not supported"
+                    )
+
+                raise NotImplementedError(
                     f"Using {inputs.strategy} strategy is not supported for "
                     "activation quantization"
                 )
