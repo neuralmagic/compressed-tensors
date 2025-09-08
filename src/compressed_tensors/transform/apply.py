@@ -62,7 +62,6 @@ def _tie_offloaded_tensors(model: torch.nn.Module):
     # map from offloaded tensor pointers to module-key locations
     offloaded_ptrs: dict[int, List[Tuple[torch.nn.Module, str]]] = defaultdict(list)
     for module in model.modules():
-        # NOTE: previously asserted that parent._hf_hook.place_submodules=False
         if has_offloaded_params(module):
             for key, _ in module.named_parameters(recurse=False):
                 param = module._hf_hook.weights_map[key]
