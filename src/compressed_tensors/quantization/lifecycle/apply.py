@@ -45,6 +45,11 @@ from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
 from torch.nn import Module
 
+from compressed_tensors.utils import (
+    get_execution_device,
+    register_offload_parameter,
+)
+
 
 __all__ = [
     "load_pretrained_quantization_parameters",
@@ -219,20 +224,13 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     if status >= QuantizationStatus.INITIALIZED > current_status:
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
 
-        # When decompressing, we set the scale_dtype as the model's dtype
-        # This is because the normal workflow of using the weight's dtype
-        # will be incorrect as the model weight will be compressed
-        # Therfore, use the dtype set by the user using the PretrainedModel
-        scale_dtype = None
-        if status == QuantizationStatus.FROZEN:
-            if hasattr(model, "dtype"):
-                scale_dtype = model.dtype
-
+        """
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
+                module, force_zero_point=force_zero_point_init
             )
         )
+        """
 
     if current_status < status >= QuantizationStatus.COMPRESSED > current_status:
         model.apply(compress_quantized_weights)
@@ -284,6 +282,9 @@ def _load_quant_args_from_mapping(
     :module: pytorch module associated with module_name
     :mapping: mapping to search fetch paths on disk for a given parameter
     """
+    # initialize on execution device to avoid performing quantized ops on cpu
+    device = get_execution_device(module)
+
     scale_name = f"{base_name}_scale"
     zp_name = f"{base_name}_zero_point"
     g_idx_name = f"{base_name}_g_idx"
@@ -293,26 +294,29 @@ def _load_quant_args_from_mapping(
     state_dict_g_idx_path = mapping.get(f"{module_name}.{g_idx_name}", None)
 
     if state_dict_g_idx_path is not None:
-        with safe_open(state_dict_g_idx_path, framework="pt", device="cpu") as f:
+        with safe_open(state_dict_g_idx_path, framework="pt", device=device) as f:
             state_dict_g_idx = f.get_tensor(f"{module_name}.{g_idx_name}")
 
-        update_parameter_data(module, state_dict_g_idx, g_idx_name)
+        init_g_idx = torch.nn.Parameter(state_dict_g_idx, requires_grad=False)
+        register_offload_parameter(module, g_idx_name, init_g_idx)
 
     if state_dict_scale_path is not None:
         # module is quantized
-        with safe_open(state_dict_scale_path, framework="pt", device="cpu") as f:
+        with safe_open(state_dict_scale_path, framework="pt", device=device) as f:
             state_dict_scale = f.get_tensor(f"{module_name}.{scale_name}")
 
-        update_parameter_data(module, state_dict_scale, scale_name)
+        init_scale = torch.nn.Parameter(state_dict_scale, requires_grad=False)
+        register_offload_parameter(module, scale_name, init_scale)
 
         if state_dict_zp_path is None:
             # fill in zero point for symmetric quantization
-            state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
+            state_dict_zp = torch.zeros_like(state_dict_scale, device=device)
         else:
-            with safe_open(state_dict_zp_path, framework="pt", device="cpu") as f:
+            with safe_open(state_dict_zp_path, framework="pt", device=device) as f:
                 state_dict_zp = f.get_tensor(f"{module_name}.{zp_name}")
 
-        update_parameter_data(module, state_dict_zp, zp_name)
+        init_zp = torch.nn.Parameter(state_dict_zp, requires_grad=False)
+        register_offload_parameter(module, zp_name, init_zp)
 
 
 def _scheme_from_targets(

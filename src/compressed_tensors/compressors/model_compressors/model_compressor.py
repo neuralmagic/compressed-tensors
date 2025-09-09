@@ -843,10 +843,6 @@ class ModelCompressor:
             for param_name, param_data in data.items():
                 if hasattr(module, param_name):
                     # If compressed, will have an incorrect dtype for transformers >4.49
-                    # TODO: we can also just skip initialization of scales/zp if in
-                    # decompression in init to be consistent with loading which happens
-                    # later as well however, update_data does a good shape check -
-                    # should be moved to the compressor
                     if param_name == "weight":
                         delattr(module, param_name)
                         requires_grad = param_data.dtype in (
@@ -858,11 +854,6 @@ class ModelCompressor:
                             param_data.to(device), requires_grad=requires_grad
                         )
                         register_offload_parameter(module, param_name, param)
-                    else:
-                        # Should already be registered to the correct device for
-                        # for scales/zero-points
-                        update_parameter_data(module, param_data, param_name)
-
 
 def map_module_to_scheme(model: Module) -> Dict[str, QuantizationScheme]:
     """
