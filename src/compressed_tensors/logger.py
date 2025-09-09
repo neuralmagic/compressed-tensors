@@ -40,7 +40,7 @@ class LoggerConfig:
     log_file_level: Optional[str] = None
 
 
-def configure_logger(config: Optional[LoggerConfig] = None) -> None:
+def configure_logger(config: Optional[LoggerConfig] = None):
     """
     Configure the logger for Compressed Tensors.
     This function sets up the console and file logging
@@ -54,10 +54,10 @@ def configure_logger(config: Optional[LoggerConfig] = None) -> None:
     logger_config = config or LoggerConfig()
 
     # env vars get priority
-    if (disabled := os.getenv("COMPRESSED_TENSORS_LOG_DISABLED")) is not None:
-        logger_config.disabled = disabled.lower() == "true"
-    if (clear_loggers := os.getenv("COMPRESSED_TENSORS_CLEAR_LOGGERS")) is not None:
-        logger_config.clear_loggers = clear_loggers.lower() == "true"
+    if bool(os.getenv("COMPRESSED_TENSORS_LOG_DISABLED")):
+        logger_config.disabled = True
+    if bool(os.getenv("COMPRESSED_TENSORS_CLEAR_LOGGERS")):
+        logger_config.clear_loggers = True
     if (console_log_level := os.getenv("COMPRESSED_TENSORS_LOG_LEVEL")) is not None:
         logger_config.console_log_level = console_log_level.upper()
     if (log_file := os.getenv("COMPRESSED_TENSORS_LOG_FILE")) is not None:
@@ -108,7 +108,7 @@ def support_log_once(record: Dict[str, Any]) -> bool:
     """
     log_once = record["extra"].get("log_once", False)
     level = getattr(record["level"], "name", "none")
-    message = str(level) + record["message"]
+    message = hash(str(level) + record["message"])
 
     if log_once and message in _logged_once:
         return False
@@ -121,12 +121,4 @@ def support_log_once(record: Dict[str, Any]) -> bool:
 
 # invoke logger setup on import with default values enabling console logging with INFO
 # and disabling file logging
-configure_logger(
-    config=LoggerConfig(
-        disabled=False,
-        clear_loggers=True,
-        console_log_level="INFO",
-        log_file=None,
-        log_file_level=None,
-    )
-)
+configure_logger(config=LoggerConfig())
