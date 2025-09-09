@@ -17,6 +17,7 @@ import math
 from typing import Generator, List, Optional, Tuple
 
 import torch
+from compressed_tensors.quantization import QuantizationScheme, QuantizationStatus
 from compressed_tensors.quantization.quant_args import (
     FP4_E2M1_DATA,
     FP8_E4M3_DATA,
@@ -25,7 +26,6 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationStrategy,
     QuantizationType,
 )
-from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.utils import deprecated
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
@@ -234,16 +234,16 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
     return q_min, q_max
 
 
-def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]:  # noqa
+def infer_quantization_status(module: Module) -> Optional["QuantizationStatus"]:  # noqa
     """
-    Checks the quantization status of a model. Assumes all modules in the model have
+    Checks the quantization status of a module. Assumes all modules in the model have
     the same status, so only the first quantized model is checked.
 
-    :param model: model to check quantization status for
+    :param module: module to check quantization status for
     :return: quantization status if the model is quantized, otherwise None
     """
-    for module in model.modules():
-        status = getattr(module, "quantization_status", None)
+    for submodule in module.modules():
+        status = getattr(submodule, "quantization_status", None)
         if status is not None:
             return status
     return None
