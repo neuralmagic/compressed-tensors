@@ -136,17 +136,21 @@ def match_targets(
     if isinstance(module, InternalModule):
         return []
 
-    # The order of the output `matches` list matters, the are arranged from most
+    # The order of the output `matches` list matters, they are arranged from most
     # specific to least specific, and this order will be used when merging configs.
     # The entries are sorted in the following order:
     #     1. matches on exact strings
     #     2. matches on regex patterns
-    #     3. matches on module names
+    #     3. matches on module names (e.g. "Linear")
 
     targets = sorted(targets, key=lambda x: ("re:" in x, x))
     matched_targets = []
     for target in targets:
-        if _match_name(name, target) or _match_class(module, target):
+        if _match_name(name, target):
+            matched_targets.append(target)
+
+    for target in targets:
+        if _match_class(module, target) and target not in matched_targets:
             matched_targets.append(target)
 
     return matched_targets
