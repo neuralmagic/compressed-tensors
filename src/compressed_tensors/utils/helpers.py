@@ -15,12 +15,16 @@
 import contextlib
 import warnings
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, TypeVar
 
 import numpy
 import torch
 from frozendict import frozendict
+from loguru import logger
 from transformers import AutoConfig
+
+
+T = TypeVar("T", bound="Callable")  # used by `deprecated`
 
 
 if TYPE_CHECKING:
@@ -170,7 +174,9 @@ def getattr_chain(obj: Any, chain_str: str, *args, **kwargs) -> Any:
     return res
 
 
-def deprecated(future_name: Optional[str] = None, message: Optional[str] = None):
+def deprecated(
+    future_name: Optional[str] = None, message: Optional[str] = None
+) -> Callable[[T], T]:
     """
     Decorator to mark functions as deprecated
 
@@ -178,7 +184,7 @@ def deprecated(future_name: Optional[str] = None, message: Optional[str] = None)
     :param message: Deprecation message, replaces default deprecation message
     """
 
-    def decorator(func: Callable[[Any], Any]):
+    def decorator(func: T) -> T:
         nonlocal message
 
         if message is None:
@@ -190,7 +196,7 @@ def deprecated(future_name: Optional[str] = None, message: Optional[str] = None)
 
         @wraps(func)
         def wrapped(*args, **kwargs):
-            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            logger.bind(log_once=True).warning(message)
             return func(*args, **kwargs)
 
         return wrapped
