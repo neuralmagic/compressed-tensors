@@ -13,13 +13,13 @@
 # limitations under the License.
 
 import contextlib
+import warnings
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, TypeVar
 
 import numpy
 import torch
 from frozendict import frozendict
-from loguru import logger
 from transformers import AutoConfig
 
 
@@ -195,7 +195,7 @@ def deprecated(
 
         @wraps(func)
         def wrapped(*args, **kwargs):
-            logger.bind(log_once=True).warning(message)
+            warnings.warn(message, DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
 
         return wrapped
