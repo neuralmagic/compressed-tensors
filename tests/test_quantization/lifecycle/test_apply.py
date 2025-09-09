@@ -66,7 +66,7 @@ def test_target_prioritization(mock_frozen):
         "config_groups": {
             "group_1": {
                 "weights": {
-                    "num_bits": 6,
+                    "num_bits": 8,
                 },
                 "targets": ["Linear"],
             },
@@ -101,7 +101,7 @@ def test_target_prioritization(mock_frozen):
         elif re.match(".*down_proj", name):
             assert module.quantization_scheme.weights.num_bits == 4
         elif isinstance(module, torch.nn.Linear):
-            assert module.quantization_scheme.weights.num_bits == 6
+            assert module.quantization_scheme.weights.num_bits == 8
 
 
 def test_apply_quantization_config_tinyllama():
