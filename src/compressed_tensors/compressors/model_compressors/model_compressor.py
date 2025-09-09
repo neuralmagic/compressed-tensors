@@ -17,7 +17,6 @@ import logging
 import operator
 import os
 import re
-from contextlib import contextmanager
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, TypeVar, Union
 
@@ -317,10 +316,10 @@ class ModelCompressor:
 
             self.quantization_compressor = {}
             for format in self.compression_formats:
-                self.quantization_compressor[
-                    format
-                ] = BaseCompressor.load_from_registry(
-                    format, config=quantization_config
+                self.quantization_compressor[format] = (
+                    BaseCompressor.load_from_registry(
+                        format, config=quantization_config
+                    )
                 )
 
     # ----- used by hf quantizer ----- #
