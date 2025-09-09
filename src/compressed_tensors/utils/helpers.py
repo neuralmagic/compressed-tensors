@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, 
 import numpy
 import torch
 from frozendict import frozendict
+from loguru import logger
 from transformers import AutoConfig
 
 
@@ -195,7 +196,7 @@ def deprecated(
 
         @wraps(func)
         def wrapped(*args, **kwargs):
-            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            logger.bind(log_once=True).warning(message)
             return func(*args, **kwargs)
 
         return wrapped
