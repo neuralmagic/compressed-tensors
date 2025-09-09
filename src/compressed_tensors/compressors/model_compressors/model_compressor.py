@@ -151,12 +151,12 @@ class ModelCompressor:
         if sparsity_config is None and quantization_config is None:
             return None
 
-        if sparsity_config:
+        if sparsity_config is not None:
             format = sparsity_config.get("format")
             sparsity_config = SparsityCompressionConfig.load_from_registry(
                 format, **sparsity_config
             )
-        if quantization_config:
+        if quantization_config is not None:
             quantization_config = QuantizationConfig.model_validate(quantization_config)
 
         return cls(
@@ -224,7 +224,8 @@ class ModelCompressor:
             s_config = compression_config.sparsity_config
             return s_config.model_dump() if s_config is not None else None
 
-        return compression_config.get(SPARSITY_CONFIG_NAME, None)
+        # explicitly return None if {} in config
+        return compression_config.get(SPARSITY_CONFIG_NAME, None) or None
 
     @staticmethod
     def parse_quantization_config(
