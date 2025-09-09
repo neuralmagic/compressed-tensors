@@ -195,7 +195,7 @@ def deprecated(
 
         @wraps(func)
         def wrapped(*args, **kwargs):
-            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            logger.bind(log_once=True).warning(message)
             return func(*args, **kwargs)
 
         return wrapped
