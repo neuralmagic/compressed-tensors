@@ -40,10 +40,7 @@ from compressed_tensors.quantization.utils import (
 )
 from compressed_tensors.utils.helpers import deprecated, replace_module
 from compressed_tensors.utils.match import match_named_modules, match_targets
-from compressed_tensors.utils.offload import (
-    register_offload_parameter,
-    update_parameter_data,
-)
+from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
 from torch.nn import Module
