@@ -19,7 +19,6 @@ from .base import *
 
 from .compressors import *
 from .config import *
-from .logger import LoggerConfig, configure_logger, logger
 from .quantization import QuantizationConfig, QuantizationStatus
 from .utils import *
 from .version import *
