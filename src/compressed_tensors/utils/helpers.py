@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import contextlib
-import warnings
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, TypeVar
 
