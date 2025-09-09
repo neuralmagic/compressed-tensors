@@ -35,7 +35,6 @@ from compressed_tensors.quantization.quant_config import (
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     KV_CACHE_TARGETS,
-    infer_quantization_status,
     is_kv_cache_quant_scheme,
 )
 from compressed_tensors.utils.helpers import deprecated, replace_module
@@ -215,9 +214,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
     :param status: status to update the module to
     """
 
-    current_status = infer_quantization_status(model)
-
-    if status >= QuantizationStatus.INITIALIZED > current_status:
+    if status >= QuantizationStatus.INITIALIZED:
         force_zero_point_init = status != QuantizationStatus.COMPRESSED
 
         # When decompressing, we set the scale_dtype as the model's dtype
@@ -235,7 +232,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
             )
         )
 
-    if status >= QuantizationStatus.COMPRESSED > current_status:
+    if status >= QuantizationStatus.COMPRESSED:
         model.apply(compress_quantized_weights)
 
 
