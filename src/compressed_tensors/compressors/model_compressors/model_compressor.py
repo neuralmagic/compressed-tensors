@@ -713,16 +713,16 @@ class ModelCompressor:
                 # Load activation scales/zp or any other quantization parameters
                 # Conditionally load the weight quantization parameters if we have a
                 # dense compressor or if a sparsity compressor has already been applied
-                load_weight_qparams = sparse_decompressed or isinstance(quant_compressor, DenseCompressor)
+                load_weight_qparams = sparse_decompressed or isinstance(
+                    quant_compressor, DenseCompressor
+                )
                 load_pretrained_quantization_parameters(
                     model,
                     model_path,
                     # TODO: all weight quantization params will be moved to the
                     # compressor in a follow-up including initialization
-                    load_weight_qparams=load_weight_qparams
+                    load_weight_qparams=load_weight_qparams,
                 )
-
-            breakpoint()
             model_path_or_state_dict = (
                 model.state_dict() if sparse_decompressed else model_path
             )
@@ -732,7 +732,9 @@ class ModelCompressor:
             )
             # TODO: all weight quantization params will be moved to the compressor
             # to prevent duplicate parameter updates in update_parameter_data
-            self._replace_weights(dense_gen, model, load_weight_qparams=not load_weight_qparams)
+            self._replace_weights(
+                dense_gen, model, load_weight_qparams=not load_weight_qparams
+            )
 
             def freeze_quantization_status(module):
                 module.quantization_status = QuantizationStatus.FROZEN
@@ -819,7 +821,9 @@ class ModelCompressor:
             param = torch.nn.Parameter(data.to(device), requires_grad=requires_grad)
             register_offload_parameter(module, param_name, param)
 
-    def _replace_weights(self, dense_weight_generator, model: Module, load_weight_qparams: bool = True):
+    def _replace_weights(
+        self, dense_weight_generator, model: Module, load_weight_qparams: bool = True
+    ):
         """
         Replace the weights of the model with the
         provided dense weights.
@@ -847,7 +851,7 @@ class ModelCompressor:
                     # decompression in init to be consistent with loading which happens
                     # later as well however, update_data does a good shape check -
                     # should be moved to the compressor
-                    
+
                     if param_name == "weight":
                         delattr(module, param_name)
                         requires_grad = param_data.dtype in (
@@ -859,8 +863,7 @@ class ModelCompressor:
                             param_data.to(device), requires_grad=requires_grad
                         )
                         register_offload_parameter(module, param_name, param)
-                    else:
-                    #elif load_weight_qparams:
+                    elif load_weight_qparams:
                         # Should already be registered to the correct device for
                         # for scales/zero-points
                         update_parameter_data(module, param_data, param_name)

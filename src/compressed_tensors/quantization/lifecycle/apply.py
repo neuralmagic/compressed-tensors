@@ -40,7 +40,10 @@ from compressed_tensors.quantization.utils import (
 )
 from compressed_tensors.utils.helpers import deprecated, replace_module
 from compressed_tensors.utils.match import match_named_modules, match_targets
-from compressed_tensors.utils.offload import update_parameter_data, register_offload_parameter
+from compressed_tensors.utils.offload import (
+    register_offload_parameter,
+    update_parameter_data,
+)
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
 from torch.nn import Module
@@ -293,17 +296,8 @@ def _load_quant_args_from_mapping(
         # module is quantized
         with safe_open(state_dict_scale_path, framework="pt", device="cpu") as f:
             state_dict_scale = f.get_tensor(f"{module_name}.{scale_name}")
-        
-        """
-        delattr(module, scale_name)
-        device = module.weight.device
-        param = torch.nn.Parameter(
-            state_dict_scale.to(device), requires_grad=False
-        )
-        register_offload_parameter(module, scale_name, param)
-        """
-        update_parameter_data(module, state_dict_scale, scale_name)
 
+        update_parameter_data(module, state_dict_scale, scale_name)
 
         if state_dict_zp_path is None:
             # fill in zero point for symmetric quantization

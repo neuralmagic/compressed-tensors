@@ -222,7 +222,7 @@ def _initialize_scale_zero_point(
             torch.float32,
             torch.float64,
         ]:
-            scale_dtype = torch.float16
+            scale_dtype = torch.bfloat16
         zp_dtype = quantization_args.pytorch_dtype()
 
     # 4. Initializes empty scale, zero point, and g_idx parameters for the module
