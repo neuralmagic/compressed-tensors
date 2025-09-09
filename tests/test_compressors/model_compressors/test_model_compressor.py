@@ -575,10 +575,3 @@ def remove_empty_weight_zero_points(state_dict):
         for name, value in state_dict.items()
         if not (name.endswith("weight_zero_point") and torch.all(value == 0))
     }
-
-
-if __name__ == "__main__":
-    test_decompress_model(
-        "nm-testing/llama2.c-stories42M-gsm8k-quantized-only-uncompressed",
-        "nm-testing/llama2.c-stories42M-gsm8k-quantized-only-compressed",
-    )
