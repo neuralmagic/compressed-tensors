@@ -22,6 +22,7 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationArgs,
     QuantizationStrategy,
     QuantizationType,
+    FP8_E4M3_DATA
 )
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -159,6 +160,8 @@ NVFP4A16 = dict(
         symmetric=True,
         dynamic=False,
         group_size=16,
+        scale_dtype=FP8_E4M3_DATA.dtype,
+        zp_dtype=FP8_E4M3_DATA.dtype
     )
 )
 
@@ -171,6 +174,9 @@ NVFP4 = dict(
         symmetric=True,
         dynamic=False,
         group_size=16,
+        scale_dtype=FP8_E4M3_DATA.dtype,
+        zp_dtype=FP8_E4M3_DATA.dtype
+
     ),
     input_activations=QuantizationArgs(
         num_bits=4,
@@ -179,6 +185,8 @@ NVFP4 = dict(
         symmetric=True,
         dynamic=DynamicType.LOCAL,
         group_size=16,
+        scale_dtype=FP8_E4M3_DATA.dtype,
+        zp_dtype=FP8_E4M3_DATA.dtype
     ),
 )
 
