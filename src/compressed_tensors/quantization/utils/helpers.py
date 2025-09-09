@@ -17,7 +17,6 @@ import math
 from typing import Generator, List, Optional, Tuple
 
 import torch
-from compressed_tensors.quantization import QuantizationScheme, QuantizationStatus
 from compressed_tensors.quantization.quant_args import (
     FP4_E2M1_DATA,
     FP8_E4M3_DATA,
@@ -26,6 +25,7 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationStrategy,
     QuantizationType,
 )
+from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.utils import deprecated
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
