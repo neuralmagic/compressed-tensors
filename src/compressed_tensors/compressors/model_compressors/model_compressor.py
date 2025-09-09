@@ -151,12 +151,12 @@ class ModelCompressor:
         if sparsity_config is None and quantization_config is None:
             return None
 
-        if sparsity_config is not None:
+        if sparsity_config:
             format = sparsity_config.get("format")
             sparsity_config = SparsityCompressionConfig.load_from_registry(
                 format, **sparsity_config
             )
-        if quantization_config is not None:
+        if quantization_config:
             quantization_config = QuantizationConfig.model_validate(quantization_config)
 
         return cls(
@@ -300,12 +300,12 @@ class ModelCompressor:
         ] = None
         # no transform compressor is required
 
-        if sparsity_config is not None:
+        if sparsity_config:
             self.sparsity_compressor = BaseCompressor.load_from_registry(
                 sparsity_config.format, config=sparsity_config
             )
 
-        if quantization_config is not None:
+        if quantization_config:
             # If a list of compression_format is not provided, we resolve the
             # relevant quantization formats using the config groups from the config
             # and if those are not defined, we fall-back to the global quantization fmt
@@ -859,8 +859,6 @@ class ModelCompressor:
                         )
                         register_offload_parameter(module, param_name, param)
                     else:
-                        # Should already be registered to the correct device for
-                        # for scales/zero-points
                         update_parameter_data(module, param_data, param_name)
 
 
