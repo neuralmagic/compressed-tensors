@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import torch
 from compressed_tensors.config import CompressionFormat, SparsityStructure
@@ -59,13 +59,13 @@ def _get_quant_compression_format(
         )
         if not is_valid_pack:  # packing only valid for int4 and int 8
             return CompressionFormat.naive_quantized
-        if is_24_structure:
-            if (
-                weight_args.strategy is not QuantizationStrategy.CHANNEL.value
-                and weight_args.strategy is not QuantizationStrategy.GROUP.value
-            ):
-                # marlin24 kernel only applicable for channel/group quantization
-                return CompressionFormat.pack_quantized
+
+        if is_24_structure and weight_args.strategy in (
+            QuantizationStrategy.CHANNEL.value,
+            QuantizationStrategy.GROUP.value,
+        ):
+            # marlin24 kernel only applicable for channel/group quantization
+            # Note: vLLM may only support group quant for marlin24
             return CompressionFormat.marlin_24
         return CompressionFormat.pack_quantized
 
@@ -89,7 +89,7 @@ def set_per_module_format(
     and sparsity structure.
 
     :param module: module which has its quantization inferred
-    :param sparisty_structure: optional sparsity applied to the module
+    :param sparsity_structure: optional sparsity applied to the module
 
     """
     weight_scheme = module.quantization_scheme.weights
@@ -116,7 +116,7 @@ def set_per_module_format(
 def infer_and_set_per_module_quantization_format(
     model: torch.nn.Module,
     sparsity_structure: Optional[str] = None,
-) -> Union[str, List[str]]:
+) -> List[str]:
     """
     Infers the quantization format for a model based on its state and provided
     compression arguments. Updates thhe quantization_scheme.format value
@@ -126,16 +126,17 @@ def infer_and_set_per_module_quantization_format(
     For a summary of the formats, see `docs/guides/compression_formats.md`.
 
     :param model: model to check for quantization
-    :param sparisty_structure: optional sparsity applied to the module
+    :param sparsity_structure: optional sparsity applied to the module
     :return compression format appropriate for model
     """
     unique_formats = []
     for submodule in model.modules():
         if is_module_quantized(submodule):
+            assert hasattr(submodule, "quantization_scheme")
             set_per_module_format(submodule, sparsity_structure)
             if submodule.quantization_scheme.format not in unique_formats:
                 unique_formats.append(submodule.quantization_scheme.format)
 
     if len(unique_formats) > 0:
         return unique_formats
-    return CompressionFormat.dense.value
+    return [CompressionFormat.dense.value]
