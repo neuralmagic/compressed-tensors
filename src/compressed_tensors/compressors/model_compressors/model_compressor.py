@@ -316,10 +316,10 @@ class ModelCompressor:
 
             self.quantization_compressor = {}
             for format in self.compression_formats:
-                self.quantization_compressor[format] = (
-                    BaseCompressor.load_from_registry(
-                        format, config=quantization_config
-                    )
+                self.quantization_compressor[
+                    format
+                ] = BaseCompressor.load_from_registry(
+                    format, config=quantization_config
                 )
 
     # ----- model memory compression/decompression pathways ----- #
