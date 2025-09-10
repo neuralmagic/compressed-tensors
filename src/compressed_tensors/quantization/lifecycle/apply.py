@@ -206,34 +206,33 @@ def process_kv_cache_config(
     return config
 
 
-def apply_quantization_status(model: Module, status: QuantizationStatus):
+def apply_quantization_status(module: Module, status: QuantizationStatus):
     """
     Applies in place the quantization lifecycle up to the given status
 
-    :param model: model to apply quantization to
+    :param module: module to apply quantization to
     :param status: status to update the module to
     """
 
-    if status >= QuantizationStatus.INITIALIZED:
-        force_zero_point_init = status != QuantizationStatus.COMPRESSED
+    force_zero_point_init = status != QuantizationStatus.COMPRESSED
 
-        # When decompressing, we set the scale_dtype as the model's dtype
-        # This is because the normal workflow of using the weight's dtype
-        # will be incorrect as the model weight will be compressed
-        # Therfore, use the dtype set by the user using the PretrainedModel
-        scale_dtype = None
-        if status == QuantizationStatus.FROZEN:
-            if hasattr(model, "dtype"):
-                scale_dtype = model.dtype
+    # When decompressing, we set the scale_dtype as the model's dtype
+    # This is because the normal workflow of using the weight's dtype
+    # will be incorrect as the model weight will be compressed
+    # Therfore, use the dtype set by the user using the PretrainedModel
+    scale_dtype = None
+    if status == QuantizationStatus.FROZEN:
+        if hasattr(module, "dtype"):
+            scale_dtype = module.dtype
 
-        model.apply(
-            lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
-            )
+    module.apply(
+        lambda module: initialize_module_for_quantization(
+            module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
         )
+    )
 
     if status >= QuantizationStatus.COMPRESSED:
-        model.apply(compress_quantized_weights)
+        module.apply(compress_quantized_weights)
 
 
 @deprecated(
