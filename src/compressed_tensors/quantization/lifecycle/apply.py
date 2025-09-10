@@ -213,18 +213,7 @@ def apply_quantization_status(module: Module, status: QuantizationStatus):
 
     force_zero_point_init = status != QuantizationStatus.COMPRESSED
 
-    # When decompressing, we set the scale_dtype as the model's dtype
-    # This is because the normal workflow of using the weight's dtype
-    # will be incorrect as the model weight will be compressed
-    # Therefore, use the dtype set by the user using the PretrainedModel
-    scale_dtype = None
-    if status == QuantizationStatus.FROZEN:
-        if hasattr(module, "dtype"):
-            scale_dtype = module.dtype
-
-    initialize_module_for_quantization(
-        module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
-    )
+    initialize_module_for_quantization(module, force_zero_point=force_zero_point_init)
 
     module.quantization_status = status
 
