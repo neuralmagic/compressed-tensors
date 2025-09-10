@@ -113,8 +113,8 @@ class QuantizationConfig(BaseModel):
     :param config_groups: dict of QuantizationSchemes specifying the quantization
     settings for each quantized layer. A group could also be a reference to
     a predefined scheme name, mapped to a list of its target layers/classes
-    :param quant_method: a constant used to differentiate sparseML quantization from
-    other quantization configs
+    :param quant_method: a constant used to differentiate compressed-tensors
+    quantization from other quantization configs
     :param format: specifies how the quantized model is stored on disk
     :quantization_status: specifies the current status of all quantized layers. It is
         assumed all layers are in the same state.

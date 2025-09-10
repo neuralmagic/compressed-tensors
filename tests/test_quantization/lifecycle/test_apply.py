@@ -25,10 +25,7 @@ from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationStatus,
 )
-from compressed_tensors.quantization.lifecycle import (
-    apply_quantization_config,
-    apply_quantization_status,
-)
+from compressed_tensors.quantization.lifecycle import apply_quantization_config
 from tests.testing_utils import requires_accelerate
 from transformers import AutoModelForCausalLM
 
@@ -105,7 +102,9 @@ def test_target_prioritization(mock_frozen):
 
 
 def test_apply_quantization_config_tinyllama():
-    quant_config = get_sample_tinyllama_quant_config(status="calibration")
+    quant_config = get_sample_tinyllama_quant_config(
+        status=QuantizationStatus.CALIBRATION
+    )
     model = get_tinyllama_model()
 
     # check that model is not already quantized
@@ -146,7 +145,8 @@ def test_apply_quantization_config_tinyllama():
     # test quantization compression
     # sample forward pass to fill scales, zps
     model(torch.zeros((1, 1), dtype=int), torch.zeros((1, 1), dtype=int))
-    apply_quantization_status(model, QuantizationStatus.COMPRESSED)
+    quant_config.quantization_status = QuantizationStatus.COMPRESSED
+    apply_quantization_config(model, quant_config)
     for name, module in model.named_modules():
         if name in quant_config.ignore:
             continue
@@ -157,7 +157,6 @@ def test_apply_quantization_config_tinyllama():
                 inputs=True,
                 weights=True,
                 expected_status=QuantizationStatus.COMPRESSED,
-                expected_dtype=torch.int8,
             )
 
 
@@ -218,7 +217,9 @@ def get_tinyllama_model():
     )
 
 
-def get_sample_tinyllama_quant_config(status: str = "frozen"):
+def get_sample_tinyllama_quant_config(
+    status: QuantizationStatus = QuantizationStatus.FROZEN,
+):
     config_dict = {
         "quant_method": "compressed-tensors",
         "format": "fakequant",
@@ -270,7 +271,7 @@ def test_apply_quantization_status(caplog, target, should_raise_warning):
     # load a dense, unquantized tiny llama model
     model = get_tinyllama_model()
     quantization_config_dict = {
-        "quant_method": "sparseml",
+        "quant_method": "compressed-tensors",
         "format": "pack-quantized",
         "global_compression_ratio": None,
         "config_groups": {

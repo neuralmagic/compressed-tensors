@@ -21,9 +21,6 @@ from typing import Union
 
 import torch
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization.lifecycle.compressed import (
-    compress_quantized_weights,
-)
 from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
 )
@@ -219,20 +216,17 @@ def apply_quantization_status(module: Module, status: QuantizationStatus):
     # When decompressing, we set the scale_dtype as the model's dtype
     # This is because the normal workflow of using the weight's dtype
     # will be incorrect as the model weight will be compressed
-    # Therfore, use the dtype set by the user using the PretrainedModel
+    # Therefore, use the dtype set by the user using the PretrainedModel
     scale_dtype = None
     if status == QuantizationStatus.FROZEN:
         if hasattr(module, "dtype"):
             scale_dtype = module.dtype
 
-    module.apply(
-        lambda module: initialize_module_for_quantization(
-            module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
-        )
+    initialize_module_for_quantization(
+        module, force_zero_point=force_zero_point_init, scale_dtype=scale_dtype
     )
 
-    if status >= QuantizationStatus.COMPRESSED:
-        module.apply(compress_quantized_weights)
+    module.quantization_status = status
 
 
 @deprecated(
