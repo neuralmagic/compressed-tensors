@@ -72,8 +72,6 @@ def initialize_module_for_quantization(
         if not provided, the layer will be skipped
     :param force_zero_point: whether to force initialization of a zero point for
         symmetric quantization
-    :param scale_dtype: dtype to used for the scales, if overriding the
-        weight dtype as the scale dtype
     """
     # TODO: don't initialize parameters when running decompression
     scheme = scheme or getattr(module, "quantization_scheme", None)
