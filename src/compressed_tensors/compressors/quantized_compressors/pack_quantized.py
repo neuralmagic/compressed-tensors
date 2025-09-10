@@ -168,11 +168,13 @@ class PackedQuantizationCompressor(BaseQuantizationCompressor):
             QuantizationStrategy.GROUP.value,
             QuantizationStrategy.CHANNEL.value,
         ]:
-            if zero_point is not None:
-                original_zp_shape = (original_shape[0], scale.shape[-1])
-                zero_point = unpack_from_int32(
-                    zero_point, num_bits, original_zp_shape, packed_dim=0
-                )
+            assert (
+                zero_point is not None
+            ), "Asymmetric quantization requires zero-point values"
+            original_zp_shape = (original_shape[0], scale.shape[-1])
+            zero_point = unpack_from_int32(
+                zero_point, num_bits, original_zp_shape, packed_dim=0
+            )
 
         decompressed_weight = dequantize(
             x_q=unpacked, scale=scale, zero_point=zero_point, g_idx=g_idx
