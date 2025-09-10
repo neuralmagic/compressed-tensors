@@ -50,7 +50,6 @@ from compressed_tensors.utils import (
     get_offloaded_device,
     get_safetensors_folder,
     has_offloaded_params,
-    merge_names,
     register_offload_parameter,
     update_parameter_data,
 )
