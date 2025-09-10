@@ -253,7 +253,6 @@ class TwoLayerModel(nn.Module):
         return x
 
 
-
 def _create_dummy_checkpoint(state_dict, save_dir, model_compressor):
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
