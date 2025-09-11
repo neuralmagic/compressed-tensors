@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import re
-from collections import defaultdict
 from typing import Optional
 from unittest.mock import MagicMock
 
