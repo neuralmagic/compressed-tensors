@@ -33,6 +33,7 @@ from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import is_fp4, is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
+    delete_offload_parameter,
     disable_hf_hook,
     get_execution_device,
     register_offload_parameter,
@@ -61,10 +62,11 @@ def initialize_module_for_quantization(
     force_zero_point: bool = True,
 ):
     """
-    attaches appropriate scales, zero points, and observers to a layer
-    given its target quantization scheme
+    Attaches appropriate scales, zero points, and observers to a layer
+    given its target quantization scheme.
 
-    apply to full model with `model.apply(initialize_module_for_quantization)`
+    Previously initialized scales and zero points will be removed from
+    module if they no longer apply to the scheme
 
     :param module: module to set for calibration
     :param scheme: scheme to use for quantization. if None is provided,
@@ -73,6 +75,8 @@ def initialize_module_for_quantization(
     :param force_zero_point: whether to force initialization of a zero point for
         symmetric quantization
     """
+    _clear_all_qparams(module)
+
     # TODO: don't initialize parameters when running decompression
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:
@@ -132,6 +136,29 @@ def is_attention_module(module: Module):
         or hasattr(module, "v_proj")
         or hasattr(module, "qkv_proj")
     )
+
+
+def _clear_all_qparams(
+    module: Module,
+):
+    """
+    Clear all previously registered quantization parameters from module
+
+    :param module: module to clear qparams from
+    """
+    keys = [KVCacheScaleType.KEY.value, KVCacheScaleType.VALUE.value] + [
+        f"{base_name}_{suffix}"
+        for base_name in ("input", "weight", "output")
+        for suffix in (
+            "global_scale",
+            "scale",
+            "zero_point",
+            "g_idx",
+        )
+    ]
+    for key in keys:
+        if hasattr(module, key):
+            delete_offload_parameter(module, key)
 
 
 def _initialize_scale_zero_point(

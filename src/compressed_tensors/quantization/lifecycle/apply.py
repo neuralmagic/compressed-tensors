@@ -243,14 +243,6 @@ def find_name_or_class_matches(
     return match_targets(name, module, targets)
 
 
-def _infer_status(model: Module) -> Optional[QuantizationStatus]:
-    for module in model.modules():
-        status = getattr(module, "quantization_status", None)
-        if status is not None:
-            return status
-    return None
-
-
 def _load_quant_args_from_mapping(
     base_name: str, module_name: str, module: Module, mapping: Dict
 ):

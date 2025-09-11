@@ -265,7 +265,7 @@ def get_sample_tinyllama_quant_config(
         [("Linear", "re:.*foobarbaz"), True],
     ],
 )
-def test_apply_quantization_status(caplog, target, should_raise_warning):
+def test_apply_quantization_config(caplog, target, should_raise_warning):
     import logging
 
     # load a dense, unquantized tiny llama model
