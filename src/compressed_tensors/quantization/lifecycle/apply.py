@@ -15,7 +15,7 @@
 import logging
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Dict, List, Optional
+from typing import List
 from typing import OrderedDict as OrderedDictType
 from typing import Union
 
@@ -36,8 +36,6 @@ from compressed_tensors.quantization.utils import (
 )
 from compressed_tensors.utils.helpers import replace_module
 from compressed_tensors.utils.match import match_named_modules, match_targets
-from compressed_tensors.utils.offload import update_parameter_data
-from safetensors import safe_open
 from torch.nn import Module
 
 
@@ -147,50 +145,6 @@ def process_kv_cache_config(
     kv_cache_group = dict(kv_cache=kv_cache_scheme)
     config.config_groups.update(kv_cache_group)
     return config
-
-
-def _load_quant_args_from_mapping(
-    base_name: str, module_name: str, module: Module, mapping: Dict
-):
-    # TODO: skip update and just register here, don't do it in initialize
-    """
-    Loads scale and zero point from a state_dict into the specified module
-
-    :param base_name: quantization target, one of: weights, input_activations or
-    output_activations
-    :param module_name: pytorch module name to look up in state_dict
-    :module: pytorch module associated with module_name
-    :mapping: mapping to search fetch paths on disk for a given parameter
-    """
-    scale_name = f"{base_name}_scale"
-    zp_name = f"{base_name}_zero_point"
-    g_idx_name = f"{base_name}_g_idx"
-
-    state_dict_scale_path = mapping.get(f"{module_name}.{scale_name}", None)
-    state_dict_zp_path = mapping.get(f"{module_name}.{zp_name}", None)
-    state_dict_g_idx_path = mapping.get(f"{module_name}.{g_idx_name}", None)
-
-    if state_dict_g_idx_path is not None:
-        with safe_open(state_dict_g_idx_path, framework="pt", device="cpu") as f:
-            state_dict_g_idx = f.get_tensor(f"{module_name}.{g_idx_name}")
-
-        update_parameter_data(module, state_dict_g_idx, g_idx_name)
-
-    if state_dict_scale_path is not None:
-        # module is quantized
-        with safe_open(state_dict_scale_path, framework="pt", device="cpu") as f:
-            state_dict_scale = f.get_tensor(f"{module_name}.{scale_name}")
-
-        update_parameter_data(module, state_dict_scale, scale_name)
-
-        if state_dict_zp_path is None:
-            # fill in zero point for symmetric quantization
-            state_dict_zp = torch.zeros_like(state_dict_scale, device="cpu")
-        else:
-            with safe_open(state_dict_zp_path, framework="pt", device="cpu") as f:
-                state_dict_zp = f.get_tensor(f"{module_name}.{zp_name}")
-
-        update_parameter_data(module, state_dict_zp, zp_name)
 
 
 def _scheme_from_targets(
