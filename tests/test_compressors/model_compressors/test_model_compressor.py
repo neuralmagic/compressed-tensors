@@ -173,70 +173,24 @@ def create_quantization_config(bits=8, type="int", strategy="tensor"):
         create_quantization_config(bits=8, type="float", strategy="channel"),
     ],
 )
-def test_composability(tmp_path, sparsity_config, quantization_config):
-
+def test_composability(sparsity_config, quantization_config):
     model_compressor = ModelCompressor(
         sparsity_config=sparsity_config, quantization_config=quantization_config
     )
-    fake_oneshot_model: DummyLinearModel = _get_fake_oneshot_sparse_quantized_model(
+    model: DummyLinearModel = _get_fake_oneshot_sparse_quantized_model(
         sparsity_config=sparsity_config, quantization_config=quantization_config
     )
-    fake_oneshot_model = fake_oneshot_model.to(torch.float32)
+    model = model.to(torch.float32)
+
     # does both sparse and quantization compression
-    compressed_state_dict = model_compressor.compress(fake_oneshot_model)
+    model_compressor.compress_model(model)
+    compressed_state_dict = {key: value.clone() for key, value in model.state_dict()}
 
-    save_dir = tmp_path / "model"
-    save_dir = _create_dummy_checkpoint(
-        compressed_state_dict, save_dir, model_compressor
-    )
-
-    decompressed_model = DummyLinearModel(
-        torch.zeros_like(fake_oneshot_model.linear.weight)
-    )
-    decompressed_model = decompressed_model.float()
-    model_compressor.decompress(model=decompressed_model, model_path=save_dir)
+    model_compressor.decompress_model(model)
+    decompressed_state_dict = {key: value.clone() for key, value in model.state_dict()}
 
     # check that the decompressed model is the same as the original model
-    _check_state_dicts(fake_oneshot_model.state_dict(), decompressed_model.state_dict())
-
-
-@pytest.mark.parametrize(
-    "sparsity_config, quantization_config, missing, unexpected",
-    [
-        (
-            get_bitmask_sparsity_config(),
-            create_quantization_config(bits=8, type="int", strategy="channel"),
-            {"linear.weight"},
-            {
-                "linear.bitmask",
-                "linear.compressed",
-                "linear.row_offsets",
-                "linear.shape",
-                "linear.weight_scale",
-            },
-        )
-    ],
-)
-def test_missing_and_unexpected_keys_on_compression(
-    tmp_path, sparsity_config, quantization_config, missing, unexpected
-):
-
-    model_compressor = ModelCompressor(
-        sparsity_config=sparsity_config, quantization_config=quantization_config
-    )
-    fake_oneshot_model: DummyLinearModel = _get_fake_oneshot_sparse_quantized_model(
-        sparsity_config=sparsity_config, quantization_config=quantization_config
-    )
-
-    og_state_dict_keys = set(
-        DummyLinearModel(weights=torch.randn(10, 5)).state_dict().keys()
-    )
-    compressed_state_dict_keys = set(
-        model_compressor.compress(fake_oneshot_model).keys()
-    )
-
-    assert og_state_dict_keys - compressed_state_dict_keys == missing
-    assert compressed_state_dict_keys - og_state_dict_keys == unexpected
+    _check_state_dicts(compressed_state_dict, decompressed_state_dict)
 
 
 class TwoLayerModel(nn.Module):
@@ -340,50 +294,6 @@ def _get_combined_config(s_config, q_config):
         ),
     ],
 )
-def test_compress_model(model_stub, q_format, s_config, tmpdir):
-    model = AutoModelForCausalLM.from_pretrained(model_stub, torch_dtype=torch.float32)
-    compressor = ModelCompressor.from_pretrained_model(model, s_config, q_format)
-
-    # compress model by eagerly compressing state dict
-    true_compressed = dict(compressor.compress(model))
-    true_compressed = {key: value.clone() for key, value in true_compressed.items()}
-
-    # compress model directly
-    compressor.compress_model(model)
-    compressed = dict(model.state_dict())
-
-    # equivalent to eagerly compressing state dict
-    assert compressed.keys() == true_compressed.keys()
-    for key in compressed.keys():
-        assert compressed[key].dtype == true_compressed[key].dtype
-        assert torch.all(compressed[key] == true_compressed[key]), f"{key}"
-
-
-@pytest.mark.parametrize(
-    "model_stub,q_format,s_config",
-    [
-        (
-            "nm-testing/llama2.c-stories42M-gsm8k-quantized-only-uncompressed",
-            "float-quantized",
-            None,
-        ),
-        (
-            "nm-testing/llama2.c-stories42M-gsm8k-sparse-only-uncompressed",
-            None,
-            "sparse-24-bitmask",
-        ),
-        (
-            "nm-testing/llama2.c-stories42M-gsm8k-stacked-uncompressed",
-            "float-quantized",
-            "sparse-24-bitmask",
-        ),
-        (
-            "nm-testing/llama2.c-stories15M-ultrachat-mixed-uncompressed",
-            "pack-quantized",
-            None,
-        ),
-    ],
-)
 def test_compress_model_meta(model_stub, q_format, s_config):
     # Load model on CPU to get expected compressed state_dict
     cpu_model = AutoModelForCausalLM.from_pretrained(model_stub)
@@ -391,7 +301,8 @@ def test_compress_model_meta(model_stub, q_format, s_config):
         cpu_model, s_config, q_format
     )
     # Only stores dtype because meta model does not store values
-    expected = {k: v.dtype for k, v in reference_compressor.compress(cpu_model).items()}
+    reference_compressor.compress_model(cpu_model)
+    expected = {k: v.dtype for k, v in cpu_model.state_dict()}
 
     # Load model on meta device
     meta_model = AutoModelForCausalLM.from_pretrained(

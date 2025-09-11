@@ -37,74 +37,16 @@ from compressed_tensors.quantization.utils import (
 from compressed_tensors.utils.helpers import replace_module
 from compressed_tensors.utils.match import match_named_modules, match_targets
 from compressed_tensors.utils.offload import update_parameter_data
-from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
 from torch.nn import Module
 
 
 __all__ = [
-    "load_pretrained_quantization_parameters",
     "apply_quantization_config",
 ]
 
-from compressed_tensors.quantization.utils.helpers import is_module_quantized
-from compressed_tensors.utils.safetensors_load import (
-    get_quantization_parameter_to_path_mapping,
-)
-
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def load_pretrained_quantization_parameters(
-    model: Module,
-    model_name_or_path: Optional[str] = None,
-    load_weight_qparams: Optional[bool] = False,
-):
-    """
-    Loads the quantization parameters (scale and zero point) from model_name_or_path to
-    a model that has already been initialized with a quantization config.
-
-    NOTE: Will always load inputs/output parameters. Will conditioanlly load weight
-    parameters, if load_weight_qparams is set to True.
-
-    :param model: model to load pretrained quantization parameters to
-    :param model_name_or_path: Hugging Face stub or local folder containing a quantized
-        model, which is used to load quantization parameters
-    :param load_weight_qparams: whether or not the weight quantization parameters
-        should be loaded
-    """
-    model_path = get_safetensors_folder(model_name_or_path)
-    mapping = get_quantization_parameter_to_path_mapping(model_path)
-
-    for name, submodule in model.named_modules():
-        if not is_module_quantized(submodule):
-            continue
-        if submodule.quantization_scheme.input_activations is not None:
-            base_name = "input"
-            _load_quant_args_from_mapping(
-                base_name=base_name,
-                module_name=name,
-                module=submodule,
-                mapping=mapping,
-            )
-        if submodule.quantization_scheme.output_activations is not None:
-            base_name = "output"
-            _load_quant_args_from_mapping(
-                base_name=base_name,
-                module_name=name,
-                module=submodule,
-                mapping=mapping,
-            )
-
-        if load_weight_qparams and submodule.quantization_scheme.weights:
-            base_name = "weight"
-            _load_quant_args_from_mapping(
-                base_name=base_name,
-                module_name=name,
-                module=submodule,
-                mapping=mapping,
-            )
 
 
 def apply_quantization_config(
