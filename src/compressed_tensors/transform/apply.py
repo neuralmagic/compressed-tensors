@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict
 
 import torch
 from accelerate.utils import has_offloaded_params
