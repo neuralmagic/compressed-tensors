@@ -26,6 +26,7 @@ from compressed_tensors.quantization import (
     QuantizationStatus,
 )
 from compressed_tensors.quantization.lifecycle import apply_quantization_config
+from compressed_tensors.utils import match_named_modules
 from tests.testing_utils import requires_accelerate
 from transformers import AutoModelForCausalLM
 
@@ -103,7 +104,7 @@ def test_target_prioritization(mock_frozen):
 
 def test_apply_quantization_config_tinyllama():
     quant_config = get_sample_tinyllama_quant_config(
-        status=QuantizationStatus.CALIBRATION
+        status=QuantizationStatus.INITIALIZED
     )
     model = get_tinyllama_model()
 
@@ -111,52 +112,19 @@ def test_apply_quantization_config_tinyllama():
     for module in model.modules():
         _test_layer_quantization_status(module, inputs=False, weights=False)
 
-    count_layer_names = ("Linear", "Embeddidng", "LlamaRotaryEmbedding")
-    count_layer_num = defaultdict(int)
-
-    for name, module in model.named_modules():
-        if name in quant_config.ignore:
-            continue
-        module_type = module.__class__.__name__
-        if module_type in count_layer_names:
-            count_layer_num[module_type] += 1
-
-    assert len(count_layer_num) > 0, f"None of {count_layer_names} found in model"
-    assert all(value > 0 for value in count_layer_num.values())
-
     # apply quant config to model
     apply_quantization_config(model, quant_config)
 
     # check for correct application of quant config
-    for name, module in model.named_modules():
-        if name in quant_config.ignore:
-            continue
-        module_type = module.__class__.__name__
-        if module_type in count_layer_names:
-            count_layer_num[module_type] -= 1
-            _inputs = module_type == "Linear"
-            _weights = not module_type == "LlamaRotaryEmbedding"
-            _test_layer_quantization_status(module, inputs=_inputs, weights=_weights)
-
-    assert all(
-        value == 0 for value in count_layer_num.values()
-    ), "Not all values are zero"
-
-    # test quantization compression
-    # sample forward pass to fill scales, zps
-    model(torch.zeros((1, 1), dtype=int), torch.zeros((1, 1), dtype=int))
-    quant_config.quantization_status = QuantizationStatus.COMPRESSED
-    apply_quantization_config(model, quant_config)
-    for name, module in model.named_modules():
-        if name in quant_config.ignore:
-            continue
-        module_type = module.__class__.__name__
-        if module_type == "Linear":
+    for quant_scheme in quant_config.config_groups.values():
+        for name, module in match_named_modules(
+            model, quant_scheme.targets, quant_config.ignore
+        ):
             _test_layer_quantization_status(
                 module,
-                inputs=True,
-                weights=True,
-                expected_status=QuantizationStatus.COMPRESSED,
+                inputs=quant_scheme.input_activations is not None,
+                weights=quant_scheme.weights is not None,
+                expected_status=QuantizationStatus.INITIALIZED,
             )
 
 

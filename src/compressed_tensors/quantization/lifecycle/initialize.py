@@ -75,13 +75,13 @@ def initialize_module_for_quantization(
     :param force_zero_point: whether to force initialization of a zero point for
         symmetric quantization
     """
-    _clear_all_qparams(module)
-
     # TODO: don't initialize parameters when running decompression
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:
         # no scheme passed and layer not targeted for quantization - skip
         return
+
+    _clear_all_qparams(module)
 
     if is_attention_module(module):
         # quantized actions based on calltime status

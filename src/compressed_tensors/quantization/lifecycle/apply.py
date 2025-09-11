@@ -45,7 +45,6 @@ from torch.nn import Module
 __all__ = [
     "load_pretrained_quantization_parameters",
     "apply_quantization_config",
-    "apply_quantization_status",
     "find_name_or_class_matches",
 ]
 
@@ -163,8 +162,14 @@ def apply_quantization_config(
             )
             replace_module(model, name, compressed_linear)
 
-        # apply current quantization status to each targeted submodule
-        apply_quantization_status(submodule, config.quantization_status)
+        else:
+            initialize_module_for_quantization(
+                submodule,
+                force_zero_point=config.quantization_status
+                != QuantizationStatus.COMPRESSED,
+            )
+
+        submodule.quantization_status = config.quantization_status
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
@@ -201,21 +206,6 @@ def process_kv_cache_config(
     kv_cache_group = dict(kv_cache=kv_cache_scheme)
     config.config_groups.update(kv_cache_group)
     return config
-
-
-def apply_quantization_status(module: Module, status: QuantizationStatus):
-    """
-    Applies in place the quantization lifecycle up to the given status
-
-    :param module: module to apply quantization to
-    :param status: status to update the module to
-    """
-
-    force_zero_point_init = status != QuantizationStatus.COMPRESSED
-
-    initialize_module_for_quantization(module, force_zero_point=force_zero_point_init)
-
-    module.quantization_status = status
 
 
 @deprecated(
