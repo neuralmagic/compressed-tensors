@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import defaultdict
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 from accelerate.utils import has_offloaded_params
@@ -59,20 +59,14 @@ def _tie_offloaded_tensors(model: torch.nn.Module):
     :param model: model potentially containing offloaded meta tensors to fix
     """
 
-    # map from offloaded tensor pointers to module-key locations
-    offloaded_ptrs: dict[int, List[Tuple[torch.nn.Module, str]]] = defaultdict(list)
+    # ensure that if a location shares an offloaded tensor pointers, that the
+    # meta tensor is also identical (assigned to the first instance of parameter)
+    ptr_to_meta: Dict[int, torch.nn.Parameter] = dict()
     for module in model.modules():
         if has_offloaded_params(module):
             for key, _ in module.named_parameters(recurse=False):
-                param = module._hf_hook.weights_map[key]
-                offloaded_ptrs[id(param)].append((module, key))
+                offloaded_ptr = module._hf_hook.weights_map[key].data_ptr()
 
-    # ensure that if a location shares an offloaded tensor pointers, that the
-    # meta tensor is also identical (assigned to the first element of the set)
-    for shared_keys in offloaded_ptrs.values():
-        assert len(shared_keys) >= 1
-        first_tensor = getattr(shared_keys[0][0], shared_keys[0][1])
-        assert first_tensor.device.type == "meta"
-        for module, key in shared_keys:
-            assert getattr(module, key).device.type == "meta"
-            setattr(module, key, first_tensor)
+                if offloaded_ptr not in ptr_to_meta:
+                    ptr_to_meta[offloaded_ptr] = getattr(module, key)
+                setattr(module, key, ptr_to_meta[offloaded_ptr])
