@@ -76,7 +76,12 @@ def create_asymmetric_quant_config(
         (QuantizationStrategy.CHANNEL, None),
     ],
 )
-def test_end_to_end_asymmetric_quantization(strategy, group_size):
+def test_end_to_end_asymmetric_quantization(
+    strategy,
+    group_size,
+    mock_per_group_calibration,
+    mock_per_channel_calibration,
+):
     """
     Test end-to-end workflow: quantize -> compress -> save -> load -> decompress -> use
     """
@@ -95,6 +100,13 @@ def test_end_to_end_asymmetric_quantization(strategy, group_size):
             group_size=group_size
         )
         apply_quantization_config(model, quant_config)
+
+        if strategy == QuantizationStrategy.GROUP:
+            mock_per_group_calibration(model.layer1, "weight", model.layer1.weight, group_size)
+            mock_per_group_calibration(model.layer2, "weight", model.layer2.weight, group_size)
+        else:
+            mock_per_channel_calibration(model.layer1, "weight", model.layer1.weight)
+            mock_per_channel_calibration(model.layer2, "weight", model.layer2.weight)
         
         
         
@@ -146,7 +158,7 @@ def test_end_to_end_asymmetric_quantization(strategy, group_size):
 
 
 @pytest.mark.parametrize("num_bits", [4, 8])
-def test_asymmetric_quantization_accuracy(num_bits):
+def test_asymmetric_quantization_accuracy(num_bits, mock_per_group_calibration):
     """
     Test that asymmetric quantization with zero-point preserves accuracy better
     than symmetric quantization for biased weight distributions.
@@ -173,6 +185,7 @@ def test_asymmetric_quantization_accuracy(num_bits):
 
         with torch.no_grad():
             model.layer.weight.copy_(biased_weights)
+        mock_per_group_calibration(model.layer, "weight", model.layer.weight, 128)
 
         compressor = PackedQuantizationCompressor(config=quant_config)
         quantized_modules_to_scheme = {"layer": quant_config.config_groups["group_1"]}
