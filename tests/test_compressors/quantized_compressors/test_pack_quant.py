@@ -15,6 +15,7 @@
 
 import math
 import shutil
+import tempfile
 from collections import OrderedDict
 
 import pytest
@@ -170,12 +171,13 @@ def test_reload_match(tmp_path, num_bits):
     )
     save_file(compressed_state_dict, tmp_path / "model.safetensors")
 
-    reconstructed_dense_gen = compressor.decompress(
-        tmp_path, names_to_scheme=quantized_modules_to_scheme
-    )
     reconstructed_dense = {}
-    for name, value in reconstructed_dense_gen:
-        reconstructed_dense[name] = value
+    with tempfile.TemporaryDirectory() as _tmp:
+        reconstructed_dense_gen = compressor.decompress(
+            tmp_path, names_to_scheme=quantized_modules_to_scheme
+        )
+        for name, value in reconstructed_dense_gen:
+            reconstructed_dense[name] = value
 
     fake_quant_dummy = fake_quantize(
         dense_state_dict["dummy.weight"],

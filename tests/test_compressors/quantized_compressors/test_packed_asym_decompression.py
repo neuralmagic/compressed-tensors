@@ -30,8 +30,12 @@ from compressed_tensors.quantization import (
     QuantizationStrategy,
     apply_quantization_config,
 )
+from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.lifecycle.forward import fake_quantize
 from safetensors.torch import save_file
+from compressed_tensors.compressors.model_compressors.model_compressor import (
+    ModelCompressor,
+)
 from torch.nn import Linear, Module, Sequential
 
 
@@ -90,8 +94,8 @@ def test_end_to_end_asymmetric_quantization(
         
         model = SimpleModel()
         original_weights = {
-            "layer1": model.layer1.weight.clone(),
-            "layer2": model.layer2.weight.clone(),
+            "layer1": model.layer1.weight.detach().clone(),
+            "layer2": model.layer2.weight.detach().clone(),
         }
         
         quant_config = create_asymmetric_quant_config(
@@ -99,6 +103,8 @@ def test_end_to_end_asymmetric_quantization(
             strategy=strategy,
             group_size=group_size
         )
+        # Set pack-quantized format for ModelCompressor usage
+        quant_config.format = CompressionFormat.pack_quantized.value
         apply_quantization_config(model, quant_config)
 
         if strategy == QuantizationStrategy.GROUP:
@@ -126,35 +132,33 @@ def test_end_to_end_asymmetric_quantization(
         assert compressed_state_dict["layer1.weight_zero_point"].dtype == torch.int32
         assert compressed_state_dict["layer2.weight_zero_point"].dtype == torch.int32
         
-        save_file(compressed_state_dict, tmp_path / "model.safetensors")
-        
-        reconstructed_gen = compressor.decompress(
-            tmp_path, names_to_scheme=quantized_modules_to_scheme
-        )
-        
-        reconstructed_weights = {}
-        for module_name, module_data in reconstructed_gen:
-            reconstructed_weights[module_name] = module_data
-        
-        assert "layer1" in reconstructed_weights
-        assert "layer2" in reconstructed_weights
-        assert "weight" in reconstructed_weights["layer1"]
-        assert "weight" in reconstructed_weights["layer2"]
-        
-        assert reconstructed_weights["layer1"]["weight"].shape == original_weights["layer1"].shape
-        assert reconstructed_weights["layer2"]["weight"].shape == original_weights["layer2"].shape
-        
         new_model = SimpleModel()
-        new_model.layer1.weight.data = reconstructed_weights["layer1"]["weight"]
-        new_model.layer2.weight.data = reconstructed_weights["layer2"]["weight"]
+        apply_quantization_config(new_model, quant_config)
+
+        for module_name in ["layer1", "layer2"]:
+            module = getattr(new_model, module_name)
+            prefix = f"{module_name}."
+            for key, value in compressed_state_dict.items():
+                if key.startswith(prefix):
+                    param_name = key[len(prefix):]
+                    if hasattr(module, param_name):
+                        getattr(module, param_name).data = value.clone()
+                    else:
+                        module.register_parameter(
+                            param_name, torch.nn.Parameter(value.clone(), requires_grad=False)
+                        )
+
+        mc = ModelCompressor(quantization_config=quant_config)
+        mc.decompress_model(new_model)
         
-        test_input = torch.randn(1, 512)
-        with torch.no_grad():
-            output = new_model(test_input)
-        
-        assert output.shape == (1, 128)
-        assert not torch.isnan(output).any()
-        assert not torch.isinf(output).any()
+        assert new_model.layer1.weight.shape == original_weights["layer1"].shape
+        assert new_model.layer2.weight.shape == original_weights["layer2"].shape
+        assert new_model.layer1.weight.dtype.is_floating_point
+        assert new_model.layer2.weight.dtype.is_floating_point
+        assert not torch.isnan(new_model.layer1.weight).any()
+        assert not torch.isnan(new_model.layer2.weight).any()
+        assert not torch.isinf(new_model.layer1.weight).any()
+        assert not torch.isinf(new_model.layer2.weight).any()
 
 
 @pytest.mark.parametrize("num_bits", [4, 8])
@@ -174,6 +178,7 @@ def test_asymmetric_quantization_accuracy(num_bits, mock_per_group_calibration):
             strategy=QuantizationStrategy.GROUP,
             group_size=128,
         )
+        quant_config.format = CompressionFormat.pack_quantized.value
 
         class SingleLayer(Module):
             def __init__(self):
@@ -194,31 +199,26 @@ def test_asymmetric_quantization_accuracy(num_bits, mock_per_group_calibration):
             model.state_dict().copy(), names_to_scheme=quantized_modules_to_scheme
         )
         
-        save_file(compressed_state_dict, tmp_path / "model.safetensors")
-        
-        reconstructed_gen = compressor.decompress(
-            tmp_path, names_to_scheme=quantized_modules_to_scheme
-        )
-        
-        reconstructed = {}
-        for module_name, module_data in reconstructed_gen:
-            reconstructed[module_name] = module_data
-        
-        assert "layer" in reconstructed
-        assert "weight" in reconstructed["layer"]
-        assert reconstructed["layer"]["weight"].shape == shape
-        
-        decompressed_weights = reconstructed["layer"]["weight"]
+        new_model = SingleLayer()
+        apply_quantization_config(new_model, quant_config)
+
+        module = new_model.layer
+        for key, value in compressed_state_dict.items():
+            if key.startswith("layer."):
+                param_name = key[len("layer."):]
+                if hasattr(module, param_name):
+                    getattr(module, param_name).data = value.clone()
+                else:
+                    module.register_parameter(
+                        param_name, torch.nn.Parameter(value.clone(), requires_grad=False)
+                    )
+
+        mc = ModelCompressor(quantization_config=quant_config)
+        mc.decompress_model(new_model)
+
+        decompressed_weights = new_model.layer.weight
+        assert decompressed_weights.shape == shape
         assert not torch.isnan(decompressed_weights).any()
         assert not torch.isinf(decompressed_weights).any()
-        
-        assert decompressed_weights.abs().max() < 100
-        assert decompressed_weights.abs().max() > 0.01
-
-
-if __name__ == "__main__":
-    test_end_to_end_asymmetric_quantization(QuantizationStrategy.GROUP, 128)
-    test_end_to_end_asymmetric_quantization(QuantizationStrategy.CHANNEL, None)
-    test_asymmetric_quantization_accuracy(4)
-    test_asymmetric_quantization_accuracy(8)
-    print("All tests passed!")
+        threshold = torch.std(torch.rand(shape) - torch.rand(shape))
+        assert torch.std(biased_weights - decompressed_weights) < threshold
