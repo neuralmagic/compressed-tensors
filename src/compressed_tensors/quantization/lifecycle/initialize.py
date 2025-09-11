@@ -45,6 +45,7 @@ __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
     "KVCacheScaleType",
+    "ALL_QPARAM_KEYS",
 ]
 
 
@@ -54,6 +55,18 @@ _LOGGER = logging.getLogger(__name__)
 class KVCacheScaleType(Enum):
     KEY = "k_scale"
     VALUE = "v_scale"
+
+
+ALL_QPARAM_KEYS = [KVCacheScaleType.KEY.value, KVCacheScaleType.VALUE.value] + [
+    f"{base_name}_{suffix}"
+    for base_name in ("input", "weight", "output")
+    for suffix in (
+        "global_scale",
+        "scale",
+        "zero_point",
+        "g_idx",
+    )
+]
 
 
 def initialize_module_for_quantization(
@@ -146,17 +159,7 @@ def _clear_all_qparams(
 
     :param module: module to clear qparams from
     """
-    keys = [KVCacheScaleType.KEY.value, KVCacheScaleType.VALUE.value] + [
-        f"{base_name}_{suffix}"
-        for base_name in ("input", "weight", "output")
-        for suffix in (
-            "global_scale",
-            "scale",
-            "zero_point",
-            "g_idx",
-        )
-    ]
-    for key in keys:
+    for key in ALL_QPARAM_KEYS:
         if hasattr(module, key):
             delete_offload_parameter(module, key)
 
