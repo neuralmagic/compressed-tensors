@@ -174,23 +174,21 @@ def create_quantization_config(bits=8, type="int", strategy="tensor"):
     ],
 )
 def test_composability(sparsity_config, quantization_config):
-    model_compressor = ModelCompressor(
-        sparsity_config=sparsity_config, quantization_config=quantization_config
-    )
+    model_compressor = ModelCompressor(sparsity_config, quantization_config)
     model: DummyLinearModel = _get_fake_oneshot_sparse_quantized_model(
-        sparsity_config=sparsity_config, quantization_config=quantization_config
+        quantization_config,
+        sparsity_config,
     )
     model = model.to(torch.float32)
 
     # does both sparse and quantization compression
+    original_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
     model_compressor.compress_model(model)
-    compressed_state_dict = {key: value.clone() for key, value in model.state_dict()}
-
     model_compressor.decompress_model(model)
-    decompressed_state_dict = {key: value.clone() for key, value in model.state_dict()}
+    decompressed_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
 
     # check that the decompressed model is the same as the original model
-    _check_state_dicts(compressed_state_dict, decompressed_state_dict)
+    _check_state_dicts(original_state_dict, decompressed_state_dict)
 
 
 class TwoLayerModel(nn.Module):
@@ -250,6 +248,9 @@ def _get_fake_oneshot_sparse_quantized_model(quantization_config, sparsity_confi
         args=quantization_args,
     )
 
+    if quantization_args.symmetric:
+        zero_point = None  # do not include in model
+
     fake_oneshot_model = DummyLinearModel(quantized_weights, scale, zero_point)
     fake_oneshot_model.linear.quantization_scheme = quantization_config.config_groups[
         "group_0"
@@ -302,7 +303,7 @@ def test_compress_model_meta(model_stub, q_format, s_config):
     )
     # Only stores dtype because meta model does not store values
     reference_compressor.compress_model(cpu_model)
-    expected = {k: v.dtype for k, v in cpu_model.state_dict()}
+    expected = {k: v.dtype for k, v in cpu_model.state_dict().items()}
 
     # Load model on meta device
     meta_model = AutoModelForCausalLM.from_pretrained(
