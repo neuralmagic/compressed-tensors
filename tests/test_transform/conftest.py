@@ -19,8 +19,6 @@ from transformers import PretrainedConfig, PreTrainedModel
 
 
 class TransformableModel(PreTrainedModel):
-    config_class = PretrainedConfig
-
     def __init__(self, *sizes):
         super().__init__(config=PretrainedConfig())
         self.fcs = torch.nn.ModuleList(

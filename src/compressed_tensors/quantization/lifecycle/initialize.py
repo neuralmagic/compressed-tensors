@@ -185,10 +185,6 @@ def _initialize_scale_zero_point(
 
         expected_shape = (observed_shape[-1], 1)
 
-<<<<<<< HEAD
-    # 3. Identify quantization scale and zp dtype
-    scale_dtype = module.weight.dtype
-=======
     elif strategy in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP):
         assert quantization_args.group_size is not None
         if len(observed_shape) < 1:
@@ -218,7 +214,6 @@ def _initialize_scale_zero_point(
 
     # 2. Identify quantization scale and zp dtype
     scale_dtype = observed_dtype
->>>>>>> fde779c (refactor)
 
     if is_fp4(quantization_args=quantization_args):
         scale_dtype = zp_dtype = FP8_E4M3_DATA.dtype

@@ -221,8 +221,7 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module,
-                force_zero_point=force_zero_point_init,
+                module, force_zero_point=force_zero_point_init
             )
         )
 
