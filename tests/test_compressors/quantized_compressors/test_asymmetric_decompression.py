@@ -96,22 +96,7 @@ def test_end_to_end_asymmetric_quantization(strategy, group_size):
         )
         apply_quantization_config(model, quant_config)
         
-        for name, module in model.named_modules():
-            if isinstance(module, Linear):
-                weight = module.weight
-                if strategy == QuantizationStrategy.CHANNEL:
-                    scale_shape = (weight.shape[0], 1)
-                else:
-                    scale_shape = (weight.shape[0], weight.shape[1] // group_size)
-                
-                module.weight_scale = torch.nn.Parameter(
-                    torch.rand(scale_shape) * 0.1,
-                    requires_grad=False
-                )
-                module.weight_zero_point = torch.nn.Parameter(
-                    torch.randint(-8, 8, scale_shape, dtype=torch.int8),
-                    requires_grad=False
-                )
+        
         
         compressor = PackedQuantizationCompressor(config=quant_config)
         quantized_modules_to_scheme = {
@@ -168,34 +153,32 @@ def test_asymmetric_quantization_accuracy(num_bits):
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        
+
         shape = (256, 512)
-        weights = torch.randn(shape) + 2.0
-        
+        biased_weights = torch.randn(shape) + 2.0
+
         quant_config = create_asymmetric_quant_config(
             num_bits=num_bits,
             strategy=QuantizationStrategy.GROUP,
-            group_size=128
+            group_size=128,
         )
-        
-        group_size = 128
-        num_groups = shape[1] // group_size
-        scale_shape = (shape[0], num_groups)
-        
-        scales = torch.rand(scale_shape) * 0.1
-        zero_points = torch.randint(-2**(num_bits-1), 2**(num_bits-1), scale_shape, dtype=torch.int8)
-        
-        state_dict = {
-            "layer.weight": weights,
-            "layer.weight_scale": scales,
-            "layer.weight_zero_point": zero_points,
-        }
-        
+
+        class SingleLayer(Module):
+            def __init__(self):
+                super().__init__()
+                self.layer = Linear(shape[1], shape[0], bias=False)
+
+        model = SingleLayer()
+        apply_quantization_config(model, quant_config)
+
+        with torch.no_grad():
+            model.layer.weight.copy_(biased_weights)
+
         compressor = PackedQuantizationCompressor(config=quant_config)
         quantized_modules_to_scheme = {"layer": quant_config.config_groups["group_1"]}
-        
+
         compressed_state_dict = compressor.compress(
-            state_dict.copy(), names_to_scheme=quantized_modules_to_scheme
+            model.state_dict().copy(), names_to_scheme=quantized_modules_to_scheme
         )
         
         save_file(compressed_state_dict, tmp_path / "model.safetensors")
