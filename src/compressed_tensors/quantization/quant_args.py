@@ -283,8 +283,9 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         has_block_structure = block_structure is not None
         if has_block_strategy != has_block_structure:
             raise ValueError(
-                "Block strategy requires `block_structure`, and vice versa. "
-                f"Instead got ({strategy}, {block_structure})"
+                "`strategy = block` requires `block_structure != None`, and vice versa."
+                f" Instead got `strategy={strategy}` and "
+                f"`block_structure={block_structure}`"
             )
 
         # validate group strategy
@@ -296,8 +297,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         has_actorder = actorder is not None
         if has_group_strategy != has_group_size:
             raise ValueError(
-                "Group strategies require `group_size`, and vice versa. "
-                f"Instead got ({strategy}, {group_size})"
+                "`strategy = group` requires `group_size != None`, and vice versa. "
+                f"Instead got `strategy={strategy}` and `group_size={group_size}`"
             )
         if has_actorder and not has_group_strategy:
             raise ValueError(

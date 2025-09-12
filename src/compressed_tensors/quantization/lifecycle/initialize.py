@@ -14,10 +14,8 @@
 
 
 import logging
-import math
-import warnings
 from enum import Enum
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.lifecycle.forward import (
@@ -32,7 +30,11 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.utils import is_fp4, is_kv_cache_quant_scheme
+from compressed_tensors.quantization.utils import (
+    is_fp4,
+    is_kv_cache_quant_scheme,
+    strict_divide,
+)
 from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
@@ -102,7 +104,7 @@ def initialize_module_for_quantization(
         if scheme.input_activations is not None:
             base_name = "input"
             args = scheme.input_activations
-            observed_shape = weight.shape[-1:]
+            observed_shape = (1, weight.size(-1))
             observed_dtype = weight.dtype
 
         if scheme.weights is not None:
@@ -148,7 +150,7 @@ def _initialize_scale_zero_point(
     module: Module,
     base_name: str,
     quantization_args: QuantizationArgs,
-    observed_shape: torch.Size,
+    observed_shape: Tuple[int],
     observed_dtype: torch.dtype,
     force_zero_point: bool = True,
 ):
@@ -191,8 +193,8 @@ def _initialize_scale_zero_point(
             raise ValueError("Group quant requires at least 1 observed dimension")
 
         group_size = quantization_args.group_size
-        num_groups = _strict_divide(observed_shape[-1], group_size, strategy)
-        expected_shape = (num_groups, group_size)
+        num_groups = strict_divide(observed_shape[-1], group_size, strategy)
+        expected_shape = (*observed_shape[:-1], num_groups)
 
         # initialize activation ordering if applicable
         if actorder == ActivationOrdering.GROUP:
@@ -208,8 +210,8 @@ def _initialize_scale_zero_point(
             raise ValueError("Block quant requires at least 2 observed dimensions")
 
         block_structure = quantization_args.block_structure
-        num_rows = _strict_divide(observed_shape[-2], block_structure[-2], strategy)
-        num_cols = _strict_divide(observed_shape[-1], block_structure[-1], strategy)
+        num_rows = strict_divide(observed_shape[-2], block_structure[-2], strategy)
+        num_cols = strict_divide(observed_shape[-1], block_structure[-1], strategy)
         expected_shape = (num_rows, num_cols)
 
     # 2. Identify quantization scale and zp dtype
@@ -264,16 +266,3 @@ def _initialize_attn_scales(module: Module) -> None:
         requires_grad=False,
     )
     register_offload_parameter(module, KVCacheScaleType.VALUE.value, init_scale)
-
-
-def _strict_divide(observed: int, divisor: int, strategy: QuantizationStrategy) -> int:
-    out = observed // divisor
-    if out * divisor != observed:
-        raise ValueError(
-            f"{strategy} quantization strategy requires strict division of "
-            f"weight/activation size {observed} and group/block size {divisor}. "
-            "consider reducing the group/block size or ignoring modules with weights "
-            f"not divisible by {divisor}"
-        )
-
-    return out
