@@ -29,8 +29,8 @@ __all__ = ["infer_and_set_per_module_quantization_format"]
 
 
 def _get_quant_compression_format(
-    input_args: QuantizationArgs,
-    weight_args: QuantizationArgs,
+    input_args: Optional[QuantizationArgs],
+    weight_args: Optional[QuantizationArgs],
     sparsity_structure: Optional[str] = None,
 ) -> CompressionFormat:
     """
