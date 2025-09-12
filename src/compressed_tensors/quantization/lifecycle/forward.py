@@ -264,8 +264,7 @@ def _process_quantization(
     ):
 
         output_dtype = dtype if dtype is not None else x.dtype
-        output = torch.zeros_like(x).to(output_dtype)
-        columns = output.shape[-1]
+        columns = x.size(-1)
 
         # TODO: make validation step for inputs
 
@@ -323,7 +322,7 @@ def _process_quantization(
                 global_scale=global_scale,
             )
 
-        output = output.flatten(start_dim=-2)
+        output = output.flatten(-2, -1)
         output = output.to(output_dtype)
 
         if not is_column_order:
