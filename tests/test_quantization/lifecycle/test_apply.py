@@ -279,13 +279,12 @@ def test_multi_apply_quantization_config():
     """
     model = get_tinyllama_model()
 
-    # FP8 applied to mlp and self_attn.o_proj to validate overwriting
+    # FP8 applied to self_attn
     qconfig1 = QuantizationConfig(
         config_groups={
             "group_0": QuantizationScheme(
                 targets=[
-                    r"re:.*model\.layers\.\d+\.mlp\.(down|gate|up)_proj$",
-                    r"re:.*model\.layers\.\d+\.self_attn\.o_proj$",
+                    r"re:.*self_attn\.(k|q|o|v)_proj$",
                 ],
                 weights=QuantizationArgs(
                     num_bits=8,
@@ -305,12 +304,13 @@ def test_multi_apply_quantization_config():
         },
         ignore=["lm_head"],
     )
-    # W4A16_ASYM applied to self_attn
+    # W4A16_ASYM applied to mlp and self_attn.o_proj to validate overwriting
     qconfig2 = QuantizationConfig(
         config_groups={
             "group_0": QuantizationScheme(
                 targets=[
-                    r"re:.*model\.layers\.\d+\.self_attn\.(k|q|o|v)_proj$",
+                    r"re:.*mlp\.(down|gate|up)_proj$",
+                    r"re:.*self_attn\.o_proj$",
                 ],
                 weights=QuantizationArgs(
                     num_bits=4,
