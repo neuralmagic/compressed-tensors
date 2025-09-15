@@ -21,11 +21,15 @@ import torch
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
+    QuantizationArgs,
     QuantizationConfig,
+    QuantizationScheme,
     QuantizationStatus,
+    QuantizationStrategy,
+    QuantizationType,
 )
 from compressed_tensors.quantization.lifecycle import apply_quantization_config
-from compressed_tensors.utils import match_named_modules
+from compressed_tensors.utils import is_match, match_named_modules
 from tests.testing_utils import requires_accelerate
 from transformers import AutoModelForCausalLM
 
@@ -265,3 +269,100 @@ def test_apply_quantization_config(caplog, target, should_raise_warning):
             assert len(caplog.text) > 0
         else:
             assert len(caplog.text) == 0
+
+
+def test_multi_apply_quantization_config():
+    """
+    Ensure that multiple quantization configs are applied correctly
+    If quantization config was previously applied to a module,
+    those changes should be reset for newly applied quantization config
+    """
+    model = get_tinyllama_model()
+
+    # FP8 applied to mlp and self_attn.o_proj to validate overwriting
+    qconfig1 = QuantizationConfig(
+        config_groups={
+            "group_0": QuantizationScheme(
+                targets=[
+                    r"re:.*model\.layers\.\d+\.mlp\.(down|gate|up)_proj$",
+                    r"re:.*model\.layers\.\d+\.self_attn\.o_proj$",
+                ],
+                weights=QuantizationArgs(
+                    num_bits=8,
+                    type=QuantizationType.FLOAT,
+                    strategy=QuantizationStrategy.TENSOR,
+                    symmetric=True,
+                    dynamic=False,
+                ),
+                input_activations=QuantizationArgs(
+                    num_bits=8,
+                    type=QuantizationType.FLOAT,
+                    strategy=QuantizationStrategy.TENSOR,
+                    symmetric=True,
+                    dynamic=False,
+                ),
+            )
+        },
+        ignore=["lm_head"],
+    )
+    # W4A16_ASYM applied to self_attn
+    qconfig2 = QuantizationConfig(
+        config_groups={
+            "group_0": QuantizationScheme(
+                targets=[
+                    r"re:.*model\.layers\.\d+\.self_attn\.(k|q|o|v)_proj$",
+                ],
+                weights=QuantizationArgs(
+                    num_bits=4,
+                    type=QuantizationType.INT,
+                    strategy=QuantizationStrategy.GROUP,
+                    group_size=128,
+                    symmetric=False,
+                    dynamic=False,
+                ),
+            )
+        },
+        ignore=["lm_head"],
+    )
+
+    apply_quantization_config(model, qconfig1)
+    apply_quantization_config(model, qconfig2)
+    for name, module in model.named_modules():
+        if is_match(
+            name, module, qconfig2.config_groups["group_0"].targets, qconfig2.ignore
+        ):
+            # assert W4A16_ASYM parameters are present with correct shape
+            # and FP8 parameters have been removed
+            assert not hasattr(module, "input_scale")
+            assert not hasattr(module, "input_zero_point")
+            weight_scale = getattr(module, "weight_scale", None)
+            assert (
+                weight_scale is not None
+                and weight_scale.shape[:-1] == module.weight.shape[:-1]
+                and weight_scale.shape[-1] == module.weight.shape[-1] / 128
+            )
+            weight_zero_point = getattr(module, "weight_zero_point", None)
+            assert (
+                weight_zero_point is not None
+                and weight_zero_point.shape[:-1] == module.weight.shape[:-1]
+                and weight_zero_point.shape[-1] == module.weight.shape[-1] / 128
+            )
+
+        elif is_match(
+            name, module, qconfig1.config_groups["group_0"].targets, qconfig1.ignore
+        ):
+            # assert FP8 scheme parameters are present with correct shape
+            input_scale = getattr(module, "input_scale", None)
+            assert input_scale is not None and input_scale.shape == torch.Size([1])
+            input_zero_point = getattr(module, "input_zero_point", None)
+            assert (
+                input_zero_point is not None
+                and input_zero_point.shape == torch.Size([1])
+            )
+            weight_scale = getattr(module, "weight_scale", None)
+            assert weight_scale is not None and weight_scale.shape == torch.Size([1])
+            weight_zero_point = getattr(module, "weight_zero_point", None)
+            assert (
+                weight_zero_point is not None
+                and weight_zero_point.shape == torch.Size([1])
+            )
