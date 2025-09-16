@@ -120,7 +120,6 @@ def set_per_module_format(
         module.quantization_scheme.format = quantization_format
     # If neither provided, set ours
     else:
-        # If not set, we set ours
         module.quantization_scheme.format = compression_format.value
 
 

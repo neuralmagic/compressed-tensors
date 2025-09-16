@@ -185,9 +185,12 @@ class ModelCompressor:
         """
         quantization_format = infer_and_set_per_module_quantization_format(
             model=model,
-            sparsity_structure=None
-            if sparsity_config is None
-            else sparsity_config.sparsity_structure,
+            sparsity_structure=(
+                sparsity_config.sparsity_structure
+                if sparsity_config is not None
+                and isinstance(sparsity_config, SparsityCompressionConfig)
+                else sparsity_config
+            ),
             quantization_format=quantization_format,
         )
 
@@ -211,9 +214,11 @@ class ModelCompressor:
             sparsity_config=sparsity_config,
             quantization_config=quantization_config,
             transform_config=transform_config,
-            compression_formats=[quantization_format]
-            if isinstance(quantization_format, str)
-            else quantization_format,
+            compression_formats=(
+                [quantization_format]
+                if isinstance(quantization_format, str)
+                else quantization_format
+            ),
         )
 
     @staticmethod
@@ -325,10 +330,10 @@ class ModelCompressor:
 
             self.quantization_compressor = {}
             for format in self.compression_formats:
-                self.quantization_compressor[
-                    format
-                ] = BaseCompressor.load_from_registry(
-                    format, config=quantization_config
+                self.quantization_compressor[format] = (
+                    BaseCompressor.load_from_registry(
+                        format, config=quantization_config
+                    )
                 )
 
     # ----- model memory compression/decompression pathways ----- #
