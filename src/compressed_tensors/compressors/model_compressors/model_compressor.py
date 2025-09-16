@@ -169,7 +169,7 @@ class ModelCompressor:
     def from_pretrained_model(
         cls,
         model: Module,
-        sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
+        sparsity_config_or_format: Union[SparsityCompressionConfig, str, None] = None,
         quantization_format: Optional[str] = None,
     ) -> Optional["ModelCompressor"]:
         """
@@ -178,18 +178,27 @@ class ModelCompressor:
 
         :param model: pytorch model to target for compression
         :param sparsity_config: a filled in sparsity config or string corresponding
-            to a sparsity compression algorithm
+            to a sparsity format
         :param quantization_format: string corresponding to a quantization
             format that should be applied to the entire model
         :return: compressor for the configs, or None if model is not compressed
         """
+        if sparsity_config_or_format and isinstance(
+            sparsity_config_or_format, str
+        ):  # we passed in a sparsity format
+            sparsity_config = SparsityCompressionConfig.load_from_registry(
+                sparsity_config_or_format
+            )
+        else:
+            # otherwise, config or None
+            sparsity_config = sparsity_config_or_format
+
         quantization_format = infer_and_set_per_module_quantization_format(
             model=model,
             sparsity_structure=(
                 sparsity_config.sparsity_structure
                 if sparsity_config is not None
-                and isinstance(sparsity_config, SparsityCompressionConfig)
-                else sparsity_config
+                else None
             ),
             quantization_format=quantization_format,
         )
@@ -197,12 +206,6 @@ class ModelCompressor:
         quantization_config = QuantizationConfig.from_pretrained(
             model, format=quantization_format
         )
-
-        # use config passed as argument
-        if isinstance(sparsity_config, str):  # we passed in a sparsity format
-            sparsity_config = SparsityCompressionConfig.load_from_registry(
-                sparsity_config
-            )
 
         # use config attached to model
         transform_config = getattr(model, TRANSFORM_CONFIG_NAME, None)
@@ -214,11 +217,7 @@ class ModelCompressor:
             sparsity_config=sparsity_config,
             quantization_config=quantization_config,
             transform_config=transform_config,
-            compression_formats=(
-                [quantization_format]
-                if isinstance(quantization_format, str)
-                else quantization_format
-            ),
+            compression_formats=quantization_format,
         )
 
     @staticmethod
@@ -330,10 +329,10 @@ class ModelCompressor:
 
             self.quantization_compressor = {}
             for format in self.compression_formats:
-                self.quantization_compressor[format] = (
-                    BaseCompressor.load_from_registry(
-                        format, config=quantization_config
-                    )
+                self.quantization_compressor[
+                    format
+                ] = BaseCompressor.load_from_registry(
+                    format, config=quantization_config
                 )
 
     # ----- model memory compression/decompression pathways ----- #
