@@ -64,6 +64,9 @@ from tqdm import tqdm
 from transformers import AutoConfig
 from transformers.file_utils import CONFIG_NAME
 
+from compressed_tensors.config.format import (
+    infer_and_set_per_module_quantization_format,
+)
 
 if TYPE_CHECKING:
     from compressed_tensors.compressors import BaseQuantizationCompressor
@@ -180,6 +183,14 @@ class ModelCompressor:
             algorithm
         :return: compressor for the configs, or None if model is not compressed
         """
+        if quantization_format is None:
+            quantization_format = infer_and_set_per_module_quantization_format(
+                model=model,
+                sparsity_structure=None
+                if sparsity_config is None
+                else sparsity_config.sparsity_structure,
+            )
+
         quantization_config = QuantizationConfig.from_pretrained(
             model, format=quantization_format
         )
@@ -616,6 +627,7 @@ class ModelCompressor:
                     # compressor in a follow-up including initialization
                     load_weight_qparams=load_weight_qparams,
                 )
+       
             model_path_or_state_dict = (
                 model.state_dict() if sparse_decompressed else model_path
             )
