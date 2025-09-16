@@ -82,7 +82,9 @@ def _get_quant_compression_format(
 
 
 def set_per_module_format(
-    module: torch.nn.Module, sparsity_structure: Optional[str] = None
+    module: torch.nn.Module,
+    sparsity_structure: Optional[str] = None,
+    quantization_format: Optional[str] = None,
 ):
     """
     Determine and set the per module quantization format given quantization args
@@ -108,6 +110,15 @@ def set_per_module_format(
                 "The provided format for the module does not match the "
                 "inferred format. Compression may fail "
             )
+    # If a per module format is not provided, check if a global format was provided
+    elif quantization_format is not None:
+        if quantization_format != compression_format.value:
+            logger.warning(
+                "The provided format for the module does not match the "
+                "inferred format. Compression may fail "
+            )
+        module.quantization_scheme.format = quantization_format
+    # If neither provided, set ours
     else:
         # If not set, we set ours
         module.quantization_scheme.format = compression_format.value
@@ -116,6 +127,7 @@ def set_per_module_format(
 def infer_and_set_per_module_quantization_format(
     model: torch.nn.Module,
     sparsity_structure: Optional[str] = None,
+    quantization_format: Optional[str] = None,
 ) -> List[str]:
     """
     Infers the quantization format for a model based on its state and provided
@@ -133,7 +145,7 @@ def infer_and_set_per_module_quantization_format(
     for submodule in model.modules():
         if is_module_quantized(submodule):
             assert hasattr(submodule, "quantization_scheme")
-            set_per_module_format(submodule, sparsity_structure)
+            set_per_module_format(submodule, sparsity_structure, quantization_format)
             if submodule.quantization_scheme.format not in unique_formats:
                 unique_formats.append(submodule.quantization_scheme.format)
 
