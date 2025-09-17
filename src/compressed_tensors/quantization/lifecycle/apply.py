@@ -143,7 +143,7 @@ def apply_quantization_config(
             model, scheme.targets, config.ignore or [], warn_on_fail=True
         ):
             # attach scheme to module (with merging)
-            attach_scheme(submodule, scheme)
+            setattr(submodule, "quantization_scheme", scheme)
 
             # replace with run compressed if applicable
             # FUTURE: move this to model compressor
@@ -173,14 +173,6 @@ def apply_quantization_config(
 
     # attach config for serialization
     attach_config(model, config)
-
-
-def attach_scheme(module: Module, scheme: QuantizationScheme) -> QuantizationScheme:
-    if existing_scheme := getattr(module, "quantization_scheme", None):
-        scheme = scheme.merge(existing_scheme)
-
-    setattr(module, "quantization_scheme", scheme)
-    return scheme
 
 
 def attach_config(model: PreTrainedModel, config: QuantizationConfig):
