@@ -16,21 +16,22 @@
 import logging
 import math
 import warnings
-from enum import Enum
 from typing import Optional
 
 import torch
+from compressed_tensors.quantization import (
+    ALL_QPARAM_NAMES,
+    FP8_E4M3_DATA,
+    ActivationOrdering,
+    KVCacheScaleType,
+    QuantizationArgs,
+    QuantizationScheme,
+    QuantizationStatus,
+    QuantizationStrategy,
+)
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
-from compressed_tensors.quantization.quant_args import (
-    FP8_E4M3_DATA,
-    ActivationOrdering,
-    QuantizationArgs,
-    QuantizationStrategy,
-)
-from compressed_tensors.quantization.quant_config import QuantizationStatus
-from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import is_fp4, is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
     delete_offload_parameter,
@@ -44,29 +45,10 @@ from torch.nn import Module, Parameter
 __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
-    "KVCacheScaleType",
-    "ALL_QPARAM_KEYS",
 ]
 
 
 _LOGGER = logging.getLogger(__name__)
-
-
-class KVCacheScaleType(Enum):
-    KEY = "k_scale"
-    VALUE = "v_scale"
-
-
-ALL_QPARAM_KEYS = [KVCacheScaleType.KEY.value, KVCacheScaleType.VALUE.value] + [
-    f"{base_name}_{suffix}"
-    for base_name in ("input", "weight", "output")
-    for suffix in (
-        "global_scale",
-        "scale",
-        "zero_point",
-        "g_idx",
-    )
-]
 
 
 def initialize_module_for_quantization(
@@ -159,7 +141,7 @@ def _clear_all_qparams(
 
     :param module: module to clear qparams from
     """
-    for key in ALL_QPARAM_KEYS:
+    for key in ALL_QPARAM_NAMES:
         if hasattr(module, key):
             delete_offload_parameter(module, key)
 
