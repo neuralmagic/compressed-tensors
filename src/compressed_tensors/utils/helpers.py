@@ -20,10 +20,6 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, 
 
 import numpy
 import torch
-<<<<<<< HEAD
-=======
-from frozendict import frozendict
->>>>>>> 6672617 (reduce diff)
 from transformers import AutoConfig
 
 
