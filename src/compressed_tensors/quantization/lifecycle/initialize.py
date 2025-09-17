@@ -104,7 +104,7 @@ def initialize_module_for_quantization(
         if scheme.input_activations is not None:
             base_name = "input"
             args = scheme.input_activations
-            observed_shape = (1, weight.size(-1))
+            observed_shape = (1, weight.shape[-1])
             observed_dtype = weight.dtype
 
         if scheme.weights is not None:
@@ -185,7 +185,7 @@ def _initialize_scale_zero_point(
         if len(observed_shape) < 1:
             raise ValueError("Channel quant requires at least 1 observed dimension")
 
-        expected_shape = (observed_shape[-1], 1)
+        expected_shape = (observed_shape[-2], 1)
 
     elif strategy in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP):
         assert quantization_args.group_size is not None

@@ -24,6 +24,7 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationType,
 )
 from pydantic import BaseModel, ConfigDict, model_validator
+from loguru import logger
 
 
 __all__ = [
@@ -60,15 +61,19 @@ class QuantizationScheme(BaseModel):
         format = model.format
 
         if inputs is not None:
-            if inputs.strategy not in (
-                QuantizationStrategy.TOKEN,
-                QuantizationStrategy.TENSOR,
-                QuantizationStrategy.GROUP,
-                QuantizationStrategy.TENSOR_GROUP,
-            ):
-                raise NotImplementedError(
-                    f"Using {inputs.strategy} strategy is not supported for "
-                    "activation quantization"
+            if inputs.strategy == QuantizationStrategy.CHANNEL:
+                raise ValueError(
+                    "Channel-wise activation quantization is equivalent to "
+                    "tensor/token-wise activation quantization, please use one of "
+                    "those. If you mean to quantize each activation value "
+                    "individually, please use group quantization with `group_size = 1`"
+                )
+
+            if inputs.strategy == QuantizationStrategy.BLOCK:
+                raise ValueError(
+                    "Block-wise activation quantization is not supported. If you mean "
+                    "to quantize each activation value individually, please use group "
+                    "quantization with `group_size = 1`"
                 )
 
             if inputs.actorder is not None:
