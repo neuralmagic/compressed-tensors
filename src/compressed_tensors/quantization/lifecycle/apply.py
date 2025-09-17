@@ -116,13 +116,7 @@ def load_pretrained_quantization_parameters(
 
 
 def apply_quantization_config(
-<<<<<<< HEAD
-    model: PreTrainedModel,
-    config: Union[QuantizationConfig, None],
-    run_compressed: bool = False,
-=======
     model: Module, config: Union[QuantizationConfig, None], run_compressed: bool = False
->>>>>>> origin
 ):
     """
     Initializes the model for quantization in-place based on the given config.

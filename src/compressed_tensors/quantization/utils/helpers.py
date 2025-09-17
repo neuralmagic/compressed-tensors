@@ -48,6 +48,7 @@ __all__ = [
     "calculate_qparams",
     "generate_gparam",
     "is_fp4",
+    "strict_divide",
 ]
 
 # note that this is a "narrow match", see quantization/apply.py
@@ -476,3 +477,19 @@ def generate_gparam(
     max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
     global_scale = scale_data.max * quant_data.max / max_val_pos
     return global_scale.to(dtype).reshape([1])
+
+
+def strict_divide(
+    observed: int, divisor: int, strategy: Optional[QuantizationStrategy] = None
+) -> int:
+    out = observed // divisor
+    if out * divisor != observed:
+        if strategy is not None:
+            raise ValueError(
+                f"{strategy} quantization strategy requires strict division of "
+                f"weight/activation size {observed} and group/block size {divisor}. "
+                "consider reducing the group/block size or ignoring modules with "
+                f"weights not divisible by {divisor}"
+            )
+
+    return out

@@ -264,8 +264,7 @@ def _process_quantization(
     ):
 
         output_dtype = dtype if dtype is not None else x.dtype
-        output = torch.zeros_like(x).to(output_dtype)
-        columns = output.shape[-1]
+        columns = x.size(-1)
 
         # TODO: make validation step for inputs
 
@@ -281,17 +280,8 @@ def _process_quantization(
                     f"by the given group_size {group_size}"
                 )
 
-        # support column-order (default) quantization as well as other orderings
-        # such as activation ordering. Below checks if g_idx has been initialized
-        is_column_order = g_idx is None or -1 in g_idx
-        if is_column_order:
-            num_groups = int(ceil(columns / group_size))
-            group_sizes = torch.full((num_groups,), group_size, dtype=torch.int)
-
-        else:
-            group_indices, group_sizes = torch.unique(g_idx, return_counts=True)
-            group_sizes = group_sizes[torch.argsort(group_indices)]
-
+        # permute groups
+        if g_idx is not None:
             perm = torch.argsort(g_idx)
             x = x.index_select(-1, perm)
 
@@ -300,6 +290,8 @@ def _process_quantization(
             ceil(x.shape[-1] / group_size),
             group_size,
         )
+        # we should potentially be folding reshaped_dims[0] into x.shape[-2]
+        # in order to allow for multi-headed activations
         x = x.unflatten(-1, reshaped_dims)
 
         if do_quantize:
@@ -323,12 +315,12 @@ def _process_quantization(
                 global_scale=global_scale,
             )
 
-        output = output.flatten(start_dim=-2)
+        output = output.flatten(-2, -1)
         output = output.to(output_dtype)
 
-        if not is_column_order:
-            inv_perm = torch.argsort(perm)
-            output = output.index_select(-1, inv_perm)
+        # unpermute groups
+        if g_idx is not None:
+            x = x.index_select(-1, g_idx)
 
     else:  # covers channel, token and tensor strategies
         if do_quantize:
