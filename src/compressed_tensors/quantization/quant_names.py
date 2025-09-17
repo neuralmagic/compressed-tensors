@@ -39,11 +39,5 @@ ALL_QPARAM_NAMES = (
         "weight_packed",
         "weight_global_scale",
         "weight_shape",
-        "scale_packed",
-        "meta",
-        "shape",
-        "compressed",
-        "bitmask",
-        "row_offsets",
     ]
 )
