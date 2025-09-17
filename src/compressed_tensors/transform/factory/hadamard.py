@@ -56,30 +56,28 @@ class HadamardFactory(TransformFactory):
         :param args: defines how the transform will be applied to the module
         """
         size = get_transform_size(module, args.location, self.scheme.head_dim)
-        dtype = self.scheme.precision
         exec_device = get_execution_device(module)
+        device = get_offloaded_device(module)
+        precision = self.scheme.precision if args.is_online() else torch.float64
 
-        # if the parent is offloaded, then weight will be placed in the weights_map
-        # if the parent is not offloaded, then the weight will stay on the exec device
-        if has_offloaded_params(module):
-            device = get_offloaded_device(module)
-        else:
-            device = exec_device
-
-        factory_kwargs = {"construct_device": exec_device}
-        weight = self.weights.get(size, dtype, device, factory_kwargs=factory_kwargs)
+        factory_kwargs = {
+            "device": device,
+            "construct_device": exec_device,
+            "precision": precision,
+        }
+        weight = self.weights.get(size, factory_kwargs=factory_kwargs)
+        # TODO: permutations should be keyed by fused modules, not weight
         perm = self.perms[weight] if self.scheme.randomize else None
         return HadamardTransform(weight, perm, self.scheme, args, type(module))
 
     def _create_weight(
         self,
         size: int,
-        dtype: dtype,
         device: device,
         construct_device: device,
+        precision: dtype,
     ) -> Parameter:
-        # construct on execution device, cache on offload device
-        data = deterministic_hadamard_matrix(size, dtype, construct_device)
+        data = deterministic_hadamard_matrix(size, precision, construct_device)
         data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
@@ -103,8 +101,7 @@ class HadamardTransform(TransformBase):
         self.scheme = scheme
         self.args = args
         self.module_type = module_type
-        self._scale = torch.tensor(weight.size(0), dtype=self.scheme.precision).sqrt()
-        self._precision = scheme.precision if args.is_online() else torch.float64
+        self._scale = torch.tensor(weight.size(0), dtype=torch.float64).sqrt()
 
     def forward(self, value: Tensor) -> Tensor:
         weight = self.weight
@@ -117,8 +114,8 @@ class HadamardTransform(TransformBase):
 
         return (
             apply_transform_weight(
-                weight.to(self._precision),
-                value.to(self._precision),
+                weight.to(device=value.device),
+                value.to(dtype=weight.dtype),
                 self.args.location,
                 self.module_type,
             )

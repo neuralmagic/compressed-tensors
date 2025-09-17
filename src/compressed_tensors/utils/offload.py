@@ -68,10 +68,8 @@ except ImportError:
 
 
 __all__ = [
-    "is_module_offloaded",
     "get_execution_device",
     "get_offloaded_device",
-    "update_prefix_dict",
     "update_parameter_data",
     "register_offload_parameter",
     "update_offload_parameter",
@@ -117,45 +115,19 @@ def check_accelerate(fallback: Any):
 """ Candidates for Depreciation """
 
 
-@check_accelerate(fallback=False)
-def is_module_offloaded(module: torch.nn.Module) -> bool:
-    return has_offloaded_params(module)
-
-
 def get_offloaded_device(module: torch.nn.Module) -> torch.device:
     """
     :param module: module to check
     :return: device module is offloaded to onto after forward pass
     """
-    for submodule in module.modules():
-        name, param = next(submodule.named_parameters(recurse=False), (None, None))
-        if has_offloaded_params(submodule) and name is not None:
-            return cast_to_device(submodule._hf_hook.weights_map[name].device)
-
-        if param is not None:
-            return param.device
-
-    warnings.warn(f"Unable to get offload device of {module}, falling back to CPU")
-    return torch.device("cpu")
-
-
-@check_accelerate(fallback=None)
-def update_prefix_dict(module: torch.nn.Module, key: str, data: torch.Tensor):
-    """
-    Updates the offloaded state dict for a given module. Parameter named key is replaced
-    by data. This is neccesary because parameter updates for offloaded modules do not
-    persist automatically between loads. This function only affects the offloaded
-    state dict and not the current state of the loaded module.
-
-    :param module: module containing the parameter to update
-    :param key: name of parameter to update
-    :param data: tensor to update parameter with in the offloaded state dict
-    """
-    if not has_offloaded_params(module):
-        raise ValueError("Prefix dict is only applicable to offloaded modules")
-
-    weights_map = module._hf_hook.weights_map
-    offload_to_weights_map(weights_map, key, data)
+    if has_offloaded_params(module):
+        first_key = list(module._hf_hook.weights_map.keys())[0]
+        prefix_dataset = module._hf_hook.weights_map.dataset
+        return prefix_dataset[first_key].device
+    else:
+        # if the module is not offloaded, then any addded weights
+        # should be placed the module's execution device
+        return get_execution_device(module)
 
 
 def update_parameter_data(
