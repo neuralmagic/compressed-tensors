@@ -320,7 +320,7 @@ def _process_quantization(
 
         # unpermute groups
         if g_idx is not None:
-            x = x.index_select(-1, g_idx)
+            output = output.index_select(-1, g_idx)
 
     else:  # covers channel, token and tensor strategies
         if do_quantize:
