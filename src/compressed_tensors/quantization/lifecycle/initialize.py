@@ -102,30 +102,33 @@ def initialize_module_for_quantization(
             return
 
         if scheme.input_activations is not None:
-            base_name = "input"
-            args = scheme.input_activations
-            observed_shape = (1, weight.shape[-1])
-            observed_dtype = weight.dtype
-
-        if scheme.weights is not None:
-            base_name = "weight"
-            args = scheme.weights
-            observed_shape = weight.shape
-            observed_dtype = weight.dtype
-
-        if scheme.output_activations is not None:
-            base_name = "output"
-            args = scheme.output_activations
-            observed_shape = weight.shape[:-1]
-            observed_dtype = weight.dtype
-
-        if not is_kv_cache_quant_scheme(scheme):
             _initialize_scale_zero_point(
                 module,
-                base_name,
-                args,
-                observed_shape=observed_shape,
-                observed_dtype=observed_dtype,
+                "input",
+                scheme.input_activations,
+                observed_shape=(1, weight.shape[-1]),
+                observed_dtype=weight.dtype,
+                force_zero_point=force_zero_point,
+            )
+
+        if scheme.weights is not None:
+            _initialize_scale_zero_point(
+                module,
+                "weight",
+                scheme.weights,
+                observed_shape=weight.shape,
+                observed_dtype=weight.dtype,
+                force_zero_point=force_zero_point,
+            )
+
+        output_is_kv_cache = is_kv_cache_quant_scheme(scheme)
+        if scheme.output_activations is not None and not output_is_kv_cache:
+            _initialize_scale_zero_point(
+                module,
+                "output",
+                scheme.output_activations,
+                observed_shape=weight.shape[:-1],
+                observed_dtype=weight.dtype,
                 force_zero_point=force_zero_point,
             )
 
