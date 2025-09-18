@@ -23,7 +23,6 @@ from compressed_tensors.quantization.quant_args import (
     QuantizationStrategy,
     QuantizationType,
 )
-from loguru import logger
 from pydantic import BaseModel, ConfigDict, model_validator
 
 

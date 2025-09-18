@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from functools import wraps
-from math import ceil
 from typing import Optional
 
 import torch
