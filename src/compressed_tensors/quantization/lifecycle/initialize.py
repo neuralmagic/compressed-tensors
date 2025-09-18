@@ -181,8 +181,11 @@ def _initialize_scale_zero_point(
         return
 
     # 1. Infer expected scale/zp shape
-    if strategy in (QuantizationStrategy.TENSOR, QuantizationStrategy.TOKEN):
+    if strategy == QuantizationStrategy.TENSOR:
         expected_shape = (1,)
+
+    elif strategy == QuantizationStrategy.TOKEN:
+        expected_shape = (1, 1)
 
     elif strategy == QuantizationStrategy.CHANNEL:
         if len(observed_shape) < 1:
@@ -216,6 +219,9 @@ def _initialize_scale_zero_point(
         num_rows = strategy_cdiv(observed_shape[-2], block_structure[-2], strategy)
         num_cols = strategy_cdiv(observed_shape[-1], block_structure[-1], strategy)
         expected_shape = (num_rows, num_cols)
+
+    else:
+        assert False, f"Unknown strategy {strategy}"
 
     # 2. Identify quantization scale and zp dtype
     scale_dtype = observed_dtype
