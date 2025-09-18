@@ -20,11 +20,11 @@ from typing import Optional
 
 import torch
 from compressed_tensors.quantization import (
-    ALL_QPARAM_NAMES,
     FP8_E4M3_DATA,
     ActivationOrdering,
     KVCacheScaleType,
     QuantizationArgs,
+    QuantizationMetadata,
     QuantizationScheme,
     QuantizationStatus,
     QuantizationStrategy,
@@ -76,7 +76,7 @@ def initialize_module_for_quantization(
         # no scheme passed and layer not targeted for quantization - skip
         return
 
-    _clear_all_qparams(module)
+    QuantizationMetadata.clear_all_qparams(module)
 
     if is_attention_module(module):
         # quantized actions based on calltime status
@@ -131,19 +131,6 @@ def is_attention_module(module: Module):
         or hasattr(module, "v_proj")
         or hasattr(module, "qkv_proj")
     )
-
-
-def _clear_all_qparams(
-    module: Module,
-):
-    """
-    Clear all previously registered quantization parameters from module
-
-    :param module: module to clear qparams from
-    """
-    for key in ALL_QPARAM_NAMES:
-        if hasattr(module, key):
-            delete_offload_parameter(module, key)
 
 
 def _initialize_scale_zero_point(
