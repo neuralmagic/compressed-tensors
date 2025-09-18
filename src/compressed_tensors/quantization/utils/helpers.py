@@ -27,10 +27,9 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.utils import deprecated
+from loguru import logger
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
-
-from loguru import logger
 
 
 __all__ = [

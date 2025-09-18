@@ -28,43 +28,27 @@ from compressed_tensors.quantization.utils import (
 
 
 @pytest.mark.parametrize(
-    "keepdims,strategy,exp_shape",
+    "keepdims,qargs,exp_shape",
     [
+        (False, QuantizationArgs(strategy="tensor"), torch.Size([1])),
+        (True, QuantizationArgs(strategy="channel"), torch.Size([1, 1])),
+        (True, QuantizationArgs(strategy="group", group_size=2), torch.Size([1, 1])),
         (
             False,
-            QuantizationStrategy.TENSOR,
-            torch.Size(
-                [
-                    1,
-                ]
-            ),
+            QuantizationArgs(strategy="block", block_structure=[1, 1]),
+            torch.Size([1]),
         ),
-        (True, QuantizationStrategy.CHANNEL, torch.Size([1, 1])),
-        (True, QuantizationStrategy.GROUP, torch.Size([1, 1])),
-        (
-            False,
-            QuantizationStrategy.BLOCK,
-            torch.Size(
-                [
-                    1,
-                ]
-            ),
-        ),
-        (True, QuantizationStrategy.TOKEN, torch.Size([1, 1])),
+        (True, QuantizationArgs(strategy="token"), torch.Size([1, 1])),
     ],
 )
-def test_calculate_qparams(keepdims, strategy, exp_shape):
+def test_calculate_qparams(keepdims, qargs, exp_shape):
     value = torch.randn(14, 5)
     min_val = torch.amin(value, dim=tuple(), keepdims=keepdims)
     max_val = torch.amax(value, dim=tuple(), keepdims=keepdims)
 
-    if strategy == QuantizationStrategy.GROUP:
-        args = QuantizationArgs(strategy=strategy, group_size=2)
-    else:
-        args = QuantizationArgs(strategy=strategy)
-        scale, zp = calculate_qparams(min_val, max_val, args)
-        assert scale.shape == exp_shape
-        assert zp.shape == exp_shape
+    scale, zp = calculate_qparams(min_val, max_val, qargs)
+    assert scale.shape == exp_shape
+    assert zp.shape == exp_shape
 
 
 def test_fused_global_scales():
