@@ -185,7 +185,8 @@ class QuantizationConfig(BaseModel):
                     ignore[layer_type] = []
                 ignore[layer_type].append(name)
             else:
-                quantization_status = submodule.quantization_status
+                if hasattr(submodule, "quantization_status"):
+                    quantization_status = submodule.quantization_status
                 scheme = submodule.quantization_scheme
                 quantization_type_names.add(layer_type)
 
