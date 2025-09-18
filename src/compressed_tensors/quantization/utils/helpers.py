@@ -482,16 +482,23 @@ def generate_gparam(
 
 
 def strategy_cdiv(
-    value: int, divisor: int, strategy: Optional[QuantizationStrategy] = None
+    value: int,
+    divisor: int,
+    strategy: Optional[QuantizationStrategy],
+    strict: bool = False,
 ) -> int:
     dividend = math.ceil(value / divisor)
     if dividend * divisor != value:
-        if strategy is not None:
-            logger.bind(log_once=True).warning(
-                f"{strategy} quantization strategy requires strict division of "
-                f"weight/activation size {value} and group/block size {divisor}. "
-                "consider reducing the group/block size or ignoring modules with "
-                f"weights not divisible by {divisor}"
-            )
+        message = (
+            f"{strategy} quantization strategy requires strict division of "
+            f"weight/activation size {value} and group/block size {divisor}. "
+            "consider reducing the group/block size or ignoring modules with "
+            f"weights not divisible by {divisor}"
+        )
+        if strict:
+            raise ValueError(message)
+
+        else:
+            logger.bind(log_once=True).warning(message)
 
     return dividend

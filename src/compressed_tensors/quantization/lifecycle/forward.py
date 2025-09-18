@@ -28,6 +28,7 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     calculate_range,
     compute_dynamic_scales_and_zp,
+    strategy_cdiv,
 )
 from torch.nn import Module
 
@@ -257,45 +258,25 @@ def _process_quantization(
                 global_scale=global_scale,
             )
         # restore original shape
-        output = x_blocks.transpose(1, 2).reshape(original_shape)
+        x = x_blocks.transpose(1, 2).reshape(original_shape)
     elif args.strategy in (
         QuantizationStrategy.GROUP,
         QuantizationStrategy.TENSOR_GROUP,
     ):
-
         output_dtype = dtype if dtype is not None else x.dtype
-        columns = x.size(-1)
 
-        # TODO: make validation step for inputs
-
-        while scale.ndim < 2:
-            # pad scale and zero point dims for slicing
-            scale = scale.unsqueeze(1)
-            zero_point = zero_point.unsqueeze(1) if zero_point is not None else None
-
-        if columns >= group_size:
-            if columns % group_size != 0:
-                raise ValueError(
-                    "tensor column shape must be divisble "
-                    f"by the given group_size {group_size}"
-                )
-
-        # permute groups
+        # activation ordering
         if g_idx is not None:
             perm = torch.argsort(g_idx)
             x = x.index_select(-1, perm)
 
-        # Maintain all dimensions except the last dim, which is divided by group_size
-        reshaped_dims = (
-            ceil(x.shape[-1] / group_size),
-            group_size,
-        )
-        # we should potentially be folding reshaped_dims[0] into x.shape[-2]
-        # in order to allow for multi-headed activations
+        # reshape into groups
+        num_groups = strategy_cdiv(x.size(-1), group_size, args.strategy, strict=True)
+        reshaped_dims = (num_groups, group_size)
         x = x.unflatten(-1, reshaped_dims)
 
         if do_quantize:
-            output = _quantize(
+            x = _quantize(
                 x=x,
                 scale=scale.unsqueeze(-1),
                 zero_point=zero_point.unsqueeze(-1) if zero_point is not None else None,
@@ -307,24 +288,25 @@ def _process_quantization(
             )
 
         if do_dequantize:
-            input = output if do_quantize else x
-            output = _dequantize(
-                x_q=input,
+            x = _dequantize(
+                x_q=x,
                 scale=scale.unsqueeze(-1),
                 zero_point=zero_point.unsqueeze(-1) if zero_point is not None else None,
                 global_scale=global_scale,
             )
 
-        output = output.flatten(-2, -1)
-        output = output.to(output_dtype)
+        # undo reshape into groups
+        x = x.flatten(-2, -1)
+        x = x.to(output_dtype)
 
-        # unpermute groups
+        # undo activation ordering
         if g_idx is not None:
-            output = output.index_select(-1, g_idx)
+            inv_perm = torch.argsort(perm)
+            x = x.index_select(-1, inv_perm)
 
     else:  # covers channel, token and tensor strategies
         if do_quantize:
-            output = _quantize(
+            x = _quantize(
                 x=x,
                 scale=scale,
                 zero_point=zero_point,
@@ -335,14 +317,14 @@ def _process_quantization(
                 global_scale=global_scale,
             )
         if do_dequantize:
-            output = _dequantize(
-                output if do_quantize else x,
+            x = _dequantize(
+                x_q=x,
                 scale=scale,
                 zero_point=zero_point,
                 global_scale=global_scale,
             )
 
-    return output
+    return x
 
 
 def wrap_module_forward_quantized(module: Module, scheme: QuantizationScheme):
