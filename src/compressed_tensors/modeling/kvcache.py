@@ -77,9 +77,30 @@ class QuantizedKVCache(InternalModule):
 
         if not self._qparams_initialized and quant_args is not None:
             # TODO: use model.config.num_key_value_heads to find key_size, value_size
-            assert quant_args.strategy == QuantizationStrategy.TENSOR
-            _initialize_scale_zero_point(module, "k", quant_args)
-            _initialize_scale_zero_point(module, "v", quant_args)
+            assert quant_args.strategy in (
+                QuantizationStrategy.TENSOR,
+                QuantizationStrategy.TOKEN,
+                QuantizationStrategy.ATTN_HEAD,
+            )
+            num_heads = model.config.num_key_value_heads
+            hidden_size = model.config.hidden_size
+            observed_dtype = next(module.parameters()).dtype
+            _initialize_scale_zero_point(
+                module,
+                "k",
+                quant_args,
+                observed_shape=(num_heads, hidden_size),
+                observed_dtype=observed_dtype,
+                force_zero_point=True,
+            )
+            _initialize_scale_zero_point(
+                module,
+                "v",
+                quant_args,
+                observed_shape=(num_heads, hidden_size),
+                observed_dtype=observed_dtype,
+                force_zero_point=True,
+            )
             self._qparams_initialized = True
 
 

@@ -87,8 +87,23 @@ class QuantizedAttentionImpl(InternalModule):
             and not scheme.kv_cache_only
         ):
             # TODO: use model.config.num_attention_heads to find query_size
-            assert quant_args.strategy == QuantizationStrategy.TENSOR
-            _initialize_scale_zero_point(module, "q", quant_args)
+            assert quant_args.strategy in (
+                QuantizationStrategy.TENSOR,
+                QuantizationStrategy.TOKEN,
+                QuantizationStrategy.ATTN_HEAD,
+            )
+
+            num_heads = model.config.num_attention_heads
+            hidden_size = model.config.hidden_size
+            observed_dtype = next(module.parameters()).dtype
+            _initialize_scale_zero_point(
+                module,
+                "q",
+                quant_args,
+                observed_shape=(num_heads, hidden_size),
+                observed_dtype=observed_dtype,
+                force_zero_point=True,
+            )
             self._qparams_initialized = True
 
 

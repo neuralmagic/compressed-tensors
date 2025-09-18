@@ -128,7 +128,6 @@ def apply_quantization_config(
         decompressed fully on load
     """
     from compressed_tensors.linear.compressed_linear import CompressedLinear
-    from compressed_tensors.modeling.attention import initialize_hooked_attention
 
     config = deepcopy(config)
     if config is None:  # see PR #180
@@ -142,7 +141,7 @@ def apply_quantization_config(
         for name, submodule in match_named_modules(
             model, scheme.targets, config.ignore or [], warn_on_fail=True
         ):
-            # attach scheme to module (with merging)
+            # attach scheme (overwrite any existing)
             setattr(submodule, "quantization_scheme", scheme)
 
             # replace with run compressed if applicable
@@ -160,25 +159,14 @@ def apply_quantization_config(
                         replace_module(model, name, compressed_linear)
 
             # attention quantization and/or kv cache quantization
-            if is_attention_module(submodule):
-                if is_narrow_match(model, scheme.targets, name):
-                    # unlike linear, do qparam initialization here (once)
-                    initialize_hooked_attention(model, submodule, quantize=True)
-                else:
-                    # do not quantize attention unless specifically targeted
-                    delattr(submodule, "quantization_scheme")
+            if is_attention_module(submodule) and not is_narrow_match(
+                model, scheme.targets, name
+            ):
+                # do not quantize attention unless specifically targeted
+                delattr(submodule, "quantization_scheme")
 
     # apply current quantization status across all targeted linear/embedding layers
     apply_quantization_status(model, config.quantization_status)
-
-    # attach config for serialization
-    attach_config(model, config)
-
-
-def attach_config(model: PreTrainedModel, config: QuantizationConfig):
-    if existing_config := getattr(model, "quantization_config", None):
-        config = config.merge(existing_config)
-    setattr(model, "quantization_config", config)
 
 
 def process_quantization_config(config: QuantizationConfig) -> QuantizationConfig:
@@ -228,7 +216,9 @@ def apply_quantization_status(model: Module, status: QuantizationStatus):
 
         model.apply(
             lambda module: initialize_module_for_quantization(
-                module, force_zero_point=force_zero_point_init
+                module,
+                force_zero_point=force_zero_point_init,
+                model=model,
             )
         )
 

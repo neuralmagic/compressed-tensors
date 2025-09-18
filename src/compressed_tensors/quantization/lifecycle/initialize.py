@@ -30,17 +30,14 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_config import QuantizationStatus
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
-from compressed_tensors.quantization.utils import (
-    is_fp4,
-    is_kv_cache_quant_scheme,
-    strict_divide,
-)
+from compressed_tensors.quantization.utils import is_fp4, is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
     register_offload_parameter,
 )
 from torch.nn import Module, Parameter
+from transformers import PreTrainedModel
 
 
 __all__ = [
@@ -62,6 +59,7 @@ def initialize_module_for_quantization(
     module: Module,
     scheme: Optional[QuantizationScheme] = None,
     force_zero_point: bool = True,
+    model: Optional[PreTrainedModel] = None,
 ):
     """
     attaches appropriate scales, zero points, and observers to a layer
@@ -80,57 +78,68 @@ def initialize_module_for_quantization(
     if scheme is None:
         return
 
-    if not isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
-        return
+    if is_attention_module(module):
+        from compressed_tensors.modeling.attention import initialize_hooked_attention
 
-    # use weight to determine observed shapes and dtype
-    if hasattr(module, "weight"):
-        weight = module.weight
-        assert isinstance(weight, torch.Tensor)
+        if not isinstance(model, PreTrainedModel):
+            raise ValueError("Must pass model in order to initialize attention")
+        initialize_hooked_attention(model, module, quantize=True)
+
     else:
-        # Note that a weight is required for both weight and activation
-        # quantization in order to know the dtype of activation scales
-        _LOGGER.warning(
-            f"module type {type(module)} targeted for quantization but "
-            f"has no attribute weight, skipping quantization for {type(module)}"
-        )
-        return
+        if not isinstance(module, torch.nn.Linear):
+            _LOGGER.warning(f"Attempting to quantize module of type {type(module)}")
 
-    if scheme.input_activations is not None:
-        base_name = "input"
-        args = scheme.input_activations
-        observed_shape = (1, weight.shape[-1])
-        observed_dtype = weight.dtype
+        # use weight to determine observed shapes and dtype
+        if hasattr(module, "weight"):
+            weight = module.weight
+            assert isinstance(weight, torch.Tensor)
+        else:
+            # Note that a weight is required for both weight and activation
+            # quantization in order to know the dtype of activation scales
+            _LOGGER.warning(
+                f"module type {type(module)} targeted for quantization but "
+                f"has no attribute weight, skipping quantization for {type(module)}"
+            )
+            return
 
-    if scheme.weights is not None:
-        base_name = "weight"
-        args = scheme.weights
-        observed_shape = weight.shape
-        observed_dtype = weight.dtype
+        if scheme.input_activations is not None:
+            _initialize_scale_zero_point(
+                module,
+                "input",
+                scheme.input_activations,
+                observed_shape=(1, weight.shape[-1]),
+                observed_dtype=weight.dtype,
+                force_zero_point=force_zero_point,
+            )
 
-    if scheme.output_activations is not None:
-        base_name = "output"
-        args = scheme.output_activations
-        observed_shape = weight.shape[:-1]
-        observed_dtype = weight.dtype
+        if scheme.weights is not None:
+            _initialize_scale_zero_point(
+                module,
+                "weight",
+                scheme.weights,
+                observed_shape=weight.shape,
+                observed_dtype=weight.dtype,
+                force_zero_point=force_zero_point,
+            )
 
-    if not is_kv_cache_quant_scheme(scheme):
-        _initialize_scale_zero_point(
-            module,
-            base_name,
-            args,
-            observed_shape=observed_shape,
-            observed_dtype=observed_dtype,
-            force_zero_point=force_zero_point,
-        )
+        output_is_kv_cache = is_kv_cache_quant_scheme(scheme)
+        if scheme.output_activations is not None and not output_is_kv_cache:
+            _initialize_scale_zero_point(
+                module,
+                "output",
+                scheme.output_activations,
+                observed_shape=weight.shape[:-1],
+                observed_dtype=weight.dtype,
+                force_zero_point=force_zero_point,
+            )
 
-    module.quantization_scheme = scheme
-    module.quantization_status = QuantizationStatus.INITIALIZED
+        module.quantization_scheme = scheme
+        module.quantization_status = QuantizationStatus.INITIALIZED
 
-    with disable_hf_hook(module):
-        # wrap forward call of module to perform
-        # quantized actions based on calltime status
-        wrap_module_forward_quantized(module, scheme)
+        with disable_hf_hook(module):
+            # wrap forward call of module to perform
+            # quantized actions based on calltime status
+            wrap_module_forward_quantized(module, scheme)
 
 
 def is_attention_module(module: Module):
@@ -173,8 +182,11 @@ def _initialize_scale_zero_point(
         return
 
     # 1. Infer expected scale/zp shape
-    if strategy in (QuantizationStrategy.TENSOR, QuantizationStrategy.TOKEN):
+    if strategy == QuantizationStrategy.TENSOR:
         expected_shape = (1,)
+
+    elif strategy == QuantizationStrategy.TOKEN:
+        expected_shape = (1, 1)
 
     elif strategy == QuantizationStrategy.CHANNEL:
         if len(observed_shape) < 1:
@@ -188,7 +200,7 @@ def _initialize_scale_zero_point(
             raise ValueError("Group quant requires at least 1 observed dimension")
 
         group_size = quantization_args.group_size
-        num_groups = strict_divide(observed_shape[-1], group_size, strategy)
+        num_groups = strategy_cdiv(observed_shape[-1], group_size, strategy)
         expected_shape = (*observed_shape[:-1], num_groups)
 
         # initialize activation ordering if applicable
@@ -205,9 +217,15 @@ def _initialize_scale_zero_point(
             raise ValueError("Block quant requires at least 2 observed dimensions")
 
         block_structure = quantization_args.block_structure
-        num_rows = strict_divide(observed_shape[-2], block_structure[-2], strategy)
-        num_cols = strict_divide(observed_shape[-1], block_structure[-1], strategy)
+        num_rows = strategy_cdiv(observed_shape[-2], block_structure[-2], strategy)
+        num_cols = strategy_cdiv(observed_shape[-1], block_structure[-1], strategy)
         expected_shape = (num_rows, num_cols)
+
+    elif strategy == QuantizationStrategy.ATTN_HEAD:
+        expected_shape = (observed_shape[-2], 1)
+
+    else:
+        assert False, f"Unknown strategy {strategy}"
 
     # 2. Identify quantization scale and zp dtype
     scale_dtype = observed_dtype

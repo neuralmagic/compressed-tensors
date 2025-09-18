@@ -18,6 +18,7 @@ from typing import List, Optional, Set, Tuple
 
 import torch
 import torch.nn.utils.parametrize as P
+import tqdm
 from compressed_tensors.modeling.attention import (
     initialize_hooked_attention,
     register_query_hook,
@@ -26,7 +27,6 @@ from compressed_tensors.modeling.kvcache import (
     initialize_hooked_kv_cache,
     register_key_hook,
 )
-import tqdm
 from compressed_tensors.registry.registry import RegistryMixin, T
 from compressed_tensors.transform import (
     TransformArgs,
