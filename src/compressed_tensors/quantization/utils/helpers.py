@@ -30,6 +30,8 @@ from compressed_tensors.utils import deprecated
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
 
+from loguru import logger
+
 
 __all__ = [
     "infer_quantization_status",
@@ -48,7 +50,7 @@ __all__ = [
     "calculate_qparams",
     "generate_gparam",
     "is_fp4",
-    "strict_divide",
+    "strategy_cdiv",
 ]
 
 # target the self_attn layer
@@ -480,17 +482,17 @@ def generate_gparam(
     return global_scale.to(dtype).reshape([1])
 
 
-def strict_divide(
-    observed: int, divisor: int, strategy: Optional[QuantizationStrategy] = None
+def strategy_cdiv(
+    value: int, divisor: int, strategy: Optional[QuantizationStrategy] = None
 ) -> int:
-    out = observed // divisor
-    if out * divisor != observed:
+    dividend = math.ceil(value / divisor)
+    if dividend * divisor != value:
         if strategy is not None:
-            raise ValueError(
+            logger.bind(log_once=True).warning(
                 f"{strategy} quantization strategy requires strict division of "
-                f"weight/activation size {observed} and group/block size {divisor}. "
+                f"weight/activation size {value} and group/block size {divisor}. "
                 "consider reducing the group/block size or ignoring modules with "
                 f"weights not divisible by {divisor}"
             )
 
-    return out
+    return dividend

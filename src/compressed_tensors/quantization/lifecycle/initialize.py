@@ -33,7 +33,7 @@ from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     is_fp4,
     is_kv_cache_quant_scheme,
-    strict_divide,
+    strategy_cdiv,
 )
 from compressed_tensors.utils import (
     disable_hf_hook,
@@ -196,7 +196,7 @@ def _initialize_scale_zero_point(
             raise ValueError("Group quant requires at least 1 observed dimension")
 
         group_size = quantization_args.group_size
-        num_groups = strict_divide(observed_shape[-1], group_size, strategy)
+        num_groups = strategy_cdiv(observed_shape[-1], group_size, strategy)
         expected_shape = (*observed_shape[:-1], num_groups)
 
         # initialize activation ordering if applicable
@@ -213,8 +213,8 @@ def _initialize_scale_zero_point(
             raise ValueError("Block quant requires at least 2 observed dimensions")
 
         block_structure = quantization_args.block_structure
-        num_rows = strict_divide(observed_shape[-2], block_structure[-2], strategy)
-        num_cols = strict_divide(observed_shape[-1], block_structure[-1], strategy)
+        num_rows = strategy_cdiv(observed_shape[-2], block_structure[-2], strategy)
+        num_cols = strategy_cdiv(observed_shape[-1], block_structure[-1], strategy)
         expected_shape = (num_rows, num_cols)
 
     # 2. Identify quantization scale and zp dtype
