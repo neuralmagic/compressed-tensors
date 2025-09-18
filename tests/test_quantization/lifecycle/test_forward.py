@@ -95,7 +95,7 @@ def test_forward_quantize(
 
 
 @pytest.mark.parametrize(
-    "num_bits,type,strategy,group_size,scale,zero_point,g_idx,global_scale",
+    "num_bits,type,strategy,group_size,scale,zero_point,g_idx,global_scale,batch_size",
     [
         (
             4,
@@ -106,6 +106,7 @@ def test_forward_quantize(
             torch.zeros((1,)),
             None,
             None,
+            None,
         ),
         (
             4,
@@ -114,6 +115,7 @@ def test_forward_quantize(
             128,
             torch.rand((512, 8)) * 0.01,
             torch.zeros((512, 8)),
+            None,
             None,
             None,
         ),
@@ -125,6 +127,7 @@ def test_forward_quantize(
             torch.rand((512, 8)) * 0.01,
             torch.zeros((512, 8)),
             make_dummy_g_idx(1024, 128),
+            None,
             None,
         ),
         (
@@ -136,6 +139,7 @@ def test_forward_quantize(
             torch.zeros((1,)),
             None,
             None,
+            None,
         ),
         (
             8,
@@ -144,6 +148,7 @@ def test_forward_quantize(
             128,
             torch.rand((512, 8)) * 0.01,
             torch.zeros((512, 8)),
+            None,
             None,
             None,
         ),
@@ -156,6 +161,7 @@ def test_forward_quantize(
             torch.zeros((512, 8)),
             make_dummy_g_idx(1024, 128),
             None,
+            None,
         ),
         (
             8,
@@ -164,6 +170,7 @@ def test_forward_quantize(
             128,
             torch.rand((512, 8)) * 0.01,
             torch.zeros((512, 8)),
+            None,
             None,
             None,
         ),
@@ -176,17 +183,41 @@ def test_forward_quantize(
             torch.zeros((512, 8)),
             make_dummy_g_idx(1024, 128),
             None,
+            None,
+        ),
+        (
+            8,
+            "int",
+            QuantizationStrategy.GROUP,
+            128,
+            torch.rand((512, 8)) * 0.01,
+            torch.zeros((512, 8)),
+            make_dummy_g_idx(1024, 128),
+            None,
+            5,
         ),
     ],
 )
-def test_fake_quantize_2d(
-    num_bits, type, strategy, group_size, scale, zero_point, g_idx, global_scale
+def test_fake_quantize(
+    num_bits,
+    type,
+    strategy,
+    group_size,
+    scale,
+    zero_point,
+    g_idx,
+    global_scale,
+    batch_size,
 ):
     args = QuantizationArgs(
         num_bits=num_bits, type=type, strategy=strategy, group_size=group_size
     )
 
-    x = torch.rand((512, 1024))
+    if batch_size is None:
+        x = torch.rand((512, 1024))
+    else:
+        x = torch.rand((batch_size, 512, 1024))
+
     fake_quantize(
         x=x,
         scale=scale,

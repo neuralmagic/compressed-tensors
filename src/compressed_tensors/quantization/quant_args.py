@@ -262,6 +262,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         actorder = model.actorder
         dynamic = model.dynamic
         observer = model.observer
+        block_structure = model.block_structure
 
         # infer strategy
         if strategy is None:
@@ -277,23 +278,29 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     "strategy='group' and group_size = -1 for 'channel'"
                 )
 
-        # validate strategy and group
-        if strategy == QuantizationStrategy.GROUP:
-            if group_size is None or group_size <= 0:
-                raise ValueError(
-                    f"strategy {strategy} requires group_size to be "
-                    "set to a positive value"
-                )
-        if (
-            group_size is not None
-            and group_size > 0
-            and strategy
-            not in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP)
-        ):
-            raise ValueError("group_size requires strategy to be set to 'group'")
+        # validate block strategy and structure
+        has_block_strategy = strategy == QuantizationStrategy.BLOCK
+        has_block_structure = block_structure is not None
+        if has_block_strategy != has_block_structure:
+            raise ValueError(
+                "`strategy = block` requires `block_structure != None`, and vice versa."
+                f" Instead got `strategy={strategy}` and "
+                f"`block_structure={block_structure}`"
+            )
 
-        # validate activation ordering and strategy
-        if actorder is not None and strategy != QuantizationStrategy.GROUP:
+        # validate group strategy
+        has_group_strategy = strategy in (
+            QuantizationStrategy.GROUP,
+            QuantizationStrategy.TENSOR_GROUP,
+        )
+        has_group_size = group_size is not None and group_size > 0
+        has_actorder = actorder is not None
+        if has_group_strategy != has_group_size:
+            raise ValueError(
+                "`strategy = group` requires `group_size != None`, and vice versa. "
+                f"Instead got `strategy={strategy}` and `group_size={group_size}`"
+            )
+        if has_actorder and not has_group_strategy:
             raise ValueError(
                 "Must use group quantization strategy in order to apply "
                 "activation ordering"
