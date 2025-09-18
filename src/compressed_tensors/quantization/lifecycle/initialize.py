@@ -34,7 +34,6 @@ from compressed_tensors.quantization.lifecycle.forward import (
 )
 from compressed_tensors.quantization.utils import is_fp4, is_kv_cache_quant_scheme
 from compressed_tensors.utils import (
-    delete_offload_parameter,
     disable_hf_hook,
     get_execution_device,
     register_offload_parameter,
