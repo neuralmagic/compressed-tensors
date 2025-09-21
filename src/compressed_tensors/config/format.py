@@ -131,21 +131,24 @@ def infer_and_set_per_module_quantization_format(
     """
     Infers the quantization format for a model based on its state and provided
     compression arguments. Updates thhe quantization_scheme.format value
-    based on the inferred format. Returns the unique list of formats in the model
-    or None if empty list
+    based on the inferred format. Returns the unique list of formats in the model.
+    All None formats are mapped to CompressionFormat.dense.value
 
     For a summary of the formats, see `docs/guides/compression_formats.md`.
 
     :param model: model to check for quantization
     :param sparsity_structure: optional sparsity applied to the module
-    :return compression format appropriate for model
+    :return compression format appropriate for the model
     """
     unique_formats = []
     for submodule in model.modules():
         if is_module_quantized(submodule):
             assert hasattr(submodule, "quantization_scheme")
             set_per_module_format(submodule, sparsity_structure, quantization_format)
-            if submodule.quantization_scheme.format not in unique_formats:
+            if (
+                submodule.quantization_scheme.format
+                and submodule.quantization_scheme.format not in unique_formats
+            ):
                 unique_formats.append(submodule.quantization_scheme.format)
 
     if len(unique_formats) > 0:
