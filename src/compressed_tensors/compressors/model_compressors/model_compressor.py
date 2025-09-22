@@ -61,6 +61,7 @@ from compressed_tensors.utils.helpers import (
     is_compressed_tensors_config,
 )
 from compressed_tensors.utils.match import match_named_modules
+from loguru import logger
 from torch import Tensor
 from torch.nn import Module
 from tqdm import tqdm
@@ -169,6 +170,7 @@ class ModelCompressor:
     def from_pretrained_model(
         cls,
         model: Module,
+        sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
         sparsity_config_or_format: Union[SparsityCompressionConfig, str, None] = None,
         quantization_format: Optional[str] = None,
     ) -> Optional["ModelCompressor"]:
@@ -183,6 +185,12 @@ class ModelCompressor:
             format that should be applied to the entire model
         :return: compressor for the configs, or None if model is not compressed
         """
+        if sparsity_config:
+            logger.warning(
+                "sparsity_config is deprecated, use sparsity_config_or_format"
+            )
+            sparsity_config_or_format = sparsity_config
+
         if sparsity_config_or_format and isinstance(
             sparsity_config_or_format, str
         ):  # we passed in a sparsity format
