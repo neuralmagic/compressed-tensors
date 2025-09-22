@@ -104,22 +104,23 @@ def set_per_module_format(
         input_scheme, weight_scheme, sparsity_structure
     )
 
-    # If set, we check if it matches our inferred one
-    if module.quantization_scheme.format is not None:
-        # If it does not, warn the user
-        if module.quantization_scheme.format != compression_format.value:
-            logger.warning(
-                "The provided format for the module does not match the "
-                "inferred format. Compression may fail "
-            )
-    # If a per module format is not provided, check if a global format was provided
-    elif quantization_format is not None:
+    # Check if a global format was provided first
+    # This will override any per module format
+    if quantization_format is not None:
         if quantization_format != compression_format.value:
             logger.warning(
                 "The provided format for the module does not match the "
                 "inferred format. Compression may fail "
             )
         module.quantization_scheme.format = quantization_format
+    # If a per module format is not provided, we check if it matches our inferred one
+    elif module.quantization_scheme.format is not None:
+        # If it does not, warn the user
+        if module.quantization_scheme.format != compression_format.value:
+            logger.warning(
+                "The provided format for the module does not match the "
+                "inferred format. Compression may fail "
+            )
     # If neither provided, set ours
     else:
         module.quantization_scheme.format = compression_format.value
