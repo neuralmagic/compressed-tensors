@@ -442,7 +442,7 @@ def test_multiple_quant_compressors():
 
     formats = [scheme_fp8.format, scheme_nvfp4.format]
 
-    compressor = ModelCompressor.from_pretrained_model(model, None, formats)
+    compressor = ModelCompressor.from_pretrained_model(model, None)
     assert isinstance(compressor.quantization_compressor, dict)
     assert (
         compressor.quantization_config.format == CompressionFormat.mixed_precision.value
