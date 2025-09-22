@@ -92,6 +92,8 @@ def set_per_module_format(
 
     :param module: module which has its quantization inferred
     :param sparsity_structure: optional sparsity applied to the module
+    :param quantization_format: optional global format to override
+        the per module formats
 
     """
     weight_scheme = module.quantization_scheme.weights
@@ -138,6 +140,8 @@ def infer_and_set_per_module_quantization_format(
 
     :param model: model to check for quantization
     :param sparsity_structure: optional sparsity applied to the module
+    :param quantization_format: optional global format to override
+        the per module formats
     :return compression format appropriate for the model
     """
     unique_formats = []
