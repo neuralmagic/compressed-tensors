@@ -170,9 +170,9 @@ class ModelCompressor:
     def from_pretrained_model(
         cls,
         model: Module,
-        sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
         sparsity_config_or_format: Union[SparsityCompressionConfig, str, None] = None,
         quantization_format: Optional[str] = None,
+        sparsity_config: Union[SparsityCompressionConfig, str, None] = None,
     ) -> Optional["ModelCompressor"]:
         """
         Given a pytorch model and optional sparsity and/or quantization configs,
