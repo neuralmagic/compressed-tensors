@@ -47,20 +47,27 @@ class TransformScheme(BaseModel):
     randomize: bool = Field(default=False)
     requires_grad: bool = Field(default=False)
     block_size: Optional[int] = Field(default=None)
+    # NOTE: head_dim is deprecated, but cannot be tagged as such because it will
+    # raise a warnings.warn that torch dynamo cannot trace when used in vllm
     head_dim: Optional[int] = Field(
-        default=None, deprecated="head_dim is deprecated, use block_size instead"
+        default=None,
+        # TODO: Deprecate once references to head_dim are removed in vllm
+        # deprecated="head_dim is deprecated, use block_size instead"
     )
     precision: TorchDtype = Field(default=torch.float32)
 
     @model_validator(mode="after")
     def validate_model_after(model: "TransformScheme") -> "TransformScheme":
         """
-        If head_dim is used instead of block_size, set block_size to head_dim
-        and remove head_dim
+        Default to block_size if it set, otherwise use deprecated head_dim
+        if it is set and block_size is not.
+        Set both values because block_sizse is preferred but vllm currently
+        uses head_dim.
         """
-        if model.block_size is None and model.head_dim is not None:
+        if model.block_size is not None:
+            model.head_dim = model.block_size
+        elif model.block_size is None and model.head_dim is not None:
             model.block_size = model.head_dim
-            model.head_dim = None
         return model
 
     model_config = ConfigDict(extra="forbid")
