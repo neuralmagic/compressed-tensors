@@ -47,10 +47,12 @@ class TransformScheme(BaseModel):
     randomize: bool = Field(default=False)
     requires_grad: bool = Field(default=False)
     block_size: Optional[int] = Field(default=None)
-    # NOTE: head_dim is deprecated, but cannot be tagged as such because it will
-    # raise a warnings.warn that torch dynamo cannot trace when used in vllm
+    # NOTE: head_dim is deprecated in favor of the more appropriate block_size,
+    # but cannot be tagged as such because it will a warnings.warn that
+    # torch dynamo cannot trace when used in vllm
     head_dim: Optional[int] = Field(
         default=None,
+        exclude=True,
         # TODO: Deprecate once references to head_dim are removed in vllm
         # deprecated="head_dim is deprecated, use block_size instead"
     )
@@ -61,7 +63,7 @@ class TransformScheme(BaseModel):
         """
         Default to block_size if it set, otherwise use deprecated head_dim
         if it is set and block_size is not.
-        Set both values because block_sizse is preferred but vllm currently
+        Set both values because block_size is preferred but vllm currently
         uses head_dim.
         """
         if model.block_size is not None:
