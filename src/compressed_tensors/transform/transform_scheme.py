@@ -36,10 +36,11 @@ class TransformScheme(BaseModel):
     :param randomize: True if uniquely randomized transform weights should be used,
         otherwise use identical transform weights where applicable
     :param requires_grad: True if weights include gradients for training
-    :param head_dim: If set, the transform matrix will be block diagonal, with each
-        block being a square matrix of this size. The name head_dim was used because
-        some rotations need to be block-diagonal with block_size equal to the head_dim,
-        but research has shown value in applying some rotations with smaller block_size
+    :param head_dim: If set, the transform matrix will be block diagonal with each
+        block being a square matrix of this size. The name head_dim was chosen because
+        some rotations need to be block-diagonal with block size equal to the head_dim,
+        but research has shown value in applying some rotations with smaller block size,
+        irrespective of head_dim.
     :param precision: Precision at which this transform should be applied during online
         rotations. Fused (offline) rotations are always performed in float64
     """
