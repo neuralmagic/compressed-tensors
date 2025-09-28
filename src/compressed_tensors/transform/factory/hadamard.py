@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from typing import List, Optional
 
 import torch
@@ -74,8 +73,11 @@ class HadamardFactory(TransformFactory):
         construct_device: device,
         precision: dtype,
     ) -> Parameter:
-        data = deterministic_hadamard_matrix(size, precision, construct_device)
-        data = data.to(device=device)
+        maybe_padded_size = 1 << (size - 1).bit_length()
+        data_full = deterministic_hadamard_matrix(maybe_padded_size, precision, construct_device)
+        data = data_full[:size, :size]
+        if construct_device != device:
+            data = data.to(device=device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
     def _create_permutation(self, weight: Parameter) -> Parameter:
