@@ -27,11 +27,13 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.utils import deprecated
+from loguru import logger
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
 
 
 __all__ = [
+    "infer_quantization_status",
     "is_module_quantized",
     "is_model_quantized",
     "module_type",
@@ -47,6 +49,7 @@ __all__ = [
     "calculate_qparams",
     "generate_gparam",
     "is_fp4",
+    "strategy_cdiv",
 ]
 
 # target the self_attn layer
@@ -231,6 +234,21 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         raise ValueError(f"Invalid quantization type {quantization_args.type}")
 
     return q_min, q_max
+
+
+def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]:  # noqa
+    """
+    Checks the quantization status of a model. Assumes all modules in the model have
+    the same status, so only the first quantized model is checked.
+
+    :param model: model to check quantization status for
+    :return: quantization status if the model is quantized, otherwise None
+    """
+    for module in model.modules():
+        status = getattr(module, "quantization_status", None)
+        if status is not None:
+            return status
+    return None
 
 
 def is_module_quantized(module: Module) -> bool:
@@ -461,3 +479,26 @@ def generate_gparam(
     max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
     global_scale = scale_data.max * quant_data.max / max_val_pos
     return global_scale.to(dtype).reshape([1])
+
+
+def strategy_cdiv(
+    value: int,
+    divisor: int,
+    strategy: Optional[QuantizationStrategy],
+    strict: bool = False,
+) -> int:
+    dividend = math.ceil(value / divisor)
+    if dividend * divisor != value:
+        message = (
+            f"{strategy} quantization strategy requires strict division of "
+            f"weight/activation size {value} and group/block size {divisor}. "
+            "consider reducing the group/block size or ignoring modules with "
+            f"weights not divisible by {divisor}"
+        )
+        if strict:
+            raise ValueError(message)
+
+        else:
+            logger.bind(log_once=True).warning(message)
+
+    return dividend
