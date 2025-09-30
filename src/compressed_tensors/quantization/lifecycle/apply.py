@@ -137,6 +137,7 @@ def apply_quantization_config(
             target_to_scheme[target] = scheme
 
     # mark appropriate layers for quantization by setting their quantization schemes
+    breakpoint()
     for name, submodule in match_named_modules(
         model, target_to_scheme, config.ignore, warn_on_fail=True
     ):

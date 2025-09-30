@@ -60,7 +60,9 @@ def match_named_modules(
 
     unmatched_targets = set(targets)
 
+
     for name, module in model.named_modules():
+        print(name, module)
         for target in targets:
             if is_match(name, module, target, fused=fused):
                 unmatched_targets -= {target}
