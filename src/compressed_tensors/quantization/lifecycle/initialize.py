@@ -47,6 +47,7 @@ from torch.nn import Module, Parameter
 __all__ = [
     "initialize_module_for_quantization",
     "is_attention_module",
+    "initialize_qparams",
 ]
 
 
@@ -100,7 +101,7 @@ def initialize_module_for_quantization(
             return
 
         if scheme.input_activations is not None:
-            _initialize_scale_zero_point(
+            initialize_qparams(
                 module,
                 "input",
                 scheme.input_activations,
@@ -110,7 +111,7 @@ def initialize_module_for_quantization(
             )
 
         if scheme.weights is not None:
-            _initialize_scale_zero_point(
+            initialize_qparams(
                 module,
                 "weight",
                 scheme.weights,
@@ -121,7 +122,7 @@ def initialize_module_for_quantization(
 
         output_is_kv_cache = is_kv_cache_quant_scheme(scheme)
         if scheme.output_activations is not None and not output_is_kv_cache:
-            _initialize_scale_zero_point(
+            initialize_qparams(
                 module,
                 "output",
                 scheme.output_activations,
@@ -147,7 +148,7 @@ def is_attention_module(module: Module):
     )
 
 
-def _initialize_scale_zero_point(
+def initialize_qparams(
     module: Module,
     base_name: str,
     quantization_args: QuantizationArgs,
@@ -155,6 +156,21 @@ def _initialize_scale_zero_point(
     observed_dtype: torch.dtype,
     force_zero_point: bool = True,
 ):
+    """
+    Initialize quantization parameters for a given basename according to the passed
+    quantization args. The shape and dtype of the observed weight/activation must also
+    be provided.
+
+    Scales will always be initialized. Global scales are initialized depending on args.
+    Zero points will be initialized if not symmetric or if `force_zero_point` is True.
+
+    :param module: module to register qparams to
+    :param base_name: base name of qparams, for example "input", "weight", "k", "v"
+    :param quantization_args: arguments for quantization
+    :param observed_shape: last (right-most) known dimensions of the observed weight/act
+    :param observed_dtype: dtype of the observed weight/actt
+    :param force_zero_point: force the zero_point parameter to be initialized
+    """
     strategy = quantization_args.strategy
     dynamic = quantization_args.dynamic
     actorder = quantization_args.actorder
