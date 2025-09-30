@@ -27,6 +27,7 @@ from compressed_tensors.quantization import (
     FP8_E4M3_DATA,
     ActivationOrdering,
     DynamicType,
+    KVCacheScaleType,
     QuantizationArgs,
     QuantizationMetadata,
     QuantizationScheme,
@@ -59,21 +60,17 @@ __all__ = [
 _LOGGER = logging.getLogger(__name__)
 
 
-class KVCacheScaleType(Enum):
-    KEY = "k_scale"
-    VALUE = "v_scale"
-
-
 def initialize_module_for_quantization(
     module: Module,
     scheme: Optional[QuantizationScheme] = None,
     force_zero_point: bool = True,
 ):
     """
-    attaches appropriate scales, zero points, and observers to a layer
-    given its target quantization scheme
+    Attaches appropriate scales, zero points, and observers to a layer
+    given its target quantization scheme.
 
-    apply to full model with `model.apply(initialize_module_for_quantization)`
+    Previously initialized scales and zero points will be removed from
+    module if they no longer apply to the scheme
 
     :param module: module to set for calibration
     :param scheme: scheme to use for quantization. if None is provided,
@@ -85,6 +82,8 @@ def initialize_module_for_quantization(
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:
         return
+
+    QuantizationMetadata.clear_all_qparams(module)
 
     if is_attention_module(module):
         # quantized actions based on calltime status
