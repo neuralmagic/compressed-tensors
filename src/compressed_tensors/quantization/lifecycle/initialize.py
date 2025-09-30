@@ -105,7 +105,7 @@ def initialize_module_for_quantization(
                 module,
                 "input",
                 scheme.input_activations,
-                observed_shape=(1, weight.shape[-1]),
+                observed_shape=weight.shape[-1:],
                 observed_dtype=weight.dtype,
                 force_zero_point=force_zero_point,
             )
