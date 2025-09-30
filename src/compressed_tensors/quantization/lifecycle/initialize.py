@@ -14,23 +14,22 @@
 
 
 import logging
+from enum import Enum
 from typing import Optional, Tuple
 
 import torch
-from compressed_tensors.quantization import (
-    FP8_E4M3_DATA,
-    ActivationOrdering,
-    DynamicType,
-    KVCacheScaleType,
-    QuantizationArgs,
-    QuantizationMetadata,
-    QuantizationScheme,
-    QuantizationStatus,
-    QuantizationStrategy,
-)
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
+from compressed_tensors.quantization.quant_args import (
+    FP8_E4M3_DATA,
+    ActivationOrdering,
+    DynamicType,
+    QuantizationArgs,
+    QuantizationStrategy,
+)
+from compressed_tensors.quantization.quant_config import QuantizationStatus
+from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.quantization.utils import (
     is_fp4,
     is_kv_cache_quant_scheme,
@@ -54,17 +53,21 @@ __all__ = [
 _LOGGER = logging.getLogger(__name__)
 
 
+class KVCacheScaleType(Enum):
+    KEY = "k_scale"
+    VALUE = "v_scale"
+
+
 def initialize_module_for_quantization(
     module: Module,
     scheme: Optional[QuantizationScheme] = None,
     force_zero_point: bool = True,
 ):
     """
-    Attaches appropriate scales, zero points, and observers to a layer
-    given its target quantization scheme.
+    attaches appropriate scales, zero points, and observers to a layer
+    given its target quantization scheme
 
-    Previously initialized scales and zero points will be removed from
-    module if they no longer apply to the scheme
+    apply to full model with `model.apply(initialize_module_for_quantization)`
 
     :param module: module to set for calibration
     :param scheme: scheme to use for quantization. if None is provided,
@@ -76,8 +79,6 @@ def initialize_module_for_quantization(
     scheme = scheme or getattr(module, "quantization_scheme", None)
     if scheme is None:
         return
-
-    QuantizationMetadata.clear_all_qparams(module)
 
     if is_attention_module(module):
         # quantized actions based on calltime status
