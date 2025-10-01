@@ -36,5 +36,4 @@ jobs:
                             {"python":"3.10.12","label":"k8s-util","timeout":"40"},
                             {"python":"3.9.17","label":"k8s-h100-solo","timeout":"40"},
                             {"python":"3.12.6","label":"k8s-a100-duo","timeout":"40"}]'
-
         secrets: inherit
