@@ -7,10 +7,7 @@ on:
 jobs:
   BUILD-TEST-NIGHTLY:
     name: Post-release nightly build & release
-    uses: ./.github/workflows/build-test.yml
+    uses: ./.github/workflows/trigger-all.yml
     with:
-      wf_category: NIGHTLY
-      gitref: main
       push_to_pypi: true
-      test_configs: '[{"python":"3.9","label":"k8s-h100-solo","timeout":"40"}]'
     secrets: inherit

@@ -5,6 +5,13 @@ on:
       # * is a special character in YAML so you have to quote this string
       - cron: '30 0 * * *'  # nightly run
 
+    workflow_call:
+        inputs:
+            push_to_pypi:
+                description: "when set and tests pass, then '.whl' & '.tar.gz' will be pushed to public pypi"
+                type: boolean
+                default: false
+
     workflow_dispatch:
         inputs:
             wf_category:
