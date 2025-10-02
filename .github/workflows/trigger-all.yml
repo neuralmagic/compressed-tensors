@@ -7,10 +7,18 @@ on:
 
     workflow_call:
         inputs:
+            wf_category:
+                description: "workflow category, must be 'NIGHTLY' or 'RELEASE' (default: NIGHTLY)"
+                type: string
+                default: NIGHTLY
             push_to_pypi:
                 description: "when set and tests pass, then '.whl' & '.tar.gz' will be pushed to public pypi"
                 type: boolean
                 default: false
+            gitref:
+                description: "git commit hash or tag name"
+                type: string
+                default: 'main'
 
     workflow_dispatch:
         inputs:
