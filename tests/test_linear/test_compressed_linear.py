@@ -15,6 +15,7 @@
 import pytest
 import torch
 from compressed_tensors.linear.compressed_linear import CompressedLinear
+from tests.testing_utils import requires_accelerate
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -27,6 +28,7 @@ def models_with_linear_quantized():
     ]
 
 
+@requires_accelerate()
 @pytest.mark.parametrize("model_stub", models_with_linear_quantized())
 def test_model_forward_pass(model_stub):
     """
@@ -58,6 +60,7 @@ def test_model_forward_pass(model_stub):
     assert outputs is not None, "Model forward pass failed, no output generated."
 
 
+@requires_accelerate()
 @pytest.mark.parametrize("model_stub", models_with_linear_quantized())
 def test_compressed_linear_from_linear_usage(monkeypatch, model_stub):
     """
