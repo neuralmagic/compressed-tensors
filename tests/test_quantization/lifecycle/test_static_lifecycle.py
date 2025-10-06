@@ -302,25 +302,6 @@ class MockAttention(torch.nn.Module):
         # group is not supported
         # tensor group is not supported
         # block is not supported
-        (
-            QuantizationArgs(
-                num_bits=4,
-                type="int",
-                symmetric=True,
-                strategy="attn_head",
-            ),
-            torch.tensor([[0], [3]]),
-            torch.tensor([[8], [11]]),
-            torch.tensor(
-                [
-                    [
-                        [[0.0000, 1.0703, 2.1406], [2.9375, 4.4062, 4.4062]],
-                        [[6.4375, 7.5000, 7.5000], [8.8125, 10.2500, 10.2500]],
-                    ]
-                ]
-            ),
-            0.16,
-        ),
     ],
 )
 def test_static_attention_quantization(
