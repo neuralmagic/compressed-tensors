@@ -172,6 +172,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     block_structure: Optional[List[int]] = None
     dynamic: Union[DynamicType, bool] = False
     actorder: Union[ActivationOrdering, bool, None] = None
+    scale_dtype: Union[torch.dtype] = None 
+    zp_dtype: Union[torch.dtype] = None
     observer: Optional[str] = Field(
         default=None,
         description=(
@@ -262,6 +264,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         actorder = model.actorder
         dynamic = model.dynamic
         observer = model.observer
+        zp_dtype = model.zp_dtype
+        scale_dtype = model.scale_dtype
 
         # infer strategy
         if strategy is None:
@@ -335,9 +339,21 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             # default to minmax for non-dynamic cases
             observer = "minmax"
 
+        # ToDo: check if fp4
+        if zp_dtype is None:
+            zp_dtype = model.pytorch_dtype()
+        
+        # ToDo - should be fp8 / uint8 for fp4
+        if scale_dtype is None:
+            scale_dtype = torch.float16
+
+        # TODO: make it obvious that fp4 does not support asym
+
         # write back modified values
         model.strategy = strategy
         model.observer = observer
+        model.zp_dtype = zp_dtype
+        model.scale_dtype = scale_dtype
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
