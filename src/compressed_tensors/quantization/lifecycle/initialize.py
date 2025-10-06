@@ -202,8 +202,8 @@ def initialize_qparams(
         expected_shape = (1, 1)
 
     elif strategy == QuantizationStrategy.CHANNEL:
-        if len(observed_shape) < 1:
-            raise ValueError("Channel quant requires at least 1 observed dimension")
+        if len(observed_shape) < 2:
+            raise ValueError("Channel quant requires at least 2 observed dimensions")
 
         expected_shape = (observed_shape[-2], 1)
 
@@ -233,6 +233,12 @@ def initialize_qparams(
         num_rows = strategy_cdiv(observed_shape[-2], block_structure[-2], strategy)
         num_cols = strategy_cdiv(observed_shape[-1], block_structure[-1], strategy)
         expected_shape = (num_rows, num_cols)
+
+    elif strategy == QuantizationStrategy.ATTN_HEAD:
+        if len(observed_shape) < 2:
+            raise ValueError("Attention quant requires at least 2 observed dimensions")
+
+        expected_shape = (observed_shape[-2], 1)
 
     else:
         assert False, f"Unknown strategy {strategy}"
