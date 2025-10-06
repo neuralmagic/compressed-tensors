@@ -234,6 +234,12 @@ def initialize_qparams(
         num_cols = strategy_cdiv(observed_shape[-1], block_structure[-1], strategy)
         expected_shape = (num_rows, num_cols)
 
+    elif strategy == QuantizationStrategy.ATTN_HEAD:
+        if len(observed_shape) < 2:
+            raise ValueError("Attention quant requires at least 2 observed dimensions")
+
+        expected_shape = (observed_shape[-2], 1)
+
     else:
         assert False, f"Unknown strategy {strategy}"
 
