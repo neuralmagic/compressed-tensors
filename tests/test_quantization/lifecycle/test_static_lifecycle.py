@@ -250,7 +250,7 @@ def test_static_activation_quantization(
             global_scale = linear.input_observer.get_global_scale(args[0])
             linear.input_global_scale.data = global_scale
 
-        if linear.quantization_scheme.input_activations.dynamic == False:
+        if linear.quantization_scheme.input_activations.dynamic is False:
             scale, zero_point = linear.input_observer(args[0])
             linear.input_scale.data = scale
             linear.input_zero_point.data = zero_point
@@ -331,7 +331,7 @@ def test_static_attention_quantization(
     attention.k_observer = MockMinMaxObserver(attention, base_name="k")
 
     # calibrate quantization parameters
-    if scheme.input_activations.dynamic == False:
+    if scheme.input_activations.dynamic is False:
         scale, zero_point = attention.k_observer(input)
         attention.k_scale.data = scale
         attention.k_zero_point.data = zero_point
