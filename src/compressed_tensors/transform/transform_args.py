@@ -45,16 +45,6 @@ class TransformLocation(str, Enum):
     K_CACHE = "k_cache"
     Q_ATTN = "q_attn"
 
-    def is_online(self) -> bool:
-        """
-        Returns True if the transform location is online
-        (applied at runtime), False otherwise
-        """
-        return self not in (
-            TransformLocation.WEIGHT_INPUT,
-            TransformLocation.WEIGHT_OUTPUT,
-        )
-
 
 class TransformArgs(BaseModel, use_enum_values=True):
     """
@@ -80,6 +70,9 @@ class TransformArgs(BaseModel, use_enum_values=True):
         return value
 
     def is_online(self) -> bool:
-        return TransformLocation(self.location).is_online()
+        return self.location not in (
+            TransformLocation.WEIGHT_INPUT,
+            TransformLocation.WEIGHT_OUTPUT,
+        )
 
     model_config = ConfigDict(extra="forbid")
