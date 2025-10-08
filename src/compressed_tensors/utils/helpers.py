@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, 
 
 import numpy
 import torch
-from transformers import AutoConfig
+from transformers import AutoConfig, PretrainedConfig
 
 
 T = TypeVar("T", bound="Callable")  # used by `deprecated`
@@ -45,6 +45,7 @@ __all__ = [
     "unpack_bitmasks",
     "patch_attr",
     "ParameterizedDefaultDict",
+    "get_head_dim",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -396,3 +397,14 @@ class ParameterizedDefaultDict(dict):
         """
         with patch_attr(self, "_factory_kwargs", factory_kwargs):
             return self[args]
+
+
+def get_head_dim(config: PretrainedConfig) -> int:
+    if hasattr(config, "head_dim"):
+        return config.head_dim
+
+    elif hasattr(config, "hidden_size") and hasattr(config, "num_attention_heads"):
+        return config.hidden_size // config.num_attention_heads
+
+    else:
+        raise ValueError()

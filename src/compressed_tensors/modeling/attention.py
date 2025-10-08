@@ -23,9 +23,6 @@ from compressed_tensors.quantization import (
     QuantizationStrategy,
     forward_quantize,
 )
-from compressed_tensors.quantization.lifecycle.initialize import (
-    _initialize_scale_zero_point,
-)
 from compressed_tensors.utils import getattr_chain
 from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
@@ -39,6 +36,7 @@ __all__ = [
     "QuantizedAttentionImpl",
     "initialize_hooked_attention",
     "register_query_hook",
+    "IMPL_ATTR",
 ]
 
 
@@ -94,33 +92,6 @@ class QuantizedAttentionImpl(InternalModule):
             **kwargs,
         )
 
-    def initialize_qparams_once(self, model: PreTrainedModel, module: Module):
-        """
-        Initialize attention quantization parameters if they have not already been
-        initialized. KV cache quantization parameters are initialized by the
-        `QuantizedKVCache`
-
-        :param model: parent model of attention module
-        :param module: attention module to initialize with
-        """
-        # TODO: move to initialize.py
-        assert module is self.attn_module()
-        scheme: Optional[QuantizationScheme] = getattr(
-            module, "quantization_scheme", None
-        )
-        quant_args: Optional[QuantizationArgs] = getattr(
-            scheme, "input_activations", None
-        )
-
-        if (
-            not self._qparams_initialized
-            and quant_args is not None
-            and not scheme.kv_cache_only
-        ):
-            assert quant_args.strategy == QuantizationStrategy.TENSOR
-            _initialize_scale_zero_point(module, "q", quant_args)
-            self._qparams_initialized = True
-
 
 # ----- initialize ----- #
 
@@ -141,7 +112,6 @@ def initialize_hooked_attention(
 
     :param model: parent model of attention module
     :param module: attention module to initialize with
-    :param quantize: initialize attention quantization parameters
     """
     if not hasattr(module, IMPL_ATTR):
         module.register_module(IMPL_ATTR, QuantizedAttentionImpl(model.config, module))
@@ -153,11 +123,7 @@ def initialize_hooked_attention(
             AttentionInterface.register(HOOKED_ATTENTION_NAME, _ct_hooked_attention)
             model.config._attn_implementation = HOOKED_ATTENTION_NAME
 
-    impl: QuantizedAttentionImpl = getattr(module, IMPL_ATTR)
-    if quantize:
-        impl.initialize_qparams_once(model, module)
-
-    initialize_hooked_kv_cache(model, module, quantize=quantize)
+    initialize_hooked_kv_cache(model, module)
 
 
 # ----- hooks ----- #

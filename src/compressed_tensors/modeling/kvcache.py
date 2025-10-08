@@ -16,10 +16,10 @@ import inspect
 from typing import Callable, Optional, Tuple
 from weakref import ref
 
-from compressed_tensors.quantization import QuantizationStrategy, forward_quantize
-from compressed_tensors.quantization.lifecycle.initialize import (
-    _initialize_scale_zero_point,
-)
+# from compressed_tensors.quantization import QuantizationStrategy, forward_quantize
+# from compressed_tensors.quantization.lifecycle.initialize import (
+#     _initialize_scale_zero_point,
+# )
 from compressed_tensors.utils import getattr_chain
 from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
@@ -33,6 +33,7 @@ __all__ = [
     "initialize_hooked_kv_cache",
     "register_key_hook",
     "register_value_hook",
+    "KV_CACHE_ATTR",
 ]
 
 
@@ -88,25 +89,6 @@ class QuantizedKVCache(InternalModule):
         self.past_key_values = None
         return ret
 
-    def initialize_qparams_once(self, model: PreTrainedModel, module: Module):
-        """
-        Initialize kv cache quantization parameters if they have not already been
-        initialized
-
-        :param model: parent model of attention module
-        :param module: attention module to initialize with
-        """
-        # TODO: move to initialize.py
-        assert module is self.attn_module()
-        scheme = getattr(module, "quantization_scheme", None)
-        quant_args = getattr(scheme, "input_activations", None)
-
-        if not self._qparams_initialized and quant_args is not None:
-            assert quant_args.strategy == QuantizationStrategy.TENSOR
-            _initialize_scale_zero_point(module, "k", quant_args)
-            _initialize_scale_zero_point(module, "v", quant_args)
-            self._qparams_initialized = True
-
 
 # ----- initialize ----- #
 
@@ -124,23 +106,16 @@ def _kv_cache_attention_hook(module: Module, args, kwargs):
     return args, kwargs
 
 
-def initialize_hooked_kv_cache(
-    model: PreTrainedModel, module: Module, quantize: bool = False
-):
+def initialize_hooked_kv_cache(model: PreTrainedModel, module: Module):
     """
     Initialize a `QuantizedKVCache` instance attached to attention
 
     :param model: parent model of attention module
     :param module: attention module to initialize with
-    :param quantize: initialize kv cache quantization parameters
     """
     if not hasattr(module, KV_CACHE_ATTR):
         module.register_module(KV_CACHE_ATTR, QuantizedKVCache(model.config, module))
         module.register_forward_pre_hook(_kv_cache_attention_hook, with_kwargs=True)
-
-    kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
-    if quantize:
-        kv_cache.initialize_qparams_once(model, module)
 
 
 # ----- hooks ----- #
