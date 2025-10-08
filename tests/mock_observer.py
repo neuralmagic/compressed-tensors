@@ -77,6 +77,8 @@ def flatten_for_quantization(
 
 
 def flatten_weight_for_quantization(value: torch.Tensor, args: QuantizationArgs):
+    # value.shape = (num_rows, num_cols)
+
     if args.strategy == QuantizationStrategy.TENSOR:
         # (1, 1, num_weight_elems)
         return value.reshape((1, 1, -1))
@@ -117,6 +119,8 @@ def flatten_weight_for_quantization(value: torch.Tensor, args: QuantizationArgs)
 
 
 def flatten_activation_for_quantization(value: torch.Tensor, args: QuantizationArgs):
+    # value.shape = (batch_size, seq_len, hidden_dim)
+
     if args.strategy == QuantizationStrategy.TENSOR:
         # (batch_size * seq_len, 1, hidden_dim)
         return value.reshape((-1, 1, value.size(-1)))
@@ -144,10 +148,11 @@ def flatten_activation_for_quantization(value: torch.Tensor, args: QuantizationA
 
 
 def flatten_attention_for_quantization(value: torch.Tensor, args: QuantizationArgs):
+    # value.shape = (batch_size, num_heads, seq_len, head_dim)
+
     if args.strategy == QuantizationStrategy.TENSOR:
-        # (batch_size, seq_len, num_heads, head_dim)
         # (batch_size * seq_len, 1, num_heads * head_dim)
-        return value.flatten(0, 1).flatten(-2, -1).unsqueeze(-2)
+        return value.transpose(1, 2).flatten(0, 1).flatten(-2, -1).unsqueeze(-2)
 
     if args.strategy == QuantizationStrategy.TOKEN:
         raise ValueError("Token quantization cannot be applied to attention")
