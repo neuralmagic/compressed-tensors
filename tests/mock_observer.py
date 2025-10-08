@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import abstractmethod
 from typing import Tuple
 from weakref import ref
 
@@ -23,37 +22,24 @@ from compressed_tensors.quantization.utils import (
     generate_gparam,
     strategy_cdiv,
 )
-from compressed_tensors.utils import getattr_chain
 
 
-base_name_to_scheme_field = {
-    "q": "input_activations",
-    "k": "input_activations",
-    "v": "input_activations",
-    "input": "input_activations",
-    "weight": "weights",
-    "output": "output_activations",
-}
-
-
-class ObserverBase(torch.nn.Module):
-    def __init__(self, module: torch.nn.Module, base_name: str):
+class MockMinMaxObserver(torch.nn.Module):
+    def __init__(self, base_name: str, args: QuantizationArgs, module: torch.nn.Module):
         super().__init__()
         self.parent = ref(module)
         self.base_name = base_name
+        self.args = args
 
-        self.scheme_field = base_name_to_scheme_field[base_name]
-        self.args: QuantizationArgs = getattr_chain(
-            module, f"quantization_scheme.{self.scheme_field}"
-        )
-
-        # used for moving averages and testing
+        # used for testing
         self.min_vals = None
         self.max_vals = None
 
-    @abstractmethod
     def get_min_max(self, observed: torch.Tensor):
-        ...
+        min_vals = torch.amin(observed, dim=(0, -1))
+        max_vals = torch.amax(observed, dim=(0, -1))
+
+        return min_vals, max_vals
 
     def forward(self, observed: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         observed = flatten_for_quantization(observed, self.base_name, self.args)
@@ -71,44 +57,10 @@ class ObserverBase(torch.nn.Module):
 
     def get_global_scale(self, observed: torch.Tensor):
         observed = observed.reshape((1, 1, -1))  # per tensor reshape
-
         min_vals, max_vals = self.get_min_max(observed)
-
         global_scale = generate_gparam(min_vals, max_vals)
 
         return global_scale
-
-
-class MockMinMaxObserver(ObserverBase):
-    def __init__(self, module: torch.nn.Module, base_name: str):
-        super().__init__(module, base_name)
-
-    def get_min_max(self, observed: torch.Tensor):
-        min_vals = torch.amin(observed, dim=(0, -1))
-        max_vals = torch.amax(observed, dim=(0, -1))
-
-        return min_vals, max_vals
-
-
-class MockMovingMinMaxObserver(ObserverBase):
-    def __init__(self, module: torch.nn.Module, base_name: str):
-        super().__init__(module, base_name)
-
-        self.averaging_constant = self.args.observer_kwargs.get(
-            "averaging_constant", 0.01
-        )
-
-    def get_min_max(self, observed: torch.Tensor):
-        min_vals = torch.amin(observed, dim=(0, -1))
-        max_vals = torch.amax(observed, dim=(0, -1))
-
-        if self.min_vals is not None:
-            # FUTURE: consider scaling by num observations (first dim)
-            #         rather than reducing by first dim
-            min_vals = torch.lerp(self.min_vals, min_vals, self.averaging_constant)
-            max_vals = torch.lerp(self.max_vals, max_vals, self.averaging_constant)
-
-        return min_vals, max_vals
 
 
 def flatten_for_quantization(

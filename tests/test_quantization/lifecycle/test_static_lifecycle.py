@@ -22,7 +22,7 @@ from compressed_tensors.quantization import (
 )
 from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import QuantizationStatus
-from tests.observer import MockMinMaxObserver
+from tests.mock_observer import MockMinMaxObserver
 
 
 @pytest.mark.parametrize(
@@ -151,7 +151,7 @@ def test_static_weight_quantization(
     scheme = QuantizationScheme(targets=[], weights=args)
     initialize_module_for_quantization(linear, scheme)
     assert getattr(linear, "quantization_scheme") is scheme
-    linear.weight_observer = MockMinMaxObserver(linear, base_name="weight")
+    linear.weight_observer = MockMinMaxObserver("weight", args, linear)
 
     # calibrate_global_scale
     if hasattr(linear, "weight_global_scale"):
@@ -242,7 +242,7 @@ def test_static_activation_quantization(
     scheme = QuantizationScheme(targets=[], input_activations=args)
     initialize_module_for_quantization(linear, scheme)
     assert getattr(linear, "quantization_scheme") is scheme
-    linear.input_observer = MockMinMaxObserver(linear, base_name="input")
+    linear.input_observer = MockMinMaxObserver("input", args, linear)
 
     # calibrate quantization parameters
     def calibrate_input_hook(_, args):
@@ -275,6 +275,7 @@ class MockAttention(torch.nn.Module):
     pass
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.parametrize(
     "args,exp_min_val,exp_max_val,exp_quant,exp_loss",
     [
@@ -328,7 +329,7 @@ def test_static_attention_quantization(
     )
     attention.quantization_scheme = scheme
     attention.quantization_status = QuantizationStatus.INITIALIZED
-    attention.k_observer = MockMinMaxObserver(attention, base_name="k")
+    attention.k_observer = MockMinMaxObserver("k", args, attention)
 
     # calibrate quantization parameters
     if scheme.input_activations.dynamic is False:
