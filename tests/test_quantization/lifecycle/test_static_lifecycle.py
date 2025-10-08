@@ -310,17 +310,17 @@ class MockAttention(torch.nn.Module):
                 symmetric=True,
                 strategy="attn_head",
             ),
-            torch.tensor([[0], [3]]),
-            torch.tensor([[8], [11]]),
+            torch.tensor([[[0.0]], [[6.0]]]),
+            torch.tensor([[[5.0]], [[11.0]]]),
             torch.tensor(
                 [
                     [
-                        [[0.0000, 1.0703, 2.1406], [2.9375, 4.4062, 4.4062]],
-                        [[6.4375, 7.5000, 7.5000], [8.8125, 10.2500, 10.2500]],
+                        [[0.0000, 1.3359, 2.0000], [2.6719, 4.0000, 4.6875]],
+                        [[5.8750, 7.3438, 7.3438], [8.8125, 10.2500, 10.2500]],
                     ]
                 ]
             ),
-            0.16,
+            0.13,
         ),
     ],
 )
@@ -335,7 +335,7 @@ def test_static_attention_quantization(
                       [ 9., 10., 11.]]]])
     """
     # set up activation (and identity weight)
-    batch_size, seq_len, num_heads, head_dim = 1, 2, 2, 3
+    batch_size, num_heads, seq_len, head_dim = 1, 2, 2, 3
     input = torch.arange(
         (batch_size * seq_len * num_heads * head_dim), dtype=torch.bfloat16
     ).reshape((batch_size, seq_len, num_heads, head_dim))
@@ -344,7 +344,7 @@ def test_static_attention_quantization(
     # initialize quantization parameters
     scheme = QuantizationScheme(targets=[], input_activations=args)
     initialize_qparams(
-        attention, "k", args, (num_heads, head_dim), observed_dtype=torch.bfloat16
+        attention, "k", args, (num_heads, None, head_dim), observed_dtype=torch.bfloat16
     )
     attention.quantization_scheme = scheme
     attention.quantization_status = QuantizationStatus.INITIALIZED
@@ -366,5 +366,7 @@ def test_static_attention_quantization(
         assert torch.equal(attention.k_observer.max_vals, exp_max_val)
 
     # check forward pass
+    print(output)
+    print(torch.nn.functional.mse_loss(output, input))
     assert torch.allclose(output, exp_quant.to(output.dtype))
     assert torch.nn.functional.mse_loss(output, input) <= exp_loss
