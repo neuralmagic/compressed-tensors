@@ -384,5 +384,7 @@ def test_static_attention_quantization(
         assert torch.equal(attention.k_observer.max_vals, exp_max_val)
 
     # check forward pass
+    print(output)
+    print(torch.nn.functional.mse_loss(output, input))
     assert torch.allclose(output, exp_quant.to(output.dtype))
     assert torch.nn.functional.mse_loss(output, input) <= exp_loss

@@ -14,7 +14,7 @@
 
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import torch
 from compressed_tensors.quantization import (
@@ -199,7 +199,7 @@ def initialize_qparams(
         expected_shape = (1,)
 
     elif strategy == QuantizationStrategy.TOKEN:
-        expected_shape = (1, 1)
+        raise ValueError("Cannot perform static token quantization")
 
     elif strategy == QuantizationStrategy.CHANNEL:
         if len(observed_shape) < 2:
