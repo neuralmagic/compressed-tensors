@@ -14,7 +14,7 @@
 
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import torch
 from compressed_tensors.quantization import (
@@ -152,7 +152,7 @@ def initialize_qparams(
     module: Module,
     base_name: str,
     quantization_args: QuantizationArgs,
-    observed_shape: Tuple[int],
+    observed_shape: Tuple[Union[int, None]],
     observed_dtype: torch.dtype,
     force_zero_point: bool = True,
 ):
@@ -199,7 +199,7 @@ def initialize_qparams(
         expected_shape = (1,)
 
     elif strategy == QuantizationStrategy.TOKEN:
-        expected_shape = (1, 1)
+        raise ValueError("Cannot perform static token quantization")
 
     elif strategy == QuantizationStrategy.CHANNEL:
         if len(observed_shape) < 2:
@@ -235,10 +235,11 @@ def initialize_qparams(
         expected_shape = (num_rows, num_cols)
 
     elif strategy == QuantizationStrategy.ATTN_HEAD:
-        if len(observed_shape) < 2:
-            raise ValueError("Attention quant requires at least 2 observed dimensions")
+        # (batch_size, num_attention_heads, seq_len, head_dim)
+        if len(observed_shape) < 3:
+            raise ValueError("Attention quant requires at least 3 observed dimensions")
 
-        expected_shape = (observed_shape[-2], 1)
+        expected_shape = (observed_shape[-3], 1, 1)
 
     else:
         assert False, f"Unknown strategy {strategy}"
