@@ -42,11 +42,15 @@ from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
     get_head_dim,
+<<<<<<< HEAD
     get_num_attn_heads,
     get_num_kv_heads,
+=======
+>>>>>>> 05ec17e (WIP)
     register_offload_parameter,
 )
 from torch.nn import Module, Parameter
+from transformers import PretrainedConfig
 
 
 __all__ = [
@@ -290,6 +294,7 @@ def initialize_attn_qparams(
     kv_cache: Optional[QuantizedKVCache] = getattr(module, KV_CACHE_ATTR, None)
 
     if impl is None and kv_cache is None:
+<<<<<<< HEAD
         raise ValueError("Attention module has quantization scheme but no attached")
 
     _validate_attention_scheme(scheme)
@@ -305,12 +310,27 @@ def initialize_attn_qparams(
     kv_observed_shape = (num_kv_heads, None, head_dim)
     observed_dtype = next(module.parameters()).dtype
 
+=======
+        raise ValueError("Attention module has quantization scheme but no attached ")
+
+    config: PretrainedConfig = getattr(impl, "config", None) or getattr(
+        kv_cache, "config", None
+    )
+    head_dim = get_head_dim(config)
+    observed_shape = (head_dim,)  # (batch_size, num_attention_heads, slen, head_dim)
+    observed_dtype = next(module.parameters()).dtype
+
+>>>>>>> 05ec17e (WIP)
     if impl is not None:
         initialize_qparams(
             module,
             "q",
             scheme.input_activations,
+<<<<<<< HEAD
             observed_shape=q_observed_shape,
+=======
+            observed_shape=observed_shape,
+>>>>>>> 05ec17e (WIP)
             observed_dtype=observed_dtype,
             force_zero_point=force_zero_point,
         )
@@ -320,7 +340,11 @@ def initialize_attn_qparams(
             module,
             "k",
             scheme.input_activations,
+<<<<<<< HEAD
             observed_shape=kv_observed_shape,
+=======
+            observed_shape=observed_shape,
+>>>>>>> 05ec17e (WIP)
             observed_dtype=observed_dtype,
             force_zero_point=force_zero_point,
         )
@@ -328,6 +352,7 @@ def initialize_attn_qparams(
             module,
             "v",
             scheme.input_activations,
+<<<<<<< HEAD
             observed_shape=kv_observed_shape,
             observed_dtype=observed_dtype,
             force_zero_point=force_zero_point,
@@ -348,3 +373,9 @@ def _validate_attention_scheme(scheme: QuantizationScheme):
 
     if scheme.output_activations is not None:
         raise ValueError("Cannot apply output quantization to attention")
+=======
+            observed_shape=observed_shape,
+            observed_dtype=observed_dtype,
+            force_zero_point=force_zero_point,
+        )
+>>>>>>> 05ec17e (WIP)
