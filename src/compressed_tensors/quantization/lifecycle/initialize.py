@@ -199,7 +199,7 @@ def initialize_qparams(
         expected_shape = (1,)
 
     elif strategy == QuantizationStrategy.TOKEN:
-        raise ValueError("Cannot perform static token quantization")
+        expected_shape = (1, 1)
 
     elif strategy == QuantizationStrategy.CHANNEL:
         if len(observed_shape) < 2:
