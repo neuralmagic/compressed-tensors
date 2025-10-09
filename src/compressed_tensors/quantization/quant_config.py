@@ -176,7 +176,8 @@ class QuantizationConfig(BaseModel):
         )
 
         # set of all quantization schemes
-        quantization_schemes: Set[QuantizationScheme] = set()
+        # TODO: make quant config/scheme/args frozen/hashable and use a set
+        quantization_schemes: List[QuantizationScheme] = list()
 
         # use any status from modules (in practice, use the last module)
         model_status = None
@@ -198,8 +199,9 @@ class QuantizationConfig(BaseModel):
             if is_module_quantized(submodule):
                 # add to running set of schemes/layer_type_names
                 model_status = getattr(submodule, "quantization_status", model_status)
-                quantization_schemes.add(submodule.quantization_scheme)
                 quantization_type_names.add(layer_type)
+                if submodule.quantization_scheme not in quantization_schemes:
+                    quantization_schemes.append(submodule.quantization_scheme)
 
                 # attention quantization implies kv cache quantization
                 if is_attention_module(submodule):
@@ -225,7 +227,7 @@ class QuantizationConfig(BaseModel):
 
         # create config groups from all unique schemes
         config_groups = {}
-        for idx, scheme in enumerate(list(quantization_schemes)):
+        for idx, scheme in enumerate(quantization_schemes):
             group_name = "group_" + str(idx)
             config_groups[group_name] = scheme
 
