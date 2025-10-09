@@ -99,9 +99,7 @@ def _ct_hooked_attention(module: Module, *args, **kwargs):
         return ALL_ATTENTION_FUNCTIONS[_original_impl](module, *args, **kwargs)
 
 
-def initialize_hooked_attention(
-    model: PreTrainedModel, module: Module, quantize: bool = True
-):
+def initialize_hooked_attention(model: PreTrainedModel, module: Module):
     """
     Initialize `QuantizedAttentionImpl` and `QuantizedKVCache` instances
     attached to attention

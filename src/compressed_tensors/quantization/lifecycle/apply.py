@@ -29,7 +29,6 @@ from compressed_tensors.quantization.lifecycle.initialize import (
     initialize_module_for_quantization,
     is_attention_module,
 )
-from compressed_tensors.quantization.quant_args import QuantizationArgs
 from compressed_tensors.quantization.quant_config import (
     QuantizationConfig,
     QuantizationStatus,
