@@ -261,13 +261,31 @@ def is_match(
     )
 
 
-def is_narrow_match(model: torch.nn.Module, targets: Iterable[str], name: str) -> bool:
-    module = model.get_submodule(name)
+def is_narrow_match(
+    model: torch.nn.Module,
+    targets: Union[str, Iterable[str]],
+    name: str,
+    module: Optional[torch.nn.Module] = None,
+) -> bool:
+    """
+    Checks if any of the targets narrowly match the module. A target narrowly matches
+    a module if the target matches the module, but does not match the module's parent
+
+    :param model: model containing both module and its parent
+    :param targets: target strings, potentially containing "re:" prefixes
+    :param name: name of module to match
+    :param module: module to match. If none is provided, then get module from model
+    :return: True if any of the targets narrow match the module
+    """
+    targets = [targets] if isinstance(targets, str) else targets
+    module = module if module is not None else model.get_submodule(name)
+
     parent_name = name.rsplit(".", 1)[0]
     parent = model.get_submodule(parent_name)
 
-    return is_match(name, module, targets) and not is_match(
-        parent_name, parent, targets
+    return any(
+        is_match(name, module, target) and not is_match(parent_name, parent, target)
+        for target in targets
     )
 
 
