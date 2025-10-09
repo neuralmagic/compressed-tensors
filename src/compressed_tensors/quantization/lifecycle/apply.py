@@ -137,7 +137,7 @@ def apply_quantization_config(
     # because attention quantization is a superset of kv cache quantization
     if config.kv_cache_scheme is not None:
         scheme = QuantizationScheme(
-            targets=".*self_attn$", input_activations=config.kv_cache_scheme
+            targets=[".*self_attn$"], input_activations=config.kv_cache_scheme
         )
         for submodule in model.modules():
             if is_attention_module(submodule):
