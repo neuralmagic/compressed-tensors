@@ -367,6 +367,7 @@ def test_multi_apply_quantization_config():
                 and weight_zero_point.shape == torch.Size([1])
             )
 
+
 @requires_accelerate()
 def test_apply_kv_cache():
     from accelerate import init_empty_weights
@@ -376,7 +377,7 @@ def test_apply_kv_cache():
 
     args = QuantizationArgs(num_bits=8, type="float", strategy="tensor")
     config = QuantizationConfig(config_groups={}, kv_cache_scheme=args)
-    
+
     apply_quantization_config(model, config)
 
     for layer in model.model.layers:
@@ -397,7 +398,7 @@ def test_apply_attention():
         input_activations=QuantizationArgs(num_bits=8, type="float", strategy="tensor"),
     )
     config = QuantizationConfig(config_groups={"attention": scheme})
-    
+
     apply_quantization_config(model, config)
 
     for layer in model.model.layers:

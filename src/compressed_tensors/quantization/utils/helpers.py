@@ -14,7 +14,7 @@
 
 import logging
 import math
-from typing import Generator, List, Optional, Tuple
+from typing import Generator, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import (

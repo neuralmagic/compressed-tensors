@@ -49,7 +49,7 @@ def test_attention_cache():
     assert torch.equal(outputs.logits, true_outputs.logits)
     assert all(k_called) and all(v_called)
 
-    ## apply attention quantization after kv cache quantization ##
+    """ apply attention quantization after kv cache quantization """
 
     # check if hooks work
     q_called = [False for _ in range(len(layers))]

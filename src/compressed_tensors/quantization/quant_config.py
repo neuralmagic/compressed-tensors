@@ -171,7 +171,7 @@ class QuantizationConfig(BaseModel):
         :param model: model to calculate quantization scheme of
         :return: filled out QuantizationScheme for the input model
         """
-        from compressed_tensors.quantization.lifecycle.initialize import (  # circular import, move to utils later
+        from compressed_tensors.quantization.lifecycle.initialize import (
             is_attention_module,
         )
 
