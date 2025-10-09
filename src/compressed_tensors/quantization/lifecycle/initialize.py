@@ -37,11 +37,7 @@ from compressed_tensors.quantization import (
 from compressed_tensors.quantization.lifecycle.forward import (
     wrap_module_forward_quantized,
 )
-from compressed_tensors.quantization.utils import (
-    is_fp4,
-    is_kv_cache_quant_scheme,
-    strategy_cdiv,
-)
+from compressed_tensors.quantization.utils import is_fp4, strategy_cdiv
 from compressed_tensors.utils import (
     disable_hf_hook,
     get_execution_device,
@@ -129,8 +125,7 @@ def initialize_module_for_quantization(
                 force_zero_point=force_zero_point,
             )
 
-        output_is_kv_cache = is_kv_cache_quant_scheme(scheme)
-        if scheme.output_activations is not None and not output_is_kv_cache:
+        if scheme.output_activations is not None:
             initialize_qparams(
                 module,
                 "output",

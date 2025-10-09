@@ -30,6 +30,7 @@ __all__ = [
     "match_targets",
     "match_modules_set",
     "is_match",
+    "is_narrow_match",
 ]
 
 
@@ -257,6 +258,16 @@ def is_match(
         and not any(
             _match_name(name, ign, fused) or _match_class(module, ign) for ign in ignore
         )
+    )
+
+
+def is_narrow_match(model: torch.nn.Module, targets: Iterable[str], name: str) -> bool:
+    module = model.get_submodule(name)
+    parent_name = name.rsplit(".", 1)[0]
+    parent = model.get_submodule(parent_name)
+
+    return is_match(name, module, targets) and not is_match(
+        parent_name, parent, targets
     )
 
 

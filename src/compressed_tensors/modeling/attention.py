@@ -17,12 +17,7 @@ from typing import Callable, Optional
 from weakref import ref
 
 from compressed_tensors.modeling.kvcache import initialize_hooked_kv_cache
-from compressed_tensors.quantization import (
-    QuantizationArgs,
-    QuantizationScheme,
-    QuantizationStrategy,
-    forward_quantize,
-)
+from compressed_tensors.quantization.lifecycle.forward import forward_quantize
 from compressed_tensors.utils import getattr_chain
 from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
@@ -60,11 +55,12 @@ class QuantizedAttentionImpl(InternalModule):
     :param attn_module: parent attention module
     """
 
+    _original_impl = "eager"
+
     def __init__(self, config: PretrainedConfig, attn_module: Module):
         super().__init__()
         self.config = config
         self.attn_module = ref(attn_module)  # avoid circular references
-        self._qparams_initialized = False
 
     def forward(
         self,
@@ -79,7 +75,7 @@ class QuantizedAttentionImpl(InternalModule):
         quant_args_attr = "quantization_scheme.input_activations"
         quant_args = getattr_chain(module, quant_args_attr, None)
         quant_enabled = getattr(module, "quantization_enabled", True)
-        if quant_args is not None and quant_enabled and self._qparams_initialized:
+        if quant_args is not None and quant_enabled:
             query = forward_quantize(module, query, "q", quant_args)
 
         # original attention

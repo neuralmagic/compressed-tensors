@@ -16,10 +16,7 @@ import inspect
 from typing import Callable, Optional, Tuple
 from weakref import ref
 
-# from compressed_tensors.quantization import QuantizationStrategy, forward_quantize
-# from compressed_tensors.quantization.lifecycle.initialize import (
-#     _initialize_scale_zero_point,
-# )
+from compressed_tensors.quantization.lifecycle.forward import forward_quantize
 from compressed_tensors.utils import getattr_chain
 from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
@@ -59,7 +56,6 @@ class QuantizedKVCache(InternalModule):
         self.config = config
         self.attn_module = ref(attn_module)  # avoid circular reference
         self.past_key_values: Optional[Cache] = None
-        self._qparams_initialized = False
 
     def update(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
         return self(*args, **kwargs)
@@ -76,7 +72,7 @@ class QuantizedKVCache(InternalModule):
         quant_args_attr = "quantization_scheme.input_activations"
         quant_args = getattr_chain(module, quant_args_attr, None)
         quant_enabled = getattr(module, "quantization_enabled", True)
-        if quant_args is not None and quant_enabled and self._qparams_initialized:
+        if quant_args is not None and quant_enabled:
             key_states = forward_quantize(module, key_states, "k", quant_args)
             value_states = forward_quantize(module, value_states, "v", quant_args)
 
