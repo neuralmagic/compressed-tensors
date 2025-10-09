@@ -366,3 +366,43 @@ def test_multi_apply_quantization_config():
                 weight_zero_point is not None
                 and weight_zero_point.shape == torch.Size([1])
             )
+
+
+@requires_accelerate()
+def test_apply_kv_cache():
+    from accelerate import init_empty_weights
+
+    with init_empty_weights():
+        model = AutoModelForCausalLM.from_pretrained("nm-testing/llama2.c-stories15M")
+
+    args = QuantizationArgs(num_bits=8, type="float", strategy="tensor")
+    config = QuantizationConfig(config_groups={}, kv_cache_scheme=args)
+
+    apply_quantization_config(model, config)
+
+    for layer in model.model.layers:
+        assert getattr(layer.self_attn, "quantization_scheme").input_activations == args
+        assert hasattr(layer.self_attn, "k_scale")
+        assert hasattr(layer.self_attn, "v_scale")
+
+
+@requires_accelerate()
+def test_apply_attention():
+    from accelerate import init_empty_weights
+
+    with init_empty_weights():
+        model = AutoModelForCausalLM.from_pretrained("nm-testing/llama2.c-stories15M")
+
+    scheme = QuantizationScheme(
+        targets=["LlamaAttention"],
+        input_activations=QuantizationArgs(num_bits=8, type="float", strategy="tensor"),
+    )
+    config = QuantizationConfig(config_groups={"attention": scheme})
+
+    apply_quantization_config(model, config)
+
+    for layer in model.model.layers:
+        assert getattr(layer.self_attn, "quantization_scheme") == scheme
+        assert hasattr(layer.self_attn, "q_scale")
+        assert hasattr(layer.self_attn, "k_scale")
+        assert hasattr(layer.self_attn, "v_scale")
