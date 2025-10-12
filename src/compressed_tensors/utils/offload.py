@@ -76,7 +76,6 @@ __all__ = [
     "delete_offload_parameter",
     "has_offloaded_params",
     "disable_hf_hook",
-    "disable_offload",
     "align_modules",
     "align_module_device",
     "register_offload_module",
@@ -374,23 +373,6 @@ def delete_from_weights_map(
             "Updating offload data not implemented for weights_map of type "
             f"{type(weights_map)}"
         )
-
-
-@check_accelerate(fallback=contextlib.nullcontext())
-@contextlib.contextmanager
-def disable_offload(module: torch.nn.Module):
-    """
-    Context manager to disable module onloading and offloading. Parameters will stay on
-    their current device
-
-    :param module: module to disable offloading for
-    """
-    if has_offloaded_params(module):
-        module._hf_hook.offload = False
-        yield
-        module._hf_hook.offload = True
-    else:
-        yield
 
 
 @check_accelerate(fallback=contextlib.nullcontext())
