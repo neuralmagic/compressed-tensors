@@ -129,18 +129,18 @@ class QuantizationScheme(BaseModel):
 
         if inputs is not None and inputs.observer is None:
             if inputs.dynamic:
-                inputs.observer = "memoryless-minmax"
+                inputs.observer = "memoryless_minmax"
             else:
-                inputs.observer = "static-minmax"
+                inputs.observer = "static_minmax"
 
         if weights is not None and weights.observer is None:
-            weights.observer = "memoryless-minmax"
+            weights.observer = "memoryless_minmax"
 
         if outputs is not None and outputs.observer is None:
             if outputs.dynamic:
-                outputs.observer = "memoryless-minmax"
+                outputs.observer = "memoryless_minmax"
             else:
-                outputs.observer = "static-minmax"
+                outputs.observer = "static_minmax"
 
         self.input_activations = inputs
         self.weights = weights
