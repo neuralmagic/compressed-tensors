@@ -15,7 +15,7 @@
 import logging
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, List, Optional
 from typing import OrderedDict as OrderedDictType
 from typing import Union
 
@@ -34,7 +34,7 @@ from compressed_tensors.quantization.utils import (
     KV_CACHE_TARGETS,
     is_kv_cache_quant_scheme,
 )
-from compressed_tensors.utils.helpers import deprecated, replace_module
+from compressed_tensors.utils.helpers import replace_module
 from compressed_tensors.utils.match import match_named_modules, match_targets
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
@@ -45,7 +45,6 @@ from torch.nn import Module
 __all__ = [
     "load_pretrained_quantization_parameters",
     "apply_quantization_config",
-    "find_name_or_class_matches",
 ]
 
 from compressed_tensors.quantization.utils.helpers import is_module_quantized
