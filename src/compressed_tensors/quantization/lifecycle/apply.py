@@ -208,31 +208,6 @@ def process_kv_cache_config(
     return config
 
 
-@deprecated(
-    message="This function is deprecated and will be removed in a future release."
-    "Please use `match_targets` from `compressed_tensors.utils.match` instead."
-)
-def find_name_or_class_matches(
-    name: str, module: Module, targets: Iterable[str], check_contains: bool = False
-) -> List[str]:
-    """
-    Returns all targets that match the given name or the class name.
-    Returns empty list otherwise.
-    The order of the output `matches` list matters.
-    The entries are sorted in the following order:
-        1. matches on exact strings
-        2. matches on regex patterns
-        3. matches on module names
-    """
-    if check_contains:
-        raise NotImplementedError(
-            "This function is deprecated, and the check_contains=True option has been"
-            " removed."
-        )
-
-    return match_targets(name, module, targets)
-
-
 def _load_quant_args_from_mapping(
     base_name: str, module_name: str, module: Module, mapping: Dict
 ):
