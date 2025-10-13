@@ -59,6 +59,7 @@ class QuantizationScheme(BaseModel):
         weights = model.weights
         format = model.format
 
+        # validate input args
         if inputs is not None:
             if inputs.strategy not in (
                 QuantizationStrategy.TOKEN,
@@ -84,15 +85,21 @@ class QuantizationScheme(BaseModel):
             if inputs.actorder is not None:
                 raise ValueError("Cannot apply actorder to input activations")
 
+            if inputs.observer is None:
+                inputs.observer
+
+        # validate output args
         if outputs is not None:
             if outputs.actorder is not None:
                 raise ValueError("Cannot apply actorder to output activations")
 
+        # validate format
         if format == CompressionFormat.mixed_precision.value:
             raise ValueError(
                 "mixed-precision cannot be set as a format for a QuantizationScheme"
             )
 
+        # validate matching group sizes
         if (
             inputs
             and weights
@@ -110,7 +117,34 @@ class QuantizationScheme(BaseModel):
                 stacklevel=2,
             )
 
+        # set observer defaults
+        model._validate_observers()
+
         return model
+
+    def _validate_observers(self):
+        inputs = self.input_activations
+        weights = self.weights
+        outputs = self.output_activations
+
+        if inputs is not None and inputs.observer is None:
+            if inputs.dynamic:
+                inputs.observer = "memoryless-minmax"
+            else:
+                inputs.observer = "static-minmax"
+
+        if weights is not None and weights.observer is None:
+            weights.observer = "memoryless-minmax"
+
+        if outputs is not None and outputs.observer is None:
+            if outputs.dynamic:
+                outputs.observer = "memoryless-minmax"
+            else:
+                outputs.observer = "static-minmax"
+
+        self.input_activations = inputs
+        self.weights = weights
+        self.output_activations = outputs
 
     model_config = ConfigDict(extra="forbid")
 
