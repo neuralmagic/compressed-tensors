@@ -44,6 +44,7 @@ from compressed_tensors.utils import (
     delete_offload_parameter,
     get_execution_device,
     get_offloaded_device,
+    merge_names,
     register_offload_parameter,
 )
 from compressed_tensors.utils.helpers import (
@@ -356,7 +357,7 @@ class ModelCompressor:
             )
 
             missing_keys.update(
-                f"{target_name}.weight"
+                merge_names(target_name, "weight")
                 for target_name, _module in sparse_targets
             )
 
@@ -373,7 +374,7 @@ class ModelCompressor:
                     ignore=self.quantization_config.ignore,
                 )
                 missing_keys.update(
-                    f"{target_name}.weight"
+                    merge_names(target_name, "weight")
                     for target_name, _module in quant_targets
                 )
 
@@ -411,7 +412,7 @@ class ModelCompressor:
                 ignore=self.sparsity_config.ignore,
             )
             unexpected_keys.update(
-                f"{target_name}.{param}"
+                merge_names(target_name, param)
                 for target_name, _module in sparse_targets
                 for param in self.sparsity_compressor.compression_param_names
             )
@@ -426,7 +427,7 @@ class ModelCompressor:
                 )
                 for quant_compressor in self.quantization_compressor.values():
                     unexpected_keys.update(
-                        f"{target_name}.{param}"
+                        merge_names(target_name, param)
                         for target_name, _module in quant_targets
                         for param in quant_compressor.compression_param_names
                         if param != "weight"
