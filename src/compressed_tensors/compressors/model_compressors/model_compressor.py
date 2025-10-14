@@ -14,10 +14,6 @@
 
 import json
 import os
-<<<<<<< HEAD
-import re
-=======
->>>>>>> 24f6104 (remove state dict compress and disk decompress)
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypeVar, Union
 
@@ -360,7 +356,7 @@ class ModelCompressor:
             )
 
             missing_keys.update(
-                merge_names(target_name, "weight")
+                f"{target_name}.weight"
                 for target_name, _module in sparse_targets
             )
 
@@ -377,7 +373,7 @@ class ModelCompressor:
                     ignore=self.quantization_config.ignore,
                 )
                 missing_keys.update(
-                    merge_names(target_name, "weight")
+                    f"{target_name}.weight"
                     for target_name, _module in quant_targets
                 )
 
@@ -415,7 +411,7 @@ class ModelCompressor:
                 ignore=self.sparsity_config.ignore,
             )
             unexpected_keys.update(
-                merge_names(target_name, param)
+                f"{target_name}.{param}"
                 for target_name, _module in sparse_targets
                 for param in self.sparsity_compressor.compression_param_names
             )
@@ -430,7 +426,7 @@ class ModelCompressor:
                 )
                 for quant_compressor in self.quantization_compressor.values():
                     unexpected_keys.update(
-                        merge_names(target_name, param)
+                        f"{target_name}.{param}"
                         for target_name, _module in quant_targets
                         for param in quant_compressor.compression_param_names
                         if param != "weight"
@@ -673,18 +669,3 @@ def map_module_to_scheme(model: Module) -> Dict[str, QuantizationScheme]:
             and module.quantization_scheme.weights is not None
         )
     }
-<<<<<<< HEAD
-
-
-# HACK: Override the dtype_byte_size function in transformers to support float8 types
-# Fix is posted upstream https://github.com/huggingface/transformers/pull/30488
-def new_dtype_byte_size(dtype):
-    if dtype == torch.bool:
-        return 1 / 8
-    bit_search = re.search(r"[^\d](\d+)_?", str(dtype))
-    if bit_search is None:
-        raise ValueError(f"`dtype` is not a valid dtype: {dtype}.")
-    bit_size = int(bit_search.groups()[0])
-    return bit_size // 8
-=======
->>>>>>> 24f6104 (remove state dict compress and disk decompress)
