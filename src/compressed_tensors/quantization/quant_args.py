@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import warnings
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import torch
 from compressed_tensors.utils import Aliasable
-from compressed_tensors.utils.helpers import deprecated
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 

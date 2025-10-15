@@ -85,9 +85,6 @@ class QuantizationScheme(BaseModel):
             if inputs.actorder is not None:
                 raise ValueError("Cannot apply actorder to input activations")
 
-            if inputs.observer is None:
-                inputs.observer
-
         # validate output args
         if outputs is not None:
             if outputs.actorder is not None:
@@ -206,7 +203,6 @@ NVFP4 = dict(
         symmetric=True,
         dynamic=False,
         group_size=16,
-        observer="static_minmax",
     ),
     input_activations=QuantizationArgs(
         num_bits=4,
@@ -215,7 +211,6 @@ NVFP4 = dict(
         symmetric=True,
         dynamic=DynamicType.LOCAL,
         group_size=16,
-        observer="static_minmax",
     ),
 )
 
