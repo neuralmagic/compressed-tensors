@@ -174,7 +174,7 @@ class TransformFactory(RegistryMixin, ABC):
             def query_hook(_, query_states):
                 return transform(query_states)
 
-            initialize_hooked_attention(model, module, quantize=False)
+            initialize_hooked_attention(model, module)
             register_query_hook(module, query_hook)
 
         # register key hook to kvcache
@@ -185,7 +185,7 @@ class TransformFactory(RegistryMixin, ABC):
             def key_hook(_, key_states):
                 return transform(key_states)
 
-            initialize_hooked_kv_cache(model, module, quantize=False)
+            initialize_hooked_kv_cache(model, module)
             register_key_hook(module, key_hook)
 
         else:
