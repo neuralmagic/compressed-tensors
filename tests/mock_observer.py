@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple
+from typing import Optional, Tuple
 from weakref import ref
 
 import torch
@@ -42,7 +42,7 @@ class MockMinMaxObserver(torch.nn.Module):
         return min_vals, max_vals
 
     def forward(self, observed: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        observed = flatten_for_quantization(observed, self.base_name, self.args)
+        observed = flatten_for_calibration(observed, self.base_name, self.args)
 
         self.min_vals, self.max_vals = self.get_min_max(observed)
 
@@ -57,26 +57,31 @@ class MockMinMaxObserver(torch.nn.Module):
 
     def get_global_scale(self, observed: torch.Tensor):
         observed = observed.reshape((1, 1, -1))  # per tensor reshape
-        min_vals, max_vals = self.get_min_max(observed)
-        global_scale = generate_gparam(min_vals, max_vals)
+        self.min_vals, self.max_vals = self.get_min_max(observed)
+        global_scale = generate_gparam(self.min_vals, self.max_vals)
 
         return global_scale
 
 
-def flatten_for_quantization(
-    value: torch.Tensor, base_name: str, args: QuantizationArgs
+def flatten_for_calibration(
+    value: torch.Tensor,
+    base_name: str,
+    args: QuantizationArgs,
+    g_idx: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     if base_name == "weight":
-        return flatten_weight_for_quantization(value, args)
+        return _flatten_weight(value, args, g_idx)
     elif base_name in ("input", "output"):
-        return flatten_activation_for_quantization(value, args)
+        return _flatten_activation(value, args)
     elif base_name in ("q", "k", "v"):
-        return flatten_attention_for_quantization(value, args)
+        return _flatten_attention(value, args)
     else:
         raise ValueError(f"Unknown quantization base name: {base_name}")
 
 
-def flatten_weight_for_quantization(value: torch.Tensor, args: QuantizationArgs):
+def _flatten_weight(
+    value: torch.Tensor, args: QuantizationArgs, g_idx: Optional[torch.Tensor] = None
+):
     # value.shape = (num_rows, num_cols)
 
     if args.strategy == QuantizationStrategy.TENSOR:
@@ -91,34 +96,32 @@ def flatten_weight_for_quantization(value: torch.Tensor, args: QuantizationArgs)
         return value.unsqueeze(-2).unsqueeze(0)
 
     if args.strategy in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP):
+        if g_idx is not None:
+            value = value.index_select(dim=1, index=torch.argsort(g_idx))
+
         # (1, num_rows, num_groups, group_size)
         return value.unflatten(-1, (-1, args.group_size)).unsqueeze(0)
 
     if args.strategy == QuantizationStrategy.BLOCK:
         # (1, num_block_rows, num_block_cols, block_width * block_height)
         block_height, block_width = args.block_structure
-        num_rows, num_cols = value.shape
-        num_block_rows = strategy_cdiv(num_rows, block_height, args.strategy)
-        num_block_cols = strategy_cdiv(num_cols, block_width, args.strategy)
+        rows, cols = value.shape
+        block_rows = strategy_cdiv(rows, block_height, args.strategy, strict=True)
+        block_cols = strategy_cdiv(cols, block_width, args.strategy, strict=True)
         return (
-            value.reshape(
-                num_block_rows,
-                block_height,
-                num_block_cols,
-                block_width,
-            )
+            value.reshape(block_rows, block_height, block_cols, block_width)
             .transpose(1, 2)
             .flatten(-2, -1)
             .unsqueeze(0)
         )
 
     if args.strategy == QuantizationStrategy.ATTN_HEAD:
-        raise ValueError("attention head quantization cannot be applied to weights")
+        raise ValueError("Attention head quantization cannot be applied to weights")
 
     assert False, f"Unknown strategy {args.strategy}"
 
 
-def flatten_activation_for_quantization(value: torch.Tensor, args: QuantizationArgs):
+def _flatten_activation(value: torch.Tensor, args: QuantizationArgs):
     # value.shape = (batch_size, seq_len, hidden_dim)
 
     if args.strategy == QuantizationStrategy.TENSOR:
@@ -128,7 +131,7 @@ def flatten_activation_for_quantization(value: torch.Tensor, args: QuantizationA
     if args.strategy == QuantizationStrategy.TOKEN:
         # (batch_size, seq_len, hidden_dim)
         # warning: token quantization uses `compute_dynamic_scales_and_zp`
-        return value.flatten(2, -1)
+        return value
 
     if args.strategy == QuantizationStrategy.CHANNEL:
         raise ValueError("Channel quantization cannot be applied to activations")
@@ -142,12 +145,12 @@ def flatten_activation_for_quantization(value: torch.Tensor, args: QuantizationA
         raise ValueError("Block quantization cannot be applied to activations")
 
     if args.strategy == QuantizationStrategy.ATTN_HEAD:
-        raise ValueError("attention head quantization cannot be applied to linear acts")
+        raise ValueError("Attention head quantization cannot be applied to activations")
 
     assert False, f"Unknown strategy {args.strategy}"
 
 
-def flatten_attention_for_quantization(value: torch.Tensor, args: QuantizationArgs):
+def _flatten_attention(value: torch.Tensor, args: QuantizationArgs):
     # value.shape = (batch_size, num_heads, seq_len, head_dim)
 
     if args.strategy == QuantizationStrategy.TENSOR:
@@ -161,7 +164,8 @@ def flatten_attention_for_quantization(value: torch.Tensor, args: QuantizationAr
         raise ValueError("Channel quantization cannot be applied to attention")
 
     if args.strategy in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP):
-        raise ValueError("Group quantization cannot be applied to attention")
+        # batch_size * num_heads * seq_len, num_groups, group_size)
+        return value.flatten(0, 2).unflatten(-1, (-1, args.group_size))
 
     if args.strategy == QuantizationStrategy.BLOCK:
         raise ValueError("Block quantization cannot be applied to attention")
