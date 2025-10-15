@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import inspect
-from typing import Callable, Optional, Tuple
-from weakref import ref
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from weakref import ReferenceType, ref
 
 from compressed_tensors.quantization.lifecycle.forward import forward_quantize
 from compressed_tensors.utils import getattr_chain
@@ -55,7 +55,7 @@ class QuantizedKVCache(InternalModule):
         super().__init__()
         self.config = config
         self.attn_module = ref(attn_module)  # avoid circular reference
-        self.past_key_values: Optional[Cache] = None
+        self.past_key_values: Optional[ReferenceType[Cache]] = None
 
     def update(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
         return self(*args, **kwargs)
@@ -78,26 +78,46 @@ class QuantizedKVCache(InternalModule):
 
         # original cache
         if self.past_key_values is not None:
-            ret = self.past_key_values.update(key_states, value_states, *args, **kwargs)
+            ret = self.past_key_values().update(
+                key_states, value_states, *args, **kwargs
+            )
         else:
             ret = (key_states, value_states)
-
         self.past_key_values = None
+
         return ret
+
+    def add_past_key_values(self, past_key_values: Optional[Cache]):
+        if past_key_values is not None:
+            self.past_key_values = ref(past_key_values)
+        else:
+            self.past_key_values = None
 
 
 # ----- initialize ----- #
 
 
-def _kv_cache_attention_hook(module: Module, args, kwargs):
-    kv_cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
+def _kv_cache_attention_hook(
+    module: Module, args: List[Any], kwargs: Dict[str, Any]
+) -> Tuple[List[Any], Dict[str, Any]]:
+    """
+    Hook which should be called before each quantized attention forward pass.
+    This hook dynamically replaces the `past_key_values` kwarg to the attention
+    forward function.
+
+    The original kvcache object is assigned to QuantizedKVCache().past_key_values
+    as a weakref to maintain original cache functionality and compute savings
+    """
     _past_kv_name = (
         "past_key_values"  # transformers#39956
         if "past_key_values" in inspect.signature(module.forward).parameters
         else "past_key_value"
     )
-    kv_cache.past_key_values = kwargs.get(_past_kv_name, None)
-    kwargs[_past_kv_name] = kv_cache
+    past_key_values: Optional[Cache] = kwargs.get(_past_kv_name, None)
+
+    cache: QuantizedKVCache = getattr(module, KV_CACHE_ATTR)
+    cache.add_past_key_values(past_key_values)
+    kwargs[_past_kv_name] = cache
 
     return args, kwargs
 

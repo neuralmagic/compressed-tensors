@@ -289,7 +289,11 @@ def initialize_attn_qparams(
     kv_cache: Optional[QuantizedKVCache] = getattr(module, KV_CACHE_ATTR, None)
 
     if impl is None and kv_cache is None:
-        raise ValueError("Attention module has quantization scheme but no attached")
+        raise ValueError(
+            f"Attention module has quantization scheme but no {IMPL_ATTR} "
+            f"or {KV_CACHE_ATTR} attributes. Please ensure that these "
+            "attributes are initialized using `apply_quantization_config`."
+        )
 
     _validate_attention_scheme(scheme)
 
@@ -337,7 +341,7 @@ def _validate_attention_scheme(scheme: QuantizationScheme):
     if scheme.weights is not None:
         raise ValueError(
             "Cannot apply weight quantization to attention. "
-            "Instead, target (q|k|v)_proj"
+            "Instead, target the (q|k|v)_proj submodule layers of attention"
         )
 
     if scheme.input_activations is None:
