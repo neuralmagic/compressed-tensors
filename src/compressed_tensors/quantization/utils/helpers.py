@@ -94,33 +94,59 @@ def calculate_qparams(
     bit_range = bit_max - bit_min
 
     if is_fp4(quantization_args=quantization_args):
-        zp_dtype = FP8_E4M3_DATA.dtype
+        if quantization_args.group_size == 16:
+            zp_dtype = FP8_E4M3_DATA.dtype
+        else:
+            # group_size 32
+            zp_dtype = torch.uint8
     else:
         zp_dtype = quantization_args.pytorch_dtype()
 
     if quantization_args.symmetric:
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
 
-        if is_fp4(quantization_args=quantization_args) and global_scale is not None:
-            # Conditionally scale the generated local scale by a global_scale
-            scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
-            scales = torch.clamp(scales, max=FP8_E4M3_DATA.max, min=FP8_E4M3_DATA.min)
-            scales = scales.to(FP8_E4M3_DATA.dtype)
+        if is_fp4(quantization_args=quantization_args):
+            if global_scale is not None:
+                # Conditionally scale the generated local scale by a global_scale
+                scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
+                scales = torch.clamp(
+                    scales, max=FP8_E4M3_DATA.max, min=FP8_E4M3_DATA.min
+                )
+                scales = scales.to(FP8_E4M3_DATA.dtype)
+            else:
 
+                """
+                block_max = max_val_pos.view(torch.uint16).to(torch.int32)
+                BFLOAT16_VAL_TO_ADD = (1 <<(7 - 1 - 1))
+                BFLOAT16_SIGN_EXPONENT_MASK = (((1 << (8 + 1)) - 1) << 7)
+                block_max_uint = torch.bitwise_and(block_max + BFLOAT16_VAL_TO_ADD, BFLOAT16_SIGN_EXPONENT_MASK)
+                block_max_uint = block_max_uint.to(torch.uint16)
+                block_max = block_max_uint.view(torch.bfloat16)
+                """
+                scale_exp = (
+                    127 + torch.floor(torch.log2(max_val_pos)).to(torch.int32) - 2
+                )
+                # clamp and convert to uint8
+                scale_exp = torch.clamp(
+                    scale_exp,
+                    max=torch.iinfo(torch.uint8).max,
+                    min=torch.iinfo(torch.uint8).min,
+                )
+                scales = scale_exp.to(torch.uint8)
         else:
             scales = max_val_pos / (float(bit_range) / 2)
 
         # TODO: in the case of MoEs, the global_scale may also be 0/need to be clamped
-        if scales.dtype == FP8_E4M3_DATA.dtype:
-            # torch.clamp not supported for FP8
-            # use the next largest fp8 value from 0
-            scales = torch.where(
-                scales == 0,
-                torch.tensor(0.125, dtype=FP8_E4M3_DATA.dtype, device=device),
-                scales,
-            )
-        else:
-            scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
+        # if scales.dtype == FP8_E4M3_DATA.dtype:
+        # torch.clamp not supported for FP8
+        # use the next largest fp8 value from 0
+        #    scales = torch.where(
+        #        scales == 0,
+        #        torch.tensor(0.125, dtype=FP8_E4M3_DATA.dtype, device=device),
+        #        scales,
+        #    )
+        # else:
+        #    scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
 
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
