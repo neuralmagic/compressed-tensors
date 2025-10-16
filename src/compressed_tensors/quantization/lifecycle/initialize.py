@@ -218,7 +218,7 @@ def initialize_qparams(
 
         group_size = quantization_args.group_size
         num_groups = strategy_cdiv(observed_shape[-1], group_size, strategy)
-        expected_shape = (*observed_shape[:-1], num_groups)
+        expected_shape = (observed_shape[-2], num_groups)
 
         # initialize activation ordering if applicable
         if actorder == ActivationOrdering.GROUP:

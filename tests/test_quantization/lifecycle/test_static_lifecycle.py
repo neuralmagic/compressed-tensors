@@ -309,7 +309,35 @@ class MockAttention(torch.nn.Module):
         # static token is not supported
         # channel is not supported
         # group is not supported
-        # tensor group is not supported
+        (
+            QuantizationArgs(
+                num_bits=4,
+                type="float",  # must be fp4
+                symmetric=True,
+                strategy="tensor_group",
+                dynamic="local",
+                group_size=2,
+            ),
+            torch.tensor([0.0]),
+            torch.tensor([23.0]),
+            torch.tensor(
+                [
+                    [
+                        [
+                            [0.0000, 1.0234, 2.0469, 3.0781],
+                            [3.2812, 4.9375, 4.9375, 7.3750],
+                            [9.0000, 9.0000, 10.6875, 10.6875],
+                        ],
+                        [
+                            [13.1250, 13.1250, 14.7500, 14.7500],
+                            [16.3750, 16.3750, 19.7500, 19.7500],
+                            [21.3750, 21.3750, 23.0000, 23.0000],
+                        ],
+                    ]
+                ]
+            ),
+            0.55,
+        ),
         # block is not supported
         (
             QuantizationArgs(
@@ -369,6 +397,10 @@ def test_static_attention_quantization(
     attention.k_observer = MockMinMaxObserver("k", args, attention)
 
     # calibrate quantization parameters
+    if hasattr(attention, "k_global_scale"):
+        global_scale = attention.k_observer.get_global_scale(input)
+        attention.k_global_scale.data = global_scale
+
     if scheme.input_activations.dynamic is False:
         scale, zero_point = attention.k_observer(input)
         attention.k_scale.data = scale
