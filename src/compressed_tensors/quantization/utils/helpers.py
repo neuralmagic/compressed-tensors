@@ -64,18 +64,6 @@ def is_fp4(quantization_args: QuantizationArgs):
         and quantization_args.type == QuantizationType.FLOAT
     )
 
-def get_power_of_two(x):
-    powers = torch.tensor([0, 1, 2, 4, 8, 16, 32, 64, 128], dtype=torch.uint8).to(x.device)
-    
-    # Expand and compute distances
-    diff = (x.unsqueeze(-1).to(torch.int16) - powers.to(torch.int16)).abs()
-    
-    # Find nearest index
-    nearest_idx = diff.argmin(dim=-1)
-    
-    return powers[nearest_idx]
-
-
 
 def calculate_qparams(
     min_vals: Tensor,
@@ -126,16 +114,25 @@ def calculate_qparams(
                 )
                 scales = scales.to(FP8_E4M3_DATA.dtype)
             else:
-                
-                scales = torch.iinfo(torch.uint8).max * (max_val_pos) # / FP4_E2M1_DATA.max)
-                scales = torch.clamp(
-                    scales,
+
+                """
+                block_max = max_val_pos.view(torch.uint16).to(torch.int32)
+                BFLOAT16_VAL_TO_ADD = (1 <<(7 - 1 - 1))
+                BFLOAT16_SIGN_EXPONENT_MASK = (((1 << (8 + 1)) - 1) << 7)
+                block_max_uint = torch.bitwise_and(block_max + BFLOAT16_VAL_TO_ADD, BFLOAT16_SIGN_EXPONENT_MASK)
+                block_max_uint = block_max_uint.to(torch.uint16)
+                block_max = block_max_uint.view(torch.bfloat16)
+                """
+                scale_exp = (
+                    127 + torch.floor(torch.log2(max_val_pos)).to(torch.int32) - 2
+                )
+                # clamp and convert to uint8
+                scale_exp = torch.clamp(
+                    scale_exp,
                     max=torch.iinfo(torch.uint8).max,
                     min=torch.iinfo(torch.uint8).min,
                 )
-                scales = scales.to(torch.uint8)
-                scales = get_power_of_two(scales)
-
+                scales = scale_exp.to(torch.uint8)
         else:
             scales = max_val_pos / (float(bit_range) / 2)
 

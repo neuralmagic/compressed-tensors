@@ -193,6 +193,7 @@ MXFP4A16 = dict(
         symmetric=True,
         dynamic=False,
         group_size=32,
+        observer="static_minmax",
     )
 )
 
@@ -204,6 +205,7 @@ MXFP4 = dict(
         symmetric=True,
         dynamic=False,
         group_size=32,
+        observer="static_minmax",
     ),
     input_activations=QuantizationArgs(
         num_bits=4,
@@ -211,6 +213,7 @@ MXFP4 = dict(
         strategy=QuantizationStrategy.GROUP,
         dynamic=True,
         symmetric=True,
+        observer=None,
         group_size=32,
     ),
 )
