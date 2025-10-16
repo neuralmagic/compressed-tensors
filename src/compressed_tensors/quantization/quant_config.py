@@ -171,7 +171,7 @@ class QuantizationConfig(BaseModel):
         :param model: model to calculate quantization scheme of
         :return: filled out QuantizationScheme for the input model
         """
-        from compressed_tensors.modeling import IMPL_ATTR, KV_CACHE_ATTR
+        from compressed_tensors.modeling import IMPL_ATTR
         from compressed_tensors.quantization.lifecycle.initialize import (
             is_attention_module,
         )
