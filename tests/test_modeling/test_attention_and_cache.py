@@ -56,7 +56,10 @@ def test_attention_cache():
     k_called = [False for _ in range(len(layers))]
     v_called = [False for _ in range(len(layers))]
 
+    # apply attention quantization
     _apply_attention(model, layers, q_called, k_called, v_called)
+
+    # check attention quantization
     outputs = model(**inputs)
     assert torch.equal(outputs.logits, true_outputs.logits)
     assert all(q_called) and all(k_called) and all(v_called)

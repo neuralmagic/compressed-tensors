@@ -16,11 +16,14 @@ import pytest
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_FORMAT,
     DEFAULT_QUANTIZATION_METHOD,
+    QuantizationArgs,
     QuantizationConfig,
     QuantizationScheme,
     QuantizationStatus,
+    apply_quantization_config,
 )
 from pydantic import ValidationError
+from transformers import AutoModelForCausalLM
 
 
 def test_basic_config():

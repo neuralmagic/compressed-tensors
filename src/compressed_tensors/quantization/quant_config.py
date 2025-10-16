@@ -171,6 +171,7 @@ class QuantizationConfig(BaseModel):
         :param model: model to calculate quantization scheme of
         :return: filled out QuantizationScheme for the input model
         """
+        from compressed_tensors.modeling import IMPL_ATTR, KV_CACHE_ATTR
         from compressed_tensors.quantization.lifecycle.initialize import (
             is_attention_module,
         )
@@ -196,24 +197,35 @@ class QuantizationConfig(BaseModel):
         for name, submodule in model.named_modules():
             layer_type: str = module_type(submodule)
 
-            if is_module_quantized(submodule):
+            # add config group if quantized non-attention or attention quant
+            has_config_group = is_module_quantized(submodule) and (
+                not is_attention_module(submodule) or hasattr(submodule, IMPL_ATTR)
+            )
+            # only add kvcache if quant attention (which always implies kvcache)
+            has_kv_cache = is_module_quantized(submodule) and is_attention_module(
+                submodule
+            )
+
+            if has_config_group:
                 # add to running set of schemes/layer_type_names
                 model_status = getattr(submodule, "quantization_status", model_status)
                 quantization_type_names.add(layer_type)
                 if submodule.quantization_scheme not in quantization_schemes:
                     quantization_schemes.append(submodule.quantization_scheme)
 
-                # attention quantization implies kv cache quantization
-                if is_attention_module(submodule):
-                    kv_cache_scheme = submodule.quantization_scheme.input_activations
+            if has_kv_cache:
+                model_status = getattr(submodule, "quantization_status", model_status)
+                kv_cache_scheme = submodule.quantization_scheme.input_activations
 
-            else:
+            if not has_config_group:
                 # add non-quantized layers to the ignore list
                 if layer_type not in ignore:
                     ignore[layer_type] = []
                 ignore[layer_type].append(name)
 
-        if len(quantization_schemes) == 0:  # No quantized layers
+        if (
+            len(quantization_schemes) == 0 and kv_cache_scheme is None
+        ):  # No quantized layers
             return None
 
         # create ignore list, only include layers whose class has ever been targeted
