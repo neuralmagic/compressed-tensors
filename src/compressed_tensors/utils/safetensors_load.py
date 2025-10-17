@@ -19,11 +19,10 @@ import struct
 from typing import Dict, Iterable, Optional, Tuple, Union
 
 from torch import Tensor
-from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME, cached_file
+from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 
 
 __all__ = [
-    "get_safetensors_folder",
     "get_safetensors_header",
     "match_param_name",
     "merge_names",
@@ -37,48 +36,6 @@ __all__ = [
 NestedStateDictType = Dict[str, Dict[str, Tensor]]
 WeightMappingType = Dict[str, str]
 NestedWeightMappingType = Dict[str, WeightMappingType]
-
-
-def get_safetensors_folder(
-    pretrained_model_name_or_path: str, cache_dir: Optional[str] = None
-) -> str:
-    """
-    Given a Hugging Face stub or a local path, return the folder containing the
-    safetensors weight files
-
-    :param pretrained_model_name_or_path: local path to model or HF stub
-    :param cache_dir: optional cache dir to search through, if none is specified the
-    model will be searched for in the default TRANSFORMERS_CACHE
-    :return: local folder containing model data
-    """
-    if os.path.exists(pretrained_model_name_or_path):
-        # argument is a path to a local folder
-        return os.path.abspath(pretrained_model_name_or_path)
-
-    safetensors_path = cached_file(
-        pretrained_model_name_or_path,
-        SAFE_WEIGHTS_NAME,
-        cache_dir=cache_dir,
-        _raise_exceptions_for_missing_entries=False,
-    )
-    index_path = cached_file(
-        pretrained_model_name_or_path,
-        SAFE_WEIGHTS_INDEX_NAME,
-        cache_dir=cache_dir,
-        _raise_exceptions_for_missing_entries=False,
-    )
-    if safetensors_path is not None:
-        # found a single cached safetensors file
-        return os.path.split(safetensors_path)[0]
-    if index_path is not None:
-        # found a cached safetensors weight index file
-        return os.path.split(index_path)[0]
-
-    # model weights could not be found locally or cached from HF Hub
-    raise ValueError(
-        "Could not locate safetensors weight or index file from "
-        f"{pretrained_model_name_or_path}."
-    )
 
 
 def get_safetensors_header(safetensors_path: str) -> Dict[str, str]:
