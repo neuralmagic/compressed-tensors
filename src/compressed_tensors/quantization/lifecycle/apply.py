@@ -45,6 +45,8 @@ from compressed_tensors.utils.safetensors_load import get_safetensors_folder
 from safetensors import safe_open
 from torch.nn import Module
 
+from loguru import logger
+
 
 __all__ = [
     "load_pretrained_quantization_parameters",
@@ -132,7 +134,7 @@ def apply_quantization_config(
     # apply and initialize kv cache quantization
     if config.kv_cache_scheme is not None:
         _apply_kv_cache_scheme(
-            model, config.kv_cache_scheme, config.quantization_status, force_zero_point
+            model, config.kv_cache_scheme, config.quantization_status
         )
 
     # build mapping of targets to schemes for easier matching
@@ -186,22 +188,22 @@ def _apply_kv_cache_scheme(
     model: torch.nn.Module,
     kv_cache_scheme: QuantizationArgs,
     status: QuantizationStatus,
-    force_zero_point: bool,
 ):
+    if not kv_cache_scheme.symmetric:
+        raise logger.warning("vLLM does not support asymmetric kv cache quantization")
+        
     # applies and initializes kv cache quantization
     # this step cannot come after attention apply/initialize
     # otherwise it will override the attention qparams
     scheme = QuantizationScheme(
-        targets=[".*self_attn$"], input_activations=kv_cache_scheme
+        targets=[".*self_attn$"],  # is never read in practice
+        input_activations=kv_cache_scheme
     )
     for submodule in model.modules():
         if is_attention_module(submodule):
             submodule.quantization_scheme = scheme
             initialize_hooked_kv_cache(model, submodule)
-            initialize_module_for_quantization(
-                submodule,
-                force_zero_point=force_zero_point,
-            )
+            initialize_module_for_quantization(submodule, force_zero_point=False)
             submodule.quantization_status = status
 
 
