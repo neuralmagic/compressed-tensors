@@ -16,13 +16,8 @@
 End-to-end tests for asymmetric quantization with zero-point decompression.
 """
 
-import shutil
-import tempfile
-from pathlib import Path
-
 import pytest
 import torch
-from compressed_tensors import PackedQuantizationCompressor
 from compressed_tensors.quantization import (
     QuantizationArgs,
     QuantizationConfig,
@@ -31,12 +26,10 @@ from compressed_tensors.quantization import (
     apply_quantization_config,
 )
 from compressed_tensors.config import CompressionFormat
-from compressed_tensors.quantization.lifecycle.forward import fake_quantize
-from safetensors.torch import save_file
 from compressed_tensors.compressors.model_compressors.model_compressor import (
     ModelCompressor,
 )
-from torch.nn import Linear, Module, Sequential
+from torch.nn import Linear, Module
 
 
 class SimpleModel(Module):
@@ -87,78 +80,52 @@ def test_end_to_end_asymmetric_quantization(
     mock_per_channel_calibration,
 ):
     """
-    Test end-to-end workflow: quantize -> compress -> save -> load -> decompress -> use
+    Test end-to-end workflow: quantize -> compress -> decompress in memory
     """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        
-        model = SimpleModel()
-        original_weights = {
-            "layer1": model.layer1.weight.detach().clone(),
-            "layer2": model.layer2.weight.detach().clone(),
-        }
-        
-        quant_config = create_asymmetric_quant_config(
-            num_bits=4,
-            strategy=strategy,
-            group_size=group_size
-        )
-        # Set pack-quantized format for ModelCompressor usage
-        quant_config.format = CompressionFormat.pack_quantized.value
-        apply_quantization_config(model, quant_config)
+    model = SimpleModel()
+    original_weights = {
+        "layer1": model.layer1.weight.detach().clone(),
+        "layer2": model.layer2.weight.detach().clone(),
+    }
+    
+    quant_config = create_asymmetric_quant_config(
+        num_bits=4,
+        strategy=strategy,
+        group_size=group_size
+    )
+    # Set pack-quantized format for ModelCompressor usage
+    quant_config.format = CompressionFormat.pack_quantized.value
+    apply_quantization_config(model, quant_config)
 
-        if strategy == QuantizationStrategy.GROUP:
-            mock_per_group_calibration(model.layer1, "weight", model.layer1.weight, group_size)
-            mock_per_group_calibration(model.layer2, "weight", model.layer2.weight, group_size)
-        else:
-            mock_per_channel_calibration(model.layer1, "weight", model.layer1.weight)
-            mock_per_channel_calibration(model.layer2, "weight", model.layer2.weight)
-        
-        
-        
-        compressor = PackedQuantizationCompressor(config=quant_config)
-        quantized_modules_to_scheme = {
-            "layer1": quant_config.config_groups["group_1"],
-            "layer2": quant_config.config_groups["group_1"],
-        }
-        
-        state_dict = model.state_dict()
-        compressed_state_dict = compressor.compress(
-            state_dict, names_to_scheme=quantized_modules_to_scheme
-        )
-        
-        assert "layer1.weight_zero_point" in compressed_state_dict
-        assert "layer2.weight_zero_point" in compressed_state_dict
-        assert compressed_state_dict["layer1.weight_zero_point"].dtype == torch.int32
-        assert compressed_state_dict["layer2.weight_zero_point"].dtype == torch.int32
-        
-        new_model = SimpleModel()
-        apply_quantization_config(new_model, quant_config)
-
-        for module_name in ["layer1", "layer2"]:
-            module = getattr(new_model, module_name)
-            prefix = f"{module_name}."
-            for key, value in compressed_state_dict.items():
-                if key.startswith(prefix):
-                    param_name = key[len(prefix):]
-                    if hasattr(module, param_name):
-                        getattr(module, param_name).data = value.clone()
-                    else:
-                        module.register_parameter(
-                            param_name, torch.nn.Parameter(value.clone(), requires_grad=False)
-                        )
-
-        mc = ModelCompressor(quantization_config=quant_config)
-        mc.decompress_model(new_model)
-        
-        assert new_model.layer1.weight.shape == original_weights["layer1"].shape
-        assert new_model.layer2.weight.shape == original_weights["layer2"].shape
-        assert new_model.layer1.weight.dtype.is_floating_point
-        assert new_model.layer2.weight.dtype.is_floating_point
-        assert not torch.isnan(new_model.layer1.weight).any()
-        assert not torch.isnan(new_model.layer2.weight).any()
-        assert not torch.isinf(new_model.layer1.weight).any()
-        assert not torch.isinf(new_model.layer2.weight).any()
+    if strategy == QuantizationStrategy.GROUP:
+        mock_per_group_calibration(model.layer1, "weight", model.layer1.weight, group_size)
+        mock_per_group_calibration(model.layer2, "weight", model.layer2.weight, group_size)
+    else:
+        mock_per_channel_calibration(model.layer1, "weight", model.layer1.weight)
+        mock_per_channel_calibration(model.layer2, "weight", model.layer2.weight)
+    
+    # Compress and decompress in memory using ModelCompressor
+    mc = ModelCompressor(quantization_config=quant_config)
+    mc.compress_model(model)
+    
+    # Verify compression created zero-point parameters
+    assert hasattr(model.layer1, "weight_zero_point")
+    assert hasattr(model.layer2, "weight_zero_point")
+    assert model.layer1.weight_zero_point.dtype == torch.int32
+    assert model.layer2.weight_zero_point.dtype == torch.int32
+    
+    # Decompress in memory
+    mc.decompress_model(model)
+    
+    # Verify decompression restored weights correctly
+    assert model.layer1.weight.shape == original_weights["layer1"].shape
+    assert model.layer2.weight.shape == original_weights["layer2"].shape
+    assert model.layer1.weight.dtype.is_floating_point
+    assert model.layer2.weight.dtype.is_floating_point
+    assert not torch.isnan(model.layer1.weight).any()
+    assert not torch.isnan(model.layer2.weight).any()
+    assert not torch.isinf(model.layer1.weight).any()
+    assert not torch.isinf(model.layer2.weight).any()
 
 
 @pytest.mark.parametrize("num_bits", [4, 8])
@@ -167,58 +134,36 @@ def test_asymmetric_quantization_accuracy(num_bits, mock_per_group_calibration):
     Test that asymmetric quantization with zero-point preserves accuracy better
     than symmetric quantization for biased weight distributions.
     """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_path = Path(tmp_dir)
+    shape = (256, 512)
+    biased_weights = torch.randn(shape) + 2.0
 
-        shape = (256, 512)
-        biased_weights = torch.randn(shape) + 2.0
+    quant_config = create_asymmetric_quant_config(
+        num_bits=num_bits,
+        strategy=QuantizationStrategy.GROUP,
+        group_size=128,
+    )
+    quant_config.format = CompressionFormat.pack_quantized.value
 
-        quant_config = create_asymmetric_quant_config(
-            num_bits=num_bits,
-            strategy=QuantizationStrategy.GROUP,
-            group_size=128,
-        )
-        quant_config.format = CompressionFormat.pack_quantized.value
+    class SingleLayer(Module):
+        def __init__(self):
+            super().__init__()
+            self.layer = Linear(shape[1], shape[0], bias=False)
 
-        class SingleLayer(Module):
-            def __init__(self):
-                super().__init__()
-                self.layer = Linear(shape[1], shape[0], bias=False)
+    model = SingleLayer()
+    apply_quantization_config(model, quant_config)
 
-        model = SingleLayer()
-        apply_quantization_config(model, quant_config)
+    with torch.no_grad():
+        model.layer.weight.copy_(biased_weights)
+    mock_per_group_calibration(model.layer, "weight", model.layer.weight, 128)
 
-        with torch.no_grad():
-            model.layer.weight.copy_(biased_weights)
-        mock_per_group_calibration(model.layer, "weight", model.layer.weight, 128)
+    # Compress and decompress in memory using ModelCompressor
+    mc = ModelCompressor(quantization_config=quant_config)
+    mc.compress_model(model)
+    mc.decompress_model(model)
 
-        compressor = PackedQuantizationCompressor(config=quant_config)
-        quantized_modules_to_scheme = {"layer": quant_config.config_groups["group_1"]}
-
-        compressed_state_dict = compressor.compress(
-            model.state_dict().copy(), names_to_scheme=quantized_modules_to_scheme
-        )
-        
-        new_model = SingleLayer()
-        apply_quantization_config(new_model, quant_config)
-
-        module = new_model.layer
-        for key, value in compressed_state_dict.items():
-            if key.startswith("layer."):
-                param_name = key[len("layer."):]
-                if hasattr(module, param_name):
-                    getattr(module, param_name).data = value.clone()
-                else:
-                    module.register_parameter(
-                        param_name, torch.nn.Parameter(value.clone(), requires_grad=False)
-                    )
-
-        mc = ModelCompressor(quantization_config=quant_config)
-        mc.decompress_model(new_model)
-
-        decompressed_weights = new_model.layer.weight
-        assert decompressed_weights.shape == shape
-        assert not torch.isnan(decompressed_weights).any()
-        assert not torch.isinf(decompressed_weights).any()
-        threshold = torch.std(torch.rand(shape) - torch.rand(shape))
-        assert torch.std(biased_weights - decompressed_weights) < threshold
+    decompressed_weights = model.layer.weight
+    assert decompressed_weights.shape == shape
+    assert not torch.isnan(decompressed_weights).any()
+    assert not torch.isinf(decompressed_weights).any()
+    threshold = torch.std(torch.rand(shape) - torch.rand(shape))
+    assert torch.std(biased_weights - decompressed_weights) < threshold
