@@ -14,7 +14,6 @@
 
 import inspect
 from typing import Callable, Optional
-from weakref import ref
 
 from compressed_tensors.modeling.kvcache import initialize_hooked_kv_cache
 from compressed_tensors.quantization.lifecycle.forward import forward_quantize
@@ -23,7 +22,8 @@ from compressed_tensors.utils.internal import InternalModule
 from torch import Tensor
 from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
-from transformers import AttentionInterface, PretrainedConfig, PreTrainedModel
+from transformers import PretrainedConfig, PreTrainedModel
+from transformers.masking_utils import ALL_MASK_ATTENTION_FUNCTIONS
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 
 
@@ -51,16 +51,13 @@ class QuantizedAttentionImpl(InternalModule):
     which calls this module, then setting the model attention implementation to the new
     function. After triggering hooks and quantization, this module calls the original
     attention implementation function.
-
-    :param attn_module: parent attention module
     """
 
     _original_impl = "eager"
 
-    def __init__(self, config: PretrainedConfig, attn_module: Module):
+    def __init__(self, config: PretrainedConfig):
         super().__init__()
         self.config = config
-        self.attn_module = ref(attn_module)  # avoid circular references
 
     def forward(
         self,
@@ -79,7 +76,7 @@ class QuantizedAttentionImpl(InternalModule):
             query = forward_quantize(module, query, "q", quant_args)
 
         # original attention
-        return ALL_ATTENTION_FUNCTIONS[_original_impl](
+        return ALL_ATTENTION_FUNCTIONS[QuantizedAttentionImpl._original_impl](
             module,
             query,
             key,
@@ -92,30 +89,34 @@ class QuantizedAttentionImpl(InternalModule):
 # ----- initialize ----- #
 
 
-def _ct_hooked_attention(module: Module, *args, **kwargs):
-    if hasattr(module, IMPL_ATTR):
-        return module.impl(module, *args, **kwargs)
-    else:
-        return ALL_ATTENTION_FUNCTIONS[_original_impl](module, *args, **kwargs)
+def _hooked_attention(module: Module, *args, **kwargs):
+    assert hasattr(module, IMPL_ATTR), (
+        f"Using {HOOKED_ATTENTION_NAME} attention implementation, "
+        f"but attention module does not have {IMPL_ATTR} submodule."
+    )
+
+    return getattr(module, IMPL_ATTR)(module, *args, **kwargs)
 
 
 def initialize_hooked_attention(model: PreTrainedModel, module: Module):
     """
     Initialize `QuantizedAttentionImpl` and `QuantizedKVCache` instances
-    attached to attention
+    attached to attention. Assumes that only one model is hooked at a time.
 
     :param model: parent model of attention module
     :param module: attention module to initialize with
     """
     if not hasattr(module, IMPL_ATTR):
-        module.register_module(IMPL_ATTR, QuantizedAttentionImpl(model.config, module))
-        if model.config._attn_implementation != HOOKED_ATTENTION_NAME:
-            # assumes only one model at a time
-            global _original_impl
-            _original_impl = model.config._attn_implementation
+        module.register_module(IMPL_ATTR, QuantizedAttentionImpl(model.config))
 
-            AttentionInterface.register(HOOKED_ATTENTION_NAME, _ct_hooked_attention)
-            model.config._attn_implementation = HOOKED_ATTENTION_NAME
+    if model.config._attn_implementation != HOOKED_ATTENTION_NAME:
+        QuantizedAttentionImpl._original_impl = model.config._attn_implementation
+        original_mask = ALL_MASK_ATTENTION_FUNCTIONS[model.config._attn_implementation]
+
+        ALL_ATTENTION_FUNCTIONS.register(HOOKED_ATTENTION_NAME, _hooked_attention)
+        ALL_MASK_ATTENTION_FUNCTIONS.register(HOOKED_ATTENTION_NAME, original_mask)
+        model.set_attn_implementation(HOOKED_ATTENTION_NAME)
+        assert model.config._attn_implementation == HOOKED_ATTENTION_NAME
 
     initialize_hooked_kv_cache(model, module)
 
@@ -133,7 +134,7 @@ def register_query_hook(
     :param module: attention module to add hook to
     :param hook: query hook function
     """
-    impl = getattr(module, IMPL_ATTR)
+    impl: QuantizedAttentionImpl = getattr(module, IMPL_ATTR)
 
     def _hook(impl: QuantizedAttentionImpl, args, kwargs):
         bound = inspect.signature(impl.forward).bind(*args, **kwargs)

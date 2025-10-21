@@ -42,10 +42,9 @@ from compressed_tensors.utils.match import (
 )
 from compressed_tensors.utils.offload import update_parameter_data
 from compressed_tensors.utils.safetensors_load import get_safetensors_folder
+from loguru import logger
 from safetensors import safe_open
 from torch.nn import Module
-
-from loguru import logger
 
 
 __all__ = [
@@ -191,13 +190,13 @@ def _apply_kv_cache_scheme(
 ):
     if not kv_cache_scheme.symmetric:
         raise logger.warning("vLLM does not support asymmetric kv cache quantization")
-        
+
     # applies and initializes kv cache quantization
     # this step cannot come after attention apply/initialize
     # otherwise it will override the attention qparams
     scheme = QuantizationScheme(
         targets=[".*self_attn$"],  # is never read in practice
-        input_activations=kv_cache_scheme
+        input_activations=kv_cache_scheme,
     )
     for submodule in model.modules():
         if is_attention_module(submodule):
