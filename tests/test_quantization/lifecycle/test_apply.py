@@ -99,8 +99,9 @@ def test_target_prioritization(mock_frozen):
     }
 
     model = AutoModelForCausalLM.from_pretrained(
-        "HuggingFaceM4/tiny-random-LlamaForCausalLM", torch_dtype="auto",
-        cache_dir="test-apply-model-cache"
+        "HuggingFaceM4/tiny-random-LlamaForCausalLM",
+        torch_dtype="auto",
+        cache_dir="test-apply-model-cache",
     )
     model.eval()
 
