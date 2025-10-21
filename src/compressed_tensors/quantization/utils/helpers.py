@@ -20,6 +20,7 @@ import torch
 from compressed_tensors.quantization.quant_args import (
     FP4_E2M1_DATA,
     FP8_E4M3_DATA,
+    BFLOAT16_DATA,
     FloatArgs,
     QuantizationArgs,
     QuantizationStrategy,
@@ -114,19 +115,18 @@ def calculate_qparams(
                 )
                 scales = scales.to(FP8_E4M3_DATA.dtype)
             else:
-
-                """
-                block_max = max_val_pos.view(torch.uint16).to(torch.int32)
-                BFLOAT16_VAL_TO_ADD = (1 <<(7 - 1 - 1))
-                BFLOAT16_SIGN_EXPONENT_MASK = (((1 << (8 + 1)) - 1) << 7)
-                block_max_uint = torch.bitwise_and(block_max + BFLOAT16_VAL_TO_ADD, BFLOAT16_SIGN_EXPONENT_MASK)
-                block_max_uint = block_max_uint.to(torch.uint16)
-                block_max = block_max_uint.view(torch.bfloat16)
-                """
+                max_val_pos = max_val_pos.view(torch.uint16).to(torch.int32)
+                # Find closest power of 2 
+                BFLOAT16_VAL_TO_ADD = 1 << (BFLOAT16_DATA.mantissa - FP4_E2M1_DATA.mantissa - 1)  
+                BFLOAT16_SIGN_EXPONENT_MASK = ((1 << (BFLOAT16_DATA.exponent + 1)) - 1) << BFLOAT16_DATA.mantissa 
+                # mask to only keep mantissa  
+                block_max_uint = torch.bitwise_and(max_val_pos + BFLOAT16_VAL_TO_ADD, BFLOAT16_SIGN_EXPONENT_MASK)
+                block_max = block_max_uint.to(torch.uint16).view(torch.bfloat16)
+                
+                # Convert to to exponent
                 scale_exp = (
-                    127 + torch.floor(torch.log2(max_val_pos)).to(torch.int32) - 2
+                    127 + torch.floor(torch.log2(block_max)).to(torch.int32) - 2
                 )
-                # clamp and convert to uint8
                 scale_exp = torch.clamp(
                     scale_exp,
                     max=torch.iinfo(torch.uint8).max,
@@ -136,17 +136,14 @@ def calculate_qparams(
         else:
             scales = max_val_pos / (float(bit_range) / 2)
 
-        # TODO: in the case of MoEs, the global_scale may also be 0/need to be clamped
-        # if scales.dtype == FP8_E4M3_DATA.dtype:
-        # torch.clamp not supported for FP8
-        # use the next largest fp8 value from 0
-        #    scales = torch.where(
-        #        scales == 0,
-        #        torch.tensor(0.125, dtype=FP8_E4M3_DATA.dtype, device=device),
-        #        scales,
-        #    )
-        # else:
-        #    scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
+        if scales.dtype == FP8_E4M3_DATA.dtype:
+            scales = torch.where(
+                scales == 0,
+                torch.tensor(0.125, dtype=FP8_E4M3_DATA.dtype, device=device),
+                scales,
+            )
+        else:
+            scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
 
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
