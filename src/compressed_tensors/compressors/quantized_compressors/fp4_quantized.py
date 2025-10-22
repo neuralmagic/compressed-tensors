@@ -210,3 +210,12 @@ def unpack_fp4_from_uint8(
 
     # Reshape to final form
     return values.reshape(m, n).to(dtype=dtype)
+
+
+@BaseCompressor.register(name=CompressionFormat.mxfp4_pack_quantized.value)
+class MXFP4PackedCompressor(NVFP4PackedCompressor):
+    """
+    Alias for mxfp4 quantized models
+    """
+
+    pass

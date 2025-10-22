@@ -468,6 +468,11 @@ def _quantize(
     if global_scale is not None:
         scale = scale.to(global_scale.dtype) / global_scale
 
+    # convert from exponent
+    scale_exp = scale.to(torch.int32) - 127
+    scale = 2.0 ** (scale_exp.to(torch.float))
+    scale = scale.to(dtype)
+
     scaled = x / scale
 
     if zero_point is not None:
@@ -501,6 +506,11 @@ def _dequantize(
     if global_scale is not None:
         scale = scale.to(global_scale.dtype) / global_scale
 
+    # convert from exponent
+    scale_exp = scale.to(torch.int32) - 127
+    scale = 2.0 ** (scale_exp.to(torch.float))
+    scale = scale.to(dtype)
+
     dequant_value = x_q.to(scale.dtype)
 
     if zero_point is not None:
@@ -510,5 +520,4 @@ def _dequantize(
 
     if dtype is not None:
         dequant_value = dequant_value.to(dtype)
-
     return dequant_value
