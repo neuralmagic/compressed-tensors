@@ -81,7 +81,7 @@ def initialize_module_for_quantization(
 
     if is_attention_module(module):
         # quantized actions based on calltime status
-        _initialize_attn_scales(module)
+        _initialize_attn_scales(module, scheme.output_activations)
 
     else:
         if not isinstance(module, torch.nn.Linear):
@@ -276,10 +276,18 @@ def initialize_qparams(
         register_offload_parameter(module, f"{base_name}_zero_point", init_zero_point)
 
 
-def _initialize_attn_scales(module: Module) -> None:
+def _initialize_attn_scales(module: Module, quantization_args: QuantizationArgs) -> None:
     """Initlaize k_scale, v_scale for  self_attn"""
 
-    expected_shape = 1  # per tensor
+    if quantization_args.strategy == QuantizationStrategy.CHANNEL:
+        expected_shape = (module.k_proj.out_features, 1)
+    elif quantization_args.strategy == QuantizationStrategy.TENSOR:
+        expected_shape = 1
+    else:
+        raise ValueError(
+            f"One of {(QuantizationStrategy.TENSOR, QuantizationStrategy.CHANNEL)} must be specified "
+            f"for kv cache quantization."
+        )
 
     param = next(module.parameters())
     scale_dtype = param.dtype
