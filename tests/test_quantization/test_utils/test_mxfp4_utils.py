@@ -13,11 +13,7 @@
 # limitations under the License.
 
 import torch
-from compressed_tensors.quantization.utils import (
-    convert_mxfp4_exp_scale,
-    generate_mxfp4_scales,
-    round_to_power_2,
-)
+from compressed_tensors.quantization.utils import round_to_power_2
 
 
 def test_round_power_2_noise():

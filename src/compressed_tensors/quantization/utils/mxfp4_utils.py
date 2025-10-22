@@ -86,7 +86,6 @@ def generate_mxfp4_scales(x: torch.Tensor) -> torch.Tensor:
     """
     # Round to closest power of 2
     scale_power_2 = round_to_power_2(x)
-    breakpoint()
     # Convert to exponent
     scale_exp = 127 + torch.floor(torch.log2(scale_power_2)).to(torch.int32) - 2
     # Clamp and store in uint8, as expected by mxfp4
