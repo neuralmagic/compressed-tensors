@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 __all__ = [
     "FP8_E4M3_DATA",
     "FP4_E2M1_DATA",
-    "BFLOAT16_DATA"
+    "BFLOAT16_DATA",
     "FloatArgs",
     "QuantizationType",
     "QuantizationStrategy",

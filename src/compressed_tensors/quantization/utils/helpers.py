@@ -115,6 +115,7 @@ def calculate_qparams(
                 )
                 scales = scales.to(FP8_E4M3_DATA.dtype)
             else:
+                assert max_val_pos.dtype == torch.bfloat16
                 max_val_pos = max_val_pos.view(torch.uint16).to(torch.int32)
                 # Find closest power of 2 
                 BFLOAT16_VAL_TO_ADD = 1 << (BFLOAT16_DATA.mantissa - FP4_E2M1_DATA.mantissa - 1)  
