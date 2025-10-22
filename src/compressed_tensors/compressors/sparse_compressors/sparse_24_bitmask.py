@@ -241,7 +241,7 @@ def get_24_bytemasks(tensor):
                         multiple of 4.
     """
     original_dtype = tensor.dtype
-    if tensor.dtype == FP8_DTYPE:
+    if tensor.dtype == FP8_E4M3_DATA.dtype:
         tensor = tensor.view(torch.int8)
     original_shape = tensor.shape
     num_elements = tensor.numel()
