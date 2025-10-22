@@ -58,18 +58,3 @@ def test_round_power_2():
     ).to(torch.bfloat16)
     rounded = round_to_power_2(x)
     torch.equal(rounded, x_rounded)
-
-
-def test_mxfp4_scale_generation():
-    x = torch.Tensor(
-        (
-            [5.687891, 8.291567, 1.540329, 0.315635, 0.965272],
-            [6.944130, 0.073246, 0.451778, 8.571118, 9.856593],
-            [0.040571, 0.708509, 2.485657, 4.003352, 0.995600],
-            [0.224199, 5.032586, 1.309816, 0.621958, 7.290238],
-            [9.848001, 0.290731, 1.501562, 0.379829, 5.312081],
-        )
-    ).to(torch.bfloat16)
-    scales = generate_mxfp4_scales(x)
-    converted_scales = convert_mxfp4_exp_scale(scales)
-    breakpoint()
