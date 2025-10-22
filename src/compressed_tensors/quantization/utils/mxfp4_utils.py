@@ -18,7 +18,7 @@ from compressed_tensors.quantization.quant_args import BFLOAT16_DATA, FP4_E2M1_D
 
 __all__ = ["convert_mxfp4_exp_scale", "generate_mxfp4_scales", "round_to_power_2"]
 
-# Reference: https://github.com/vllm-project/vllm/blob/main/tests/quantization/reference_mxfp4.py
+# Reference: https://github.com/vllm-project/vllm/blob/main/tests/quantization/reference_mxfp4.py # noqa: E501
 
 
 def convert_mxfp4_exp_scale(
