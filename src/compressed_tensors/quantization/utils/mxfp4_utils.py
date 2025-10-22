@@ -42,7 +42,7 @@ def round_to_power_2(x: torch.Tensor) -> torch.Tensor:
     """
     Round values to the closest power of 2.
     This is done by masking the values with BFLOAT16_SIGN_EXPONENT_MASK
-    which essentially removes the mantissa and keeps the exponent,
+    which essentially removes the mantissa and keeps the exponent.
     i.e the closest power of 2 for the input_value.
 
     E.g:
@@ -60,10 +60,12 @@ def round_to_power_2(x: torch.Tensor) -> torch.Tensor:
 
     # Find closest power of 2
     BFLOAT16_VAL_TO_ADD = 1 << (BFLOAT16_DATA.mantissa - FP4_E2M1_DATA.mantissa - 1)
+    # Add value to push the value to the next exponent
     BFLOAT16_SIGN_EXPONENT_MASK = (
         (1 << (BFLOAT16_DATA.exponent + 1)) - 1
     ) << BFLOAT16_DATA.mantissa
-    # mask to only keep exponent
+    # mask to only keep exponent - we conservatively round down
+    # to better represent smaller numbers / prevent overflow
     block_max_uint = torch.bitwise_and(
         x + BFLOAT16_VAL_TO_ADD, BFLOAT16_SIGN_EXPONENT_MASK
     )
@@ -77,11 +79,14 @@ def generate_mxfp4_scales(x: torch.Tensor) -> torch.Tensor:
     2. Convert to exponent
     3. Store in uint8
 
+    Called when calculating qparams using observers.
+
     :param x: tensor to round to closest power of 2
     :returns uint8 scales as exponents
     """
     # Round to closest power of 2
     scale_power_2 = round_to_power_2(x)
+    breakpoint()
     # Convert to exponent
     scale_exp = 127 + torch.floor(torch.log2(scale_power_2)).to(torch.int32) - 2
     # Clamp and store in uint8, as expected by mxfp4
