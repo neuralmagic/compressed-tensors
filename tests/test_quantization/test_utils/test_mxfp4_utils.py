@@ -20,7 +20,6 @@ from compressed_tensors.quantization.utils import (
 )
 
 
-"""
 def test_round_power_2_noise():
     powers = torch.Tensor(
         [
@@ -59,7 +58,6 @@ def test_round_power_2():
     ).to(torch.bfloat16)
     rounded = round_to_power_2(x)
     torch.equal(rounded, x_rounded)
-"""
 
 
 def test_mxfp4_scale_generation():
