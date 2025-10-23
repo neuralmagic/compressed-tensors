@@ -34,11 +34,12 @@ from torch.nn import Linear, Module
 
 class SimpleModel(Module):
     """Simple model for testing"""
+
     def __init__(self, input_dim=512, hidden_dim=256, output_dim=128):
         super().__init__()
         self.layer1 = Linear(input_dim, hidden_dim, bias=False)
         self.layer2 = Linear(hidden_dim, output_dim, bias=False)
-    
+
     def forward(self, x):
         x = self.layer1(x)
         x = torch.relu(x)
@@ -47,9 +48,7 @@ class SimpleModel(Module):
 
 
 def create_asymmetric_quant_config(
-    num_bits=4,
-    strategy=QuantizationStrategy.GROUP,
-    group_size=128
+    num_bits=4, strategy=QuantizationStrategy.GROUP, group_size=128
 ) -> QuantizationConfig:
     """Create an asymmetric quantization config"""
     config_groups = {
@@ -58,7 +57,9 @@ def create_asymmetric_quant_config(
             weights=QuantizationArgs(
                 num_bits=num_bits,
                 strategy=strategy.value,
-                group_size=group_size if strategy == QuantizationStrategy.GROUP else None,
+                group_size=(
+                    group_size if strategy == QuantizationStrategy.GROUP else None
+                ),
                 symmetric=False,
             ),
         ),
@@ -87,36 +88,38 @@ def test_end_to_end_asymmetric_quantization(
         "layer1": model.layer1.weight.detach().clone(),
         "layer2": model.layer2.weight.detach().clone(),
     }
-    
+
     quant_config = create_asymmetric_quant_config(
-        num_bits=4,
-        strategy=strategy,
-        group_size=group_size
+        num_bits=4, strategy=strategy, group_size=group_size
     )
     # Set pack-quantized format for ModelCompressor usage
     quant_config.format = CompressionFormat.pack_quantized.value
     apply_quantization_config(model, quant_config)
 
     if strategy == QuantizationStrategy.GROUP:
-        mock_per_group_calibration(model.layer1, "weight", model.layer1.weight, group_size)
-        mock_per_group_calibration(model.layer2, "weight", model.layer2.weight, group_size)
+        mock_per_group_calibration(
+            model.layer1, "weight", model.layer1.weight, group_size
+        )
+        mock_per_group_calibration(
+            model.layer2, "weight", model.layer2.weight, group_size
+        )
     else:
         mock_per_channel_calibration(model.layer1, "weight", model.layer1.weight)
         mock_per_channel_calibration(model.layer2, "weight", model.layer2.weight)
-    
+
     # Compress and decompress in memory using ModelCompressor
     mc = ModelCompressor(quantization_config=quant_config)
     mc.compress_model(model)
-    
+
     # Verify compression created zero-point parameters
     assert hasattr(model.layer1, "weight_zero_point")
     assert hasattr(model.layer2, "weight_zero_point")
     assert model.layer1.weight_zero_point.dtype == torch.int32
     assert model.layer2.weight_zero_point.dtype == torch.int32
-    
+
     # Decompress in memory
     mc.decompress_model(model)
-    
+
     # Verify decompression restored weights correctly
     assert model.layer1.weight.shape == original_weights["layer1"].shape
     assert model.layer2.weight.shape == original_weights["layer2"].shape
