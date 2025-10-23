@@ -54,4 +54,8 @@ def test_pack_unpack_odd_dims():
     )
 
     with pytest.raises((ValueError, torch._dynamo.exc.Unsupported)):
+<<<<<<< Updated upstream:tests/test_compressors/quantized_compressors/test_fp4_quant.py
         _ = pack_fp4_to_uint8(x)
+=======
+        pack_fp4_to_uint8(x)
+>>>>>>> Stashed changes:tests/test_compressors/quantized_compressors/test_nvfp4_quant.py

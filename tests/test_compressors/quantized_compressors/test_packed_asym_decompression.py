@@ -18,16 +18,16 @@ End-to-end tests for asymmetric quantization with zero-point decompression.
 
 import pytest
 import torch
+from compressed_tensors.compressors.model_compressors.model_compressor import (
+    ModelCompressor,
+)
+from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import (
     QuantizationArgs,
     QuantizationConfig,
     QuantizationScheme,
     QuantizationStrategy,
     apply_quantization_config,
-)
-from compressed_tensors.config import CompressionFormat
-from compressed_tensors.compressors.model_compressors.model_compressor import (
-    ModelCompressor,
 )
 from torch.nn import Linear, Module
 

@@ -172,7 +172,7 @@ def test_reload_match(tmp_path, num_bits):
     save_file(compressed_state_dict, tmp_path / "model.safetensors")
 
     reconstructed_dense = {}
-    with tempfile.TemporaryDirectory() as _tmp:
+    with tempfile.TemporaryDirectory():
         reconstructed_dense_gen = compressor.decompress(
             tmp_path, names_to_scheme=quantized_modules_to_scheme
         )
@@ -486,8 +486,8 @@ def test_unpack_from_int32(num_bits, values, expected_tensor):
 )
 def test_asymmetric_zero_point_decompression(strategy, group_size, tmp_path):
     """
-    Test that zero-point packing and unpacking works correctly for asymmetric quantization
-    with GROUP and CHANNEL strategies.
+    Test that zero-point packing and unpacking works correctly for asymmetric
+    quantization with GROUP and CHANNEL strategies.
     """
     shape = (512, 1024)
 
@@ -550,10 +550,8 @@ def test_zero_point_pack_unpack_consistency(num_bits, strategy):
     """
     if strategy == QuantizationStrategy.GROUP:
         shape = (512, 8)
-        group_size = 128
     else:
         shape = (512, 1)
-        group_size = None
 
     max_val = (1 << (num_bits - 1)) - 1
     min_val = -(1 << (num_bits - 1))
