@@ -25,9 +25,9 @@ def convert_mxfp4_exp_scale(
     scale: torch.Tensor, dtype: torch.dtype = torch.bfloat16
 ) -> torch.Tensor:
     """
-    Converts mxfp4 scales. Scales are powers of 2 exponents,
-    stored in uint8. Converts to dense dtype so that they
-    can be applied to the weights and activations during QDQ
+    Converts mxfp4 scales. Scales are powers of 2, with the
+    exponents stored in uint8. Converts to dense dtype so that
+    they can be applied to the weights and activations during QDQ
 
     :param scale: uint8 exponent scale
     :param dtype: dense dtype

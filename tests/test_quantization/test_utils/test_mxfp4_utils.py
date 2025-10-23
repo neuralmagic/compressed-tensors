@@ -57,7 +57,7 @@ def test_round_power_2():
         )
     ).to(torch.bfloat16)
     rounded = round_to_power_2(x)
-    torch.equal(rounded, x_rounded)
+    assert torch.equal(rounded, x_rounded)
 
 
 def test_mxfp4_scales_e2e():
@@ -75,5 +75,5 @@ def test_mxfp4_scales_e2e():
     converted_ct = convert_mxfp4_exp_scale(scales_generated)
 
     scales_exp = torch.log2(converted_ct)
-    block_max_exp = torch.floor(torch.log2(block_max)) - 2
-    torch.equal(scales_exp, block_max_exp)
+    block_max_exp = torch.floor(torch.log2(round_to_power_2(block_max))) - 2
+    assert torch.equal(scales_exp, block_max_exp)
