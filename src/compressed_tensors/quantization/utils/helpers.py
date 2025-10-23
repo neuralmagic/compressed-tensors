@@ -14,7 +14,7 @@
 
 import logging
 import math
-from typing import Generator, List, Optional, Tuple
+from typing import Generator, Optional, Tuple
 
 import torch
 from compressed_tensors.quantization.quant_args import (
@@ -27,18 +27,17 @@ from compressed_tensors.quantization.quant_args import (
 )
 from compressed_tensors.quantization.quant_scheme import QuantizationScheme
 from compressed_tensors.utils import deprecated
+from loguru import logger
 from torch import FloatTensor, IntTensor, Tensor
 from torch.nn import Module
 
 
 __all__ = [
-    "infer_quantization_status",
     "is_module_quantized",
     "is_model_quantized",
     "module_type",
     "get_torch_bit_depth",
     "can_quantize",
-    "parse_out_kv_cache_args",
     "KV_CACHE_TARGETS",
     "is_kv_cache_quant_scheme",
     "iter_named_leaf_modules",
@@ -48,6 +47,7 @@ __all__ = [
     "calculate_qparams",
     "generate_gparam",
     "is_fp4",
+    "strategy_cdiv",
 ]
 
 # target the self_attn layer
@@ -166,7 +166,7 @@ def compute_dynamic_scales_and_zp(
 
     keep_dims = True
     if args.strategy == QuantizationStrategy.TOKEN:
-        dim = {1, 2}
+        dim = {0, 1}
         reduce_dims = tuple(idx for idx in range(value.ndim) if idx not in dim)
     elif args.strategy == QuantizationStrategy.TENSOR:
         reduce_dims = None
@@ -232,21 +232,6 @@ def calculate_range(quantization_args: QuantizationArgs, device: str) -> Tuple:
         raise ValueError(f"Invalid quantization type {quantization_args.type}")
 
     return q_min, q_max
-
-
-def infer_quantization_status(model: Module) -> Optional["QuantizationStatus"]:  # noqa
-    """
-    Checks the quantization status of a model. Assumes all modules in the model have
-    the same status, so only the first quantized model is checked.
-
-    :param model: model to check quantization status for
-    :return: quantization status if the model is quantized, otherwise None
-    """
-    for module in model.modules():
-        status = getattr(module, "quantization_status", None)
-        if status is not None:
-            return status
-    return None
 
 
 def is_module_quantized(module: Module) -> bool:
@@ -405,6 +390,7 @@ def can_quantize(value: torch.Tensor, quant_args: "QuantizationArgs") -> bool:  
     return bit_depth > quant_args.num_bits
 
 
+@deprecated()
 def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
     """
     Check whether the QuantizationScheme targets the kv cache.
@@ -423,37 +409,6 @@ def is_kv_cache_quant_scheme(scheme: QuantizationScheme) -> bool:
             return True
 
     return False
-
-
-def parse_out_kv_cache_args(
-    quant_scheme_to_layers: List[QuantizationScheme],
-) -> Tuple[Optional[QuantizationArgs], List[QuantizationScheme]]:
-    """
-    If possible, parse out the kv cache specific QuantizationArgs
-    from the list of the QuantizationSchemes. If no kv cache
-    specific QuantizationArgs available, this function acts
-    as an identity function
-
-    :param quant_scheme_to_layers: list of QuantizationSchemes
-    :return: kv_cache_args (optional) and the (remaining or original)
-        list of the QuantizationSchemes
-    """
-    kv_cache_quant_scheme_to_layers = [
-        scheme for scheme in quant_scheme_to_layers if is_kv_cache_quant_scheme(scheme)
-    ]
-    quant_scheme_to_layers = [
-        scheme
-        for scheme in quant_scheme_to_layers
-        if not is_kv_cache_quant_scheme(scheme)
-    ]
-
-    if kv_cache_quant_scheme_to_layers:
-        kv_cache_quant_scheme_to_layers = kv_cache_quant_scheme_to_layers[0]
-        kv_cache_args = kv_cache_quant_scheme_to_layers.output_activations
-    else:
-        kv_cache_args = None
-
-    return kv_cache_args, quant_scheme_to_layers
 
 
 def generate_gparam(
@@ -477,3 +432,26 @@ def generate_gparam(
     max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
     global_scale = scale_data.max * quant_data.max / max_val_pos
     return global_scale.to(dtype).reshape([1])
+
+
+def strategy_cdiv(
+    value: int,
+    divisor: int,
+    strategy: Optional[QuantizationStrategy],
+    strict: bool = False,
+) -> int:
+    dividend = math.ceil(value / divisor)
+    if dividend * divisor != value:
+        message = (
+            f"{strategy} quantization strategy requires strict division of "
+            f"weight/activation size {value} and group/block size {divisor}. "
+            "consider reducing the group/block size or ignoring modules with "
+            f"weights not divisible by {divisor}"
+        )
+        if strict:
+            raise ValueError(message)
+
+        else:
+            logger.bind(log_once=True).warning(message)
+
+    return dividend

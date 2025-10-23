@@ -71,6 +71,8 @@ jobs:
             contents: 'read'
             id-token: 'write'
             pages: 'write'
+        env:
+            HF_TOKEN: ${{ secrets.HF_RED_HAT_READ_ONLY }}
         environment:
             name: github-pages
             url: ${{ steps.coverage.outputs.page_url }}
@@ -79,7 +81,7 @@ jobs:
 
             - name: set python
               id: set_python
-              uses: actions/setup-python@v5
+              uses: actions/setup-python@v6
               with:
                   python-version: ${{ inputs.python }}
 
@@ -90,13 +92,9 @@ jobs:
                   python-version: ${{ inputs.python }}
 
             - name: install system dependencies
-              run: |
-                if command -v g++ >/dev/null 2>&1; then
-                  echo "found g++ compiler"
-                else
-                   echo "installing g++ etc compilers..."
-                   sudo apt update && sudo apt install -y g++ gcc
-                fi
+              run: |-
+                  sudo apt-get update
+                  sudo apt-get install -y --no-install-recommends g++ gcc make
               shell: bash
 
             - name: checkout code
@@ -124,9 +122,9 @@ jobs:
               id: auth
               uses: google-github-actions/auth@v2.1.3
               with:
-                  project_id: ${{ secrets.GCP_PROJECT }}
-                  workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-                  service_account: ${{ secrets.GCP_GHA_SA }}
+                  project_id: ${{ secrets.GCP_VLLM_PROJECT }}
+                  workload_identity_provider: ${{ secrets.GCP_VLLM_PROJECT_WORKLOAD_IDENTITY_PROVIDER }}
+                  service_account: ${{ secrets.GCP_VLLM_PROJECT_GHA_SA }}
 
             - name: 'Set up Cloud SDK'
               uses: 'google-github-actions/setup-gcloud@v2'
@@ -137,7 +135,7 @@ jobs:
               if: ${{ inputs.run_id != '' }}
               uses: neuralmagic/nm-actions/actions/gcp-download-assets@v1.1.0
               with:
-                  bucket_source: ${{ secrets.GCP_BUILD_ML_ASSETS2 }}
+                  bucket_source: ${{ secrets.GCP_VLLM_PROJECT_BUILD_ASSETS }}
                   run_id: ${{ inputs.run_id }}
 
             - name: run tests
@@ -166,13 +164,13 @@ jobs:
 
             - name: copy results to GCP
               run: |
-                  gcloud storage cp test-results/report.xml ${{ secrets.GCP_BUILD_ML_ASSETS2 }}/${{ github.run_id }}/test-results/report-${{ inputs.test_label }}.xml
+                  gcloud storage cp test-results/report.xml ${{ secrets.GCP_VLLM_PROJECT_BUILD_ASSETS }}/${{ github.run_id }}/test-results/report-${{ inputs.test_label }}.xml
 
             - name: upload results
               uses: actions/upload-artifact@v4
               if: success() || failure()
               with:
-                  name: report-${{ inputs.test_label }}.xml
+                  name: report-${{ inputs.python }}-${{ inputs.test_label }}.xml
                   path: test-results/report.xml
                   retention-days: 5
 

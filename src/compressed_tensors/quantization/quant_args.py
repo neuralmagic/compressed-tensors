@@ -23,7 +23,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 __all__ = [
-    "FP8_DTYPE",
     "FP8_E4M3_DATA",
     "FP4_E2M1_DATA",
     "FloatArgs",
@@ -77,10 +76,6 @@ class FP8_E4M3_DATA(FloatArgs):
     dtype = torch.float8_e4m3fn
 
 
-# TODO: Remove soon in favour of a more descriptive FloatArgs
-FP8_DTYPE = torch.float8_e4m3fn
-
-
 class QuantizationType(str, Enum):
     """
     Enum storing quantization type options
@@ -101,6 +96,7 @@ class QuantizationStrategy(str, Enum):
     BLOCK = "block"
     TOKEN = "token"
     TENSOR_GROUP = "tensor_group"
+    ATTN_HEAD = "attn_head"
 
 
 class DynamicType(str, Enum):
@@ -259,9 +255,11 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         # extract user-passed values from dictionary
         strategy = model.strategy
         group_size = model.group_size
+        block_structure = model.block_structure
         actorder = model.actorder
         dynamic = model.dynamic
         observer = model.observer
+        dynamic = model.dynamic
 
         # infer strategy
         if strategy is None:
@@ -277,8 +275,14 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                     "strategy='group' and group_size = -1 for 'channel'"
                 )
 
-        # validate strategy and group
-        if strategy == QuantizationStrategy.GROUP:
+        # validate token strategy
+        if strategy == QuantizationStrategy.TOKEN and not dynamic:
+            raise ValueError(
+                "Cannot perform static token quantization, please use `dynamic=True`"
+            )
+
+        # validate group strategy
+        if strategy in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP):
             if group_size is None or group_size <= 0:
                 raise ValueError(
                     f"strategy {strategy} requires group_size to be "
@@ -291,6 +295,14 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
             not in (QuantizationStrategy.GROUP, QuantizationStrategy.TENSOR_GROUP)
         ):
             raise ValueError("group_size requires strategy to be set to 'group'")
+
+        # validate block strategy
+        has_block_strategy = strategy == QuantizationStrategy.BLOCK
+        has_block_structure = block_structure is not None
+        if has_block_strategy and not has_block_structure:
+            raise ValueError(f"Block strategy requires block structure\n{model}")
+        if has_block_structure and not has_block_strategy:
+            raise ValueError(f"Block structure requires block strategy\n{model}")
 
         # validate activation ordering and strategy
         if actorder is not None and strategy != QuantizationStrategy.GROUP:

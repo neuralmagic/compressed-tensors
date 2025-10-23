@@ -65,6 +65,7 @@ class QuantizationScheme(BaseModel):
                 QuantizationStrategy.TENSOR,
                 QuantizationStrategy.GROUP,
                 QuantizationStrategy.TENSOR_GROUP,
+                QuantizationStrategy.ATTN_HEAD,
             ):
                 if (
                     inputs.strategy == QuantizationStrategy.GROUP
@@ -171,6 +172,7 @@ NVFP4 = dict(
         symmetric=True,
         dynamic=False,
         group_size=16,
+        observer="static_minmax",
     ),
     input_activations=QuantizationArgs(
         num_bits=4,
@@ -179,6 +181,7 @@ NVFP4 = dict(
         symmetric=True,
         dynamic=DynamicType.LOCAL,
         group_size=16,
+        observer="static_minmax",
     ),
 )
 

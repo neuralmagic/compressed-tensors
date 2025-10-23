@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import re
-from collections import defaultdict
+import shutil
 from typing import Optional
 from unittest.mock import MagicMock
 
@@ -22,15 +22,27 @@ import torch
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization import (
     DEFAULT_QUANTIZATION_METHOD,
+    QuantizationArgs,
     QuantizationConfig,
+    QuantizationScheme,
     QuantizationStatus,
+    QuantizationStrategy,
+    QuantizationType,
 )
-from compressed_tensors.quantization.lifecycle import (
-    apply_quantization_config,
-    apply_quantization_status,
-)
+from compressed_tensors.quantization.lifecycle import apply_quantization_config
+from compressed_tensors.utils import is_match, match_named_modules
 from tests.testing_utils import requires_accelerate
 from transformers import AutoModelForCausalLM
+
+
+@pytest.fixture(scope="module", autouse=True)
+def cleanup_model_cache():
+    """Clean up the test model cache directory after all tests complete."""
+    yield
+    try:
+        shutil.rmtree("test-apply-model-cache", ignore_errors=True)
+    except Exception:
+        pass
 
 
 @pytest.fixture
@@ -54,6 +66,7 @@ def llama_stories_model():
     return AutoModelForCausalLM.from_pretrained(
         "Xenova/llama2.c-stories15M",
         torch_dtype="auto",
+        cache_dir="test-apply-model-cache",
     )
 
 
@@ -86,7 +99,9 @@ def test_target_prioritization(mock_frozen):
     }
 
     model = AutoModelForCausalLM.from_pretrained(
-        "HuggingFaceM4/tiny-random-LlamaForCausalLM", torch_dtype="auto"
+        "HuggingFaceM4/tiny-random-LlamaForCausalLM",
+        torch_dtype="auto",
+        cache_dir="test-apply-model-cache",
     )
     model.eval()
 
@@ -105,60 +120,87 @@ def test_target_prioritization(mock_frozen):
 
 
 def test_apply_quantization_config_tinyllama():
-    quant_config = get_sample_tinyllama_quant_config(status="calibration")
+    quant_config = get_sample_tinyllama_quant_config(
+        status=QuantizationStatus.INITIALIZED
+    )
     model = get_tinyllama_model()
 
     # check that model is not already quantized
     for module in model.modules():
         _test_layer_quantization_status(module, inputs=False, weights=False)
 
-    count_layer_names = ("Linear", "Embeddidng", "LlamaRotaryEmbedding")
-    count_layer_num = defaultdict(int)
-
-    for name, module in model.named_modules():
-        if name in quant_config.ignore:
-            continue
-        module_type = module.__class__.__name__
-        if module_type in count_layer_names:
-            count_layer_num[module_type] += 1
-
-    assert len(count_layer_num) > 0, f"None of {count_layer_names} found in model"
-    assert all(value > 0 for value in count_layer_num.values())
-
     # apply quant config to model
     apply_quantization_config(model, quant_config)
 
     # check for correct application of quant config
-    for name, module in model.named_modules():
-        if name in quant_config.ignore:
-            continue
-        module_type = module.__class__.__name__
-        if module_type in count_layer_names:
-            count_layer_num[module_type] -= 1
-            _inputs = module_type == "Linear"
-            _weights = not module_type == "LlamaRotaryEmbedding"
-            _test_layer_quantization_status(module, inputs=_inputs, weights=_weights)
-
-    assert all(
-        value == 0 for value in count_layer_num.values()
-    ), "Not all values are zero"
-
-    # test quantization compression
-    # sample forward pass to fill scales, zps
-    model(torch.zeros((1, 1), dtype=int), torch.zeros((1, 1), dtype=int))
-    apply_quantization_status(model, QuantizationStatus.COMPRESSED)
-    for name, module in model.named_modules():
-        if name in quant_config.ignore:
-            continue
-        module_type = module.__class__.__name__
-        if module_type == "Linear":
+    for quant_scheme in quant_config.config_groups.values():
+        for name, module in match_named_modules(
+            model, quant_scheme.targets, quant_config.ignore
+        ):
             _test_layer_quantization_status(
                 module,
-                inputs=True,
-                weights=True,
-                expected_status=QuantizationStatus.COMPRESSED,
-                expected_dtype=torch.int8,
+                inputs=quant_scheme.input_activations is not None,
+                weights=quant_scheme.weights is not None,
+                expected_status=QuantizationStatus.INITIALIZED,
             )
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        QuantizationConfig(
+            config_groups={
+                "linear": QuantizationScheme(
+                    targets=["Linear"],
+                    input_activations=QuantizationArgs(
+                        num_bits=8, type="float", strategy="tensor"
+                    ),
+                )
+            }
+        ),
+        QuantizationConfig(
+            config_groups={
+                "linear": QuantizationScheme(
+                    targets=["Linear"],
+                    input_activations=QuantizationArgs(
+                        num_bits=8, type="float", strategy="tensor"
+                    ),
+                )
+            },
+            ignore=[
+                "model.layers.0.self_attn.q_proj",
+                "model.layers.1.self_attn.k_proj",
+                "model.layers.2.self_attn.v_proj",
+            ],
+        ),
+        QuantizationConfig(
+            config_groups={},
+            kv_cache_scheme=QuantizationArgs(
+                num_bits=8, type="float", strategy="tensor"
+            ),
+        ),
+        QuantizationConfig(
+            config_groups={
+                "attention": QuantizationScheme(
+                    targets=["LlamaAttention"],
+                    input_activations=QuantizationArgs(
+                        num_bits=8, type="float", strategy="tensor"
+                    ),
+                )
+            },
+            kv_cache_scheme=QuantizationArgs(
+                num_bits=8, type="float", strategy="tensor"
+            ),
+        ),
+    ],
+)
+def test_from_pretrained(config: QuantizationConfig):
+    model = AutoModelForCausalLM.from_pretrained("nm-testing/llama2.c-stories15M")
+    apply_quantization_config(model, config)
+    _config = QuantizationConfig.from_pretrained(model)
+    assert list(_config.config_groups.values()) == list(config.config_groups.values())
+    assert _config.kv_cache_scheme == config.kv_cache_scheme
+    assert _config.ignore == config.ignore
 
 
 def test_serialize_config_tinyllama():
@@ -215,10 +257,13 @@ def get_tinyllama_model():
     return AutoModelForCausalLM.from_pretrained(
         "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T",
         torch_dtype="auto",
+        cache_dir="test-apply-model-cache",
     )
 
 
-def get_sample_tinyllama_quant_config(status: str = "frozen"):
+def get_sample_tinyllama_quant_config(
+    status: QuantizationStatus = QuantizationStatus.FROZEN,
+):
     config_dict = {
         "quant_method": "compressed-tensors",
         "format": "fakequant",
@@ -264,13 +309,13 @@ def get_sample_tinyllama_quant_config(status: str = "frozen"):
         [("Linear", "re:.*foobarbaz"), True],
     ],
 )
-def test_apply_quantization_status(caplog, target, should_raise_warning):
+def test_apply_quantization_config(caplog, target, should_raise_warning):
     import logging
 
     # load a dense, unquantized tiny llama model
     model = get_tinyllama_model()
     quantization_config_dict = {
-        "quant_method": "sparseml",
+        "quant_method": "compressed-tensors",
         "format": "pack-quantized",
         "global_compression_ratio": None,
         "config_groups": {
@@ -297,3 +342,140 @@ def test_apply_quantization_status(caplog, target, should_raise_warning):
             assert len(caplog.text) > 0
         else:
             assert len(caplog.text) == 0
+
+
+def test_multi_apply_quantization_config():
+    """
+    Ensure that multiple quantization configs are applied correctly
+    If quantization config was previously applied to a module,
+    those changes should be reset for newly applied quantization config
+    """
+    model = get_tinyllama_model()
+
+    # FP8 applied to self_attn
+    qconfig1 = QuantizationConfig(
+        config_groups={
+            "group_0": QuantizationScheme(
+                targets=[
+                    r"re:.*self_attn\.(k|q|o|v)_proj$",
+                ],
+                weights=QuantizationArgs(
+                    num_bits=8,
+                    type=QuantizationType.FLOAT,
+                    strategy=QuantizationStrategy.TENSOR,
+                    symmetric=True,
+                    dynamic=False,
+                ),
+                input_activations=QuantizationArgs(
+                    num_bits=8,
+                    type=QuantizationType.FLOAT,
+                    strategy=QuantizationStrategy.TENSOR,
+                    symmetric=True,
+                    dynamic=False,
+                ),
+            )
+        },
+        ignore=["lm_head"],
+    )
+    # W4A16_ASYM applied to mlp and self_attn.o_proj to validate overwriting
+    qconfig2 = QuantizationConfig(
+        config_groups={
+            "group_0": QuantizationScheme(
+                targets=[
+                    r"re:.*mlp\.(down|gate|up)_proj$",
+                    r"re:.*self_attn\.o_proj$",
+                ],
+                weights=QuantizationArgs(
+                    num_bits=4,
+                    type=QuantizationType.INT,
+                    strategy=QuantizationStrategy.GROUP,
+                    group_size=128,
+                    symmetric=False,
+                    dynamic=False,
+                ),
+            )
+        },
+        ignore=["lm_head"],
+    )
+
+    apply_quantization_config(model, qconfig1)
+    apply_quantization_config(model, qconfig2)
+    for name, module in model.named_modules():
+        if is_match(
+            name, module, qconfig2.config_groups["group_0"].targets, qconfig2.ignore
+        ):
+            # assert W4A16_ASYM parameters are present with correct shape
+            # and FP8 parameters have been removed
+            assert not hasattr(module, "input_scale")
+            assert not hasattr(module, "input_zero_point")
+            weight_scale = getattr(module, "weight_scale", None)
+            assert (
+                weight_scale is not None
+                and weight_scale.shape[:-1] == module.weight.shape[:-1]
+                and weight_scale.shape[-1] == module.weight.shape[-1] / 128
+            )
+            weight_zero_point = getattr(module, "weight_zero_point", None)
+            assert (
+                weight_zero_point is not None
+                and weight_zero_point.shape[:-1] == module.weight.shape[:-1]
+                and weight_zero_point.shape[-1] == module.weight.shape[-1] / 128
+            )
+
+        elif is_match(
+            name, module, qconfig1.config_groups["group_0"].targets, qconfig1.ignore
+        ):
+            # assert FP8 scheme parameters are present with correct shape
+            input_scale = getattr(module, "input_scale", None)
+            assert input_scale is not None and input_scale.shape == torch.Size([1])
+            input_zero_point = getattr(module, "input_zero_point", None)
+            assert (
+                input_zero_point is not None
+                and input_zero_point.shape == torch.Size([1])
+            )
+            weight_scale = getattr(module, "weight_scale", None)
+            assert weight_scale is not None and weight_scale.shape == torch.Size([1])
+            weight_zero_point = getattr(module, "weight_zero_point", None)
+            assert (
+                weight_zero_point is not None
+                and weight_zero_point.shape == torch.Size([1])
+            )
+
+
+@requires_accelerate()
+def test_apply_kv_cache():
+    from accelerate import init_empty_weights
+
+    with init_empty_weights():
+        model = AutoModelForCausalLM.from_pretrained("nm-testing/llama2.c-stories15M")
+
+    args = QuantizationArgs(num_bits=8, type="float", strategy="tensor")
+    config = QuantizationConfig(config_groups={}, kv_cache_scheme=args)
+
+    apply_quantization_config(model, config)
+
+    for layer in model.model.layers:
+        assert getattr(layer.self_attn, "quantization_scheme").input_activations == args
+        assert hasattr(layer.self_attn, "k_scale")
+        assert hasattr(layer.self_attn, "v_scale")
+
+
+@requires_accelerate()
+def test_apply_attention():
+    from accelerate import init_empty_weights
+
+    with init_empty_weights():
+        model = AutoModelForCausalLM.from_pretrained("nm-testing/llama2.c-stories15M")
+
+    scheme = QuantizationScheme(
+        targets=["LlamaAttention"],
+        input_activations=QuantizationArgs(num_bits=8, type="float", strategy="tensor"),
+    )
+    config = QuantizationConfig(config_groups={"attention": scheme})
+
+    apply_quantization_config(model, config)
+
+    for layer in model.model.layers:
+        assert getattr(layer.self_attn, "quantization_scheme") == scheme
+        assert hasattr(layer.self_attn, "q_scale")
+        assert hasattr(layer.self_attn, "k_scale")
+        assert hasattr(layer.self_attn, "v_scale")

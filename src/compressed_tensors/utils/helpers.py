@@ -15,12 +15,15 @@
 import contextlib
 import warnings
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, TypeVar
 
 import numpy
 import torch
-from frozendict import frozendict
-from transformers import AutoConfig
+from transformers import AutoConfig, PretrainedConfig
+
+
+T = TypeVar("T", bound="Callable")  # used by `deprecated`
 
 
 if TYPE_CHECKING:
@@ -42,6 +45,9 @@ __all__ = [
     "unpack_bitmasks",
     "patch_attr",
     "ParameterizedDefaultDict",
+    "get_num_attn_heads",
+    "get_num_kv_heads",
+    "get_head_dim",
 ]
 
 FSDP_WRAPPER_NAME = "_fsdp_wrapped_module"
@@ -71,9 +77,6 @@ def infer_compressor_from_model_config(
     return compressor
 
 
-# TODO: There is already the same function in
-# SparseML, should be moved to a shared location
-# in the future
 def fix_fsdp_module_name(name: str) -> str:
     """
     Remove FSDP wrapper prefixes from a module name
@@ -170,7 +173,9 @@ def getattr_chain(obj: Any, chain_str: str, *args, **kwargs) -> Any:
     return res
 
 
-def deprecated(future_name: Optional[str] = None, message: Optional[str] = None):
+def deprecated(
+    future_name: Optional[str] = None, message: Optional[str] = None
+) -> Callable[[T], T]:
     """
     Decorator to mark functions as deprecated
 
@@ -178,7 +183,7 @@ def deprecated(future_name: Optional[str] = None, message: Optional[str] = None)
     :param message: Deprecation message, replaces default deprecation message
     """
 
-    def decorator(func: Callable[[Any], Any]):
+    def decorator(func: T) -> T:
         nonlocal message
 
         if message is None:
@@ -374,7 +379,7 @@ class ParameterizedDefaultDict(dict):
 
     def __init__(self, default_factory: Callable[[Any], Any]):
         self.default_factory = default_factory
-        self._factory_kwargs = frozendict()
+        self._factory_kwargs = MappingProxyType({})
 
     def __missing__(self, key: Any) -> Any:
         if isinstance(key, tuple):
@@ -384,7 +389,7 @@ class ParameterizedDefaultDict(dict):
         self[key] = value
         return value
 
-    def get(self, *args, factory_kwargs: Mapping = frozendict()) -> Any:
+    def get(self, *args, factory_kwargs: Mapping = MappingProxyType({})) -> Any:
         """
         Similar to `__getitem__`, but allows passing kwargs to factory function
 
@@ -394,3 +399,62 @@ class ParameterizedDefaultDict(dict):
         """
         with patch_attr(self, "_factory_kwargs", factory_kwargs):
             return self[args]
+
+
+def get_num_attn_heads(config: PretrainedConfig) -> int:
+    """
+    Get the number of attention heads used by a model
+
+    :param config: model config
+    :return: num_attention_heads of model
+    """
+    if hasattr(config, "num_attention_heads"):
+        return config.num_attention_heads
+
+    elif hasattr(config, "hidden_size") and hasattr(config, "head_dim"):
+        return config.hidden_size // config.head_dim
+
+    else:
+        raise ValueError(
+            "Cannot determine num_attention_heads from config. Config must define "
+            "either `num_attention_heads` or both `hidden_size` and `head_dim`. "
+            f"{config}"
+        )
+
+
+def get_num_kv_heads(config: PretrainedConfig) -> int:
+    """
+    Get the number of key-value attention heads used by a model
+
+    :param config: model config
+    :return: num_key_value_heads of model
+    """
+    if hasattr(config, "num_key_value_heads"):
+        return config.num_key_value_heads
+
+    else:
+        raise ValueError(
+            "Cannot determine num_key_value_heads from config. Config must define "
+            f"`num_key_value_heads`. {config}"
+        )
+
+
+def get_head_dim(config: PretrainedConfig) -> int:
+    """
+    Get the number of dimensions used by the attention heads of a model
+
+    :param config: model config
+    :return: head_dim of model
+    """
+    if hasattr(config, "head_dim"):
+        return config.head_dim
+
+    elif hasattr(config, "hidden_size") and hasattr(config, "num_attention_heads"):
+        return config.hidden_size // config.num_attention_heads
+
+    else:
+        raise ValueError(
+            "Cannot determine head_dim from config. Config must define "
+            "either `head_dim` or both `hidden_size` and `num_attention_heads`. "
+            f"{config}"
+        )
