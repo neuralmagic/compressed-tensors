@@ -23,7 +23,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 __all__ = [
-    "FP8_DTYPE",
     "FP8_E4M3_DATA",
     "FP4_E2M1_DATA",
     "BFLOAT16_DATA",
@@ -81,10 +80,6 @@ class FP8_E4M3_DATA(FloatArgs):
 class BFLOAT16_DATA(FloatArgs):
     exponent = 8
     mantissa = 7
-
-
-# TODO: Remove soon in favour of a more descriptive FloatArgs
-FP8_DTYPE = torch.float8_e4m3fn
 
 
 class QuantizationType(str, Enum):
