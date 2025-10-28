@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import torch
 from collections import defaultdict
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Optional, Set, Union
@@ -278,6 +278,28 @@ class QuantizationConfig(BaseModel):
                     return True
 
         return False
+
+    def model_dump(self, *args, **kwargs):
+        # Call the parent dump first
+        data = super().model_dump(*args, **kwargs)
+
+        # Convert any torch.dtype to string
+        schemes = ["config_groups", "kv_cache_scheme"]
+        for scheme in schemes:
+            if data.get(scheme) is not None:
+                for _, v in data[scheme].items():
+                    weight = v.get("weights")
+                    input = v.get("input_activations")
+                    output = v.get("output_activations")
+
+                    args = [weight, input, output]
+                    for arg in args:
+                        for key, value in arg.items():
+                            if isinstance(value, torch.dtype):
+                                data[key] = str(value).replace("torch.", "")
+        
+        breakpoint()
+        return data
 
     # TODO set `extra="forbid"` when upstream transformers is compatible
     model_config = ConfigDict(extra="ignore")
