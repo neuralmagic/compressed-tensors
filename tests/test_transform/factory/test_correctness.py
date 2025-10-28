@@ -167,13 +167,18 @@ def test_correctness_attention_heads(type, randomize, head_dim, input_batch_size
 
 
 @requires_gpu
-def test_random_matrix_device_handling():
+@pytest.mark.parametrize("cuda_default", (True, False))
+def test_random_matrix_device_handling(cuda_default):
     """
     Test that random-matrix transforms can be created
-    on CUDA.
+    on CUDA. 
     """
     seed = 0
     size = (4, 8)
+
+    cur_default = torch.get_default_device()
+    if cuda_default:
+        torch.set_default_device("cuda")
     module = torch.nn.Linear(*size, bias=False).cuda()
     scheme = TransformScheme(type="random-matrix", randomize=True)
     factory = TransformFactory.from_scheme(scheme, name="", seed=seed)
@@ -189,3 +194,6 @@ def test_random_matrix_device_handling():
 
     # Verify that transforms were created on CUDA
     assert input_tfm.weight.device.type == "cuda"
+    torch.set_default_device(cur_default)
+
+

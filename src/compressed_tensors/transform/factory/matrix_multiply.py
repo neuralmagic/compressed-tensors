@@ -68,6 +68,7 @@ class RandomMatrixFactory(TransformFactory):
             (size, size),
             generator=self.generator,
             dtype=precision,
+            device=self.generator.device
         ).to(device)
         return Parameter(data, requires_grad=self.scheme.requires_grad)
 
