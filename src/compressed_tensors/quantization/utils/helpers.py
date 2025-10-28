@@ -92,7 +92,7 @@ def calculate_qparams(
 
         if global_scale is not None:
             # Conditionally scale the generated local scale by a global_scale
-            scales = torch.clamp(
+            scales = global_scale * torch.clamp(
                 scales,
                 max=torch.finfo(quantization_args.scale_dtype).max,
                 min=torch.finfo(quantization_args.scale_dtype).min,
