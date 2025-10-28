@@ -171,7 +171,7 @@ def test_correctness_attention_heads(type, randomize, head_dim, input_batch_size
 def test_random_matrix_device_handling(cuda_default):
     """
     Test that random-matrix transforms can be created
-    on CUDA. 
+    on CUDA.
     """
     seed = 0
     size = (4, 8)
@@ -195,5 +195,3 @@ def test_random_matrix_device_handling(cuda_default):
     # Verify that transforms were created on CUDA
     assert input_tfm.weight.device.type == "cuda"
     torch.set_default_device(cur_default)
-
-
