@@ -46,7 +46,6 @@ __all__ = [
     "calculate_range",
     "calculate_qparams",
     "generate_gparam",
-    "is_fp4",
     "strategy_cdiv",
 ]
 
@@ -55,13 +54,6 @@ __all__ = [
 KV_CACHE_TARGETS = ["re:.*self_attn$"]
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
-
-
-def is_fp4(quantization_args: QuantizationArgs):
-    return (
-        quantization_args.num_bits == 4
-        and quantization_args.type == QuantizationType.FLOAT
-    )
 
 
 def calculate_qparams(
@@ -92,22 +84,20 @@ def calculate_qparams(
     bit_min, bit_max = calculate_range(quantization_args, device)
     bit_range = bit_max - bit_min
 
-    if is_fp4(quantization_args=quantization_args):
-        zp_dtype = FP8_E4M3_DATA.dtype
-    else:
-        zp_dtype = quantization_args.pytorch_dtype()
+    zp_dtype = quantization_args.zp_dtype
 
     if quantization_args.symmetric:
         max_val_pos = torch.max(torch.abs(min_vals), torch.abs(max_vals))
+        scales = max_val_pos / (float(bit_range) / 2)
 
-        if is_fp4(quantization_args=quantization_args) and global_scale is not None:
+        if global_scale is not None:
             # Conditionally scale the generated local scale by a global_scale
-            scales = global_scale * (max_val_pos / FP4_E2M1_DATA.max)
-            scales = torch.clamp(scales, max=FP8_E4M3_DATA.max, min=FP8_E4M3_DATA.min)
-            scales = scales.to(FP8_E4M3_DATA.dtype)
-
-        else:
-            scales = max_val_pos / (float(bit_range) / 2)
+            scales = torch.clamp(
+                scales,
+                max=torch.finfo(quantization_args.scale_dtype).max,
+                min=torch.finfo(quantization_args.scale_dtype).min,
+            )
+            scales = scales.to(quantization_args.scale_dtype)
 
         # TODO: in the case of MoEs, the global_scale may also be 0/need to be clamped
         if scales.dtype == FP8_E4M3_DATA.dtype:
@@ -123,11 +113,6 @@ def calculate_qparams(
 
         zero_points = torch.zeros(scales.shape, device=device, dtype=min_vals.dtype)
     else:
-        if is_fp4(quantization_args=quantization_args):
-            raise NotImplementedError(
-                "Asymmetric Quantization is not supported for FP4"
-            )
-
         scales = (max_vals - min_vals) / float(bit_range)
         scales = torch.clamp(scales, min=torch.finfo(torch.float32).eps)
         zero_points = bit_min - (min_vals / scales)
