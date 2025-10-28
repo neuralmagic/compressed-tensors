@@ -170,7 +170,7 @@ def test_correctness_attention_heads(type, randomize, head_dim, input_batch_size
 def test_random_matrix_device_handling():
     """
     Test that random-matrix transforms can be created
-    on CUDA. 
+    on CUDA.
     """
     seed = 0
     size = (4, 8)
