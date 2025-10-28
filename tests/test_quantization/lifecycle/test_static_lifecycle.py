@@ -179,6 +179,25 @@ def test_static_weight_quantization(
 @pytest.mark.parametrize(
     "args,exp_min_val,exp_max_val,exp_quant,exp_loss",
     [
+        (
+            QuantizationArgs(
+                num_bits=4,
+                type="int",
+                symmetric=True,
+                strategy="tensor",
+            ),
+            torch.tensor([0.0]),
+            torch.tensor([11.0]),
+            torch.tensor(
+                [
+                    [
+                        [0.0000, 1.4688, 1.4688, 2.9375, 4.4062, 4.4062],
+                        [5.8750, 7.3438, 7.3438, 8.8125, 10.2500, 10.2500],
+                    ]
+                ]
+            ),
+            0.2,
+        ),
         # static token is not supported
         # channel is not supported
         # group is not supported
