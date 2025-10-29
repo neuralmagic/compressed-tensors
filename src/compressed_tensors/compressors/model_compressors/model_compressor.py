@@ -790,7 +790,6 @@ class ModelCompressor:
             config_data = {}
 
         # serialize configs into json
-        breakpoint()
         qconfig_data = (
             self.quantization_config.model_dump(exclude=["quant_method"])
             if self.quantization_config is not None

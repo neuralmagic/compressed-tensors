@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import torch
 from collections import defaultdict
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Optional, Set, Union
 
+import torch
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_args import DynamicType, QuantizationArgs
 from compressed_tensors.quantization.quant_scheme import (
@@ -283,7 +283,17 @@ class QuantizationConfig(BaseModel):
         # Call the parent dump first
         data = super().model_dump(*args, **kwargs)
 
-        # Convert any torch.dtype to string
+        def _convert_dtypes_in_dict(d):
+            for k, v in d.items():
+                if isinstance(v, torch.dtype):
+                    if k == "zp_dtype" and d.get("symmetric"):
+                        d[k] = None
+                    else:
+                        d[k] = str(v).replace("torch.", "")
+                elif isinstance(v, dict):
+                    _convert_dtypes_in_dict(v)
+            return d
+
         schemes = ["config_groups", "kv_cache_scheme"]
         for scheme in schemes:
             if data.get(scheme) is not None:
@@ -294,11 +304,8 @@ class QuantizationConfig(BaseModel):
 
                     args = [weight, input, output]
                     for arg in args:
-                        for key, value in arg.items():
-                            if isinstance(value, torch.dtype):
-                                data[key] = str(value).replace("torch.", "")
-        
-        breakpoint()
+                        if arg is not None:
+                            _convert_dtypes_in_dict(arg)
         return data
 
     # TODO set `extra="forbid"` when upstream transformers is compatible
