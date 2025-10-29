@@ -24,7 +24,6 @@ from compressed_tensors.modeling import (
     QuantizedKVCache,
 )
 from compressed_tensors.quantization import (
-    FP8_E4M3_DATA,
     ActivationOrdering,
     DynamicType,
     QuantizationArgs,
