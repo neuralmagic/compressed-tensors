@@ -286,7 +286,9 @@ class QuantizationConfig(BaseModel):
         def _convert_dtypes_in_dict(d):
             for k, v in d.items():
                 if isinstance(v, torch.dtype):
-                    if k == "zp_dtype" and d.get("symmetric"):
+                    if (k == "zp_dtype" and d.get("symmetric")) or (
+                        k == "scale_dtype" and d.get("dynamic") in (True, "local")
+                    ):
                         d[k] = None
                     else:
                         d[k] = str(v).replace("torch.", "")
