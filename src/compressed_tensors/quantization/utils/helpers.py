@@ -92,12 +92,14 @@ def calculate_qparams(
 
         if global_scale is not None:
             # Conditionally scale the generated local scale by a global_scale
-            scales = global_scale * torch.clamp(
-                scales,
-                max=torch.finfo(quantization_args.scale_dtype).max,
-                min=torch.finfo(quantization_args.scale_dtype).min,
-            )
-            scales = scales.to(quantization_args.scale_dtype)
+            scales = global_scale * scales
+            if quantization_args.scale_dtype is not None:
+                scales = torch.clamp(
+                    scales,
+                    max=torch.finfo(quantization_args.scale_dtype).max,
+                    min=torch.finfo(quantization_args.scale_dtype).min,
+                )
+                scales = scales.to(quantization_args.scale_dtype)
 
         # TODO: in the case of MoEs, the global_scale may also be 0/need to be clamped
         if scales.dtype == FP8_E4M3_DATA.dtype:
