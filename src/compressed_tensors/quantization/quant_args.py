@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import warnings
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import torch
 from compressed_tensors.utils import Aliasable
-from compressed_tensors.utils.helpers import deprecated
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
@@ -264,8 +262,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
         block_structure = model.block_structure
         actorder = model.actorder
         dynamic = model.dynamic
-        observer = model.observer
-        dynamic = model.dynamic
 
         # infer strategy
         if strategy is None:
@@ -317,45 +313,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 "activation ordering"
             )
 
-        # infer observer w.r.t. dynamic
-        if dynamic:
-            supported_strategies = (
-                QuantizationStrategy.TOKEN,
-                QuantizationStrategy.TENSOR,
-                QuantizationStrategy.TENSOR_GROUP,
-                QuantizationStrategy.GROUP,
-            )
-            if strategy not in supported_strategies:
-                raise ValueError(
-                    f"One of {supported_strategies} must be used for dynamic quant."
-                )
-
-            if (
-                dynamic == DynamicType.LOCAL
-                and strategy != QuantizationStrategy.TENSOR_GROUP
-            ):
-                raise ValueError("local is only supported for strategy tensor_group")
-
-            if observer is not None:
-                if dynamic is True:  # checking if dynamic is True, not "local"
-                    if (
-                        observer != "memoryless"
-                    ):  # avoid annoying users with old configs
-                        warnings.warn(
-                            "No observer is used for dynamic quant., setting to None"
-                        )
-                    observer = None
-            else:
-                if dynamic == DynamicType.LOCAL:
-                    observer = "minmax"
-
-        elif observer is None:
-            # default to minmax for non-dynamic cases
-            observer = "minmax"
-
         # write back modified values
         model.strategy = strategy
-        model.observer = observer
         return model
 
     def pytorch_dtype(self) -> torch.dtype:
@@ -373,10 +332,6 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
                 return torch.int32
         else:
             raise ValueError(f"Invalid quantization type {self.type}")
-
-    @deprecated("QuantizationArgs.observer")
-    def get_observer(self) -> str:
-        return self.observer
 
     model_config = ConfigDict(extra="forbid")
 
