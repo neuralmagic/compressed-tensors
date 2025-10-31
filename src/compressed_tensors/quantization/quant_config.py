@@ -296,18 +296,23 @@ class QuantizationConfig(BaseModel):
                     _convert_dtypes_in_dict(v)
             return d
 
-        schemes = ["config_groups", "kv_cache_scheme"]
-        for scheme in schemes:
-            if data.get(scheme) is not None:
-                for _, v in data[scheme].items():
-                    weight = v.get("weights")
-                    input = v.get("input_activations")
-                    output = v.get("output_activations")
+        scheme = "config_groups"
+        if data.get(scheme):
+            for _, v in data[scheme].items():
+                weight = v.get("weights")
+                input = v.get("input_activations")
+                output = v.get("output_activations")
 
-                    args = [weight, input, output]
-                    for arg in args:
-                        if arg is not None:
-                            _convert_dtypes_in_dict(arg)
+                args = [weight, input, output]
+                for arg in args:
+                    if arg is not None:
+                        _convert_dtypes_in_dict(arg)
+
+        scheme = "kv_cache_scheme"
+        kv_cache_data = data.get(scheme)
+        if kv_cache_data:
+            _convert_dtypes_in_dict(kv_cache_data)
+
         return data
 
     # TODO set `extra="forbid"` when upstream transformers is compatible
