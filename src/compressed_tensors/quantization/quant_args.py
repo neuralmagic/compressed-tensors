@@ -174,6 +174,8 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     block_structure: Optional[List[int]] = None
     dynamic: Union[DynamicType, bool] = False
     actorder: Union[ActivationOrdering, bool, None] = None
+    scale_dtype: Optional[torch.dtype] = None
+    zp_dtype: Optional[torch.dtype] = None
     observer: Optional[str] = Field(
         default=None,
         description=(
@@ -378,7 +380,7 @@ class QuantizationArgs(BaseModel, use_enum_values=True):
     def get_observer(self) -> str:
         return self.observer
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
 
 def round_to_quantized_type(

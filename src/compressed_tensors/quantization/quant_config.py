@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from collections import defaultdict
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Optional, Set, Union
 
+import torch
 from compressed_tensors.config import CompressionFormat
 from compressed_tensors.quantization.quant_args import DynamicType, QuantizationArgs
 from compressed_tensors.quantization.quant_scheme import (
@@ -278,6 +278,42 @@ class QuantizationConfig(BaseModel):
                     return True
 
         return False
+
+    def model_dump(self, *args, **kwargs):
+        # Call the parent dump first
+        data = super().model_dump(*args, **kwargs)
+
+        def _convert_dtypes_in_dict(d):
+            for k, v in d.items():
+                if isinstance(v, torch.dtype):
+                    if (k == "zp_dtype" and d.get("symmetric")) or (
+                        k == "scale_dtype" and d.get("dynamic") in (True, "local")
+                    ):
+                        d[k] = None
+                    else:
+                        d[k] = str(v).replace("torch.", "")
+                elif isinstance(v, dict):
+                    _convert_dtypes_in_dict(v)
+            return d
+
+        scheme = "config_groups"
+        if data.get(scheme):
+            for _, v in data[scheme].items():
+                weight = v.get("weights")
+                input = v.get("input_activations")
+                output = v.get("output_activations")
+
+                args = [weight, input, output]
+                for arg in args:
+                    if arg is not None:
+                        _convert_dtypes_in_dict(arg)
+
+        scheme = "kv_cache_scheme"
+        kv_cache_data = data.get(scheme)
+        if kv_cache_data:
+            _convert_dtypes_in_dict(kv_cache_data)
+
+        return data
 
     # TODO set `extra="forbid"` when upstream transformers is compatible
     model_config = ConfigDict(extra="ignore")

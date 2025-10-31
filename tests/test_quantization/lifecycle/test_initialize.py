@@ -156,13 +156,23 @@ def test_initialize_module_for_quantization_offloaded(
         ),
         (
             QuantizationArgs(
-                strategy="tensor_group", group_size=16, type="float", num_bits=4
+                strategy="tensor_group",
+                group_size=16,
+                type="float",
+                num_bits=4,
+                scale_dtype=FP8_E4M3_DATA.dtype,
+                zp_dtype=FP8_E4M3_DATA.dtype,
             ),
             None,
         ),
         (
             QuantizationArgs(
-                strategy="tensor_group", group_size=16, type="float", num_bits=4
+                strategy="tensor_group",
+                group_size=16,
+                type="float",
+                num_bits=4,
+                scale_dtype=FP8_E4M3_DATA.dtype,
+                zp_dtype=FP8_E4M3_DATA.dtype,
             ),
             QuantizationArgs(
                 strategy="tensor_group",
@@ -170,6 +180,8 @@ def test_initialize_module_for_quantization_offloaded(
                 type="float",
                 num_bits=4,
                 dynamic="local",
+                scale_dtype=FP8_E4M3_DATA.dtype,
+                zp_dtype=FP8_E4M3_DATA.dtype,
             ),
         ),
         (
