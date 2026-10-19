@@ -80,6 +80,10 @@ class QuantizationScheme(BaseModel, use_enum_values=True):
             and weights.strategy == QuantizationStrategy.GROUP
             and inputs.strategy == QuantizationStrategy.GROUP
             and weights.group_size != inputs.group_size
+            # mixed-precision schemes (e.g. MXFP4xFP8) intentionally use
+            # different group sizes for weights and activations
+            and weights.num_bits == inputs.num_bits
+            and weights.type == inputs.type
         ):
             warnings.warn(
                 "Using GROUP strategy for both weights and input_activations "
@@ -234,6 +238,27 @@ MXFP4 = dict(
         group_size=32,
         scale_dtype=torch.uint8,
         zp_dtype=torch.uint8,
+    ),
+)
+
+MXFP4xFP8 = dict(
+    weights=QuantizationArgs(
+        num_bits=4,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.GROUP,
+        symmetric=True,
+        dynamic=False,
+        group_size=32,
+        scale_dtype=torch.uint8,
+        zp_dtype=torch.uint8,
+    ),
+    input_activations=QuantizationArgs(
+        num_bits=8,
+        type=QuantizationType.FLOAT,
+        strategy=QuantizationStrategy.GROUP,
+        symmetric=True,
+        dynamic=True,
+        group_size=128,
     ),
 )
 
@@ -454,6 +479,7 @@ PRESET_SCHEMES: dict[str, dict] = {
     "NVFP4": NVFP4,
     "MXFP4A16": MXFP4A16,
     "MXFP4": MXFP4,
+    "MXFP4XFP8": MXFP4xFP8,
     "MXFP6A16": MXFP6A16,
     "MXFP6A8": MXFP6A8,
     "MXFP8A16": MXFP8A16,
