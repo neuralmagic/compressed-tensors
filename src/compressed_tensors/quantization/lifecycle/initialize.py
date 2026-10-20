@@ -11,7 +11,11 @@ from compressed_tensors.modeling import (
     QuantizedAttentionImpl,
     QuantizedKVCache,
 )
-from compressed_tensors.offload import disable_onloading, unwrap_offload_forward
+from compressed_tensors.offload import (
+    disable_onloading,
+    get_offloaded_device,
+    unwrap_offload_forward,
+)
 from compressed_tensors.quantization import (
     DynamicType,
     QuantizationArgs,
@@ -22,12 +26,7 @@ from compressed_tensors.quantization import (
 )
 from compressed_tensors.quantization.lifecycle.forward import set_forward_quantized
 from compressed_tensors.quantization.utils import strategy_cdiv
-from compressed_tensors.utils import (
-    get_execution_device,
-    get_head_dim,
-    get_num_attn_heads,
-    get_num_kv_heads,
-)
+from compressed_tensors.utils import get_head_dim, get_num_attn_heads, get_num_kv_heads
 from compressed_tensors.utils.helpers import deprecated
 from loguru import logger
 from torch.nn import Module, Parameter
@@ -191,12 +190,9 @@ def initialize_qparams(
     """
     strategy = quantization_args.strategy
     dynamic = quantization_args.dynamic
-    # avoid performing intialization ops on cpu
-    if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
-        with disable_onloading():
-            device = module.weight.device
-    else:
-        device = get_execution_device(module)
+    device = get_offloaded_device(module)
+    if device == "disk":
+        device = torch.device("cpu")
 
     # Skip all intialization for fully dynamic quantization
     if dynamic is True:
